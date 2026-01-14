@@ -100,7 +100,7 @@ fn grab_keyboard(
                 .reply()?;
 
             if reply.status == GrabStatus::SUCCESS {
-                println!("Successfully grabbed device {}", device_id);
+                // println!("Successfully grabbed device {}", device_id);
                 device_ids.push(device_id);
             } else {
                 println!("Failed to grab device {}: {:?}", device_id, reply.status);
@@ -114,7 +114,7 @@ fn grab_keyboard(
 
 fn ungrab_keyboard(conn: &RustConnection, device_ids: Vec<DeviceId>) -> Result<(), Box<dyn Error>> {
     for device_id in device_ids {
-        println!("Ungrabbing keyboard ID: {}", device_id);
+        // println!("Ungrabbing keyboard ID: {}", device_id);
         conn.xinput_xi_ungrab_device(CURRENT_TIME, device_id)?;
     }
     conn.flush()?;
@@ -175,12 +175,23 @@ fn freeze_inject_restore(
         println!("masking ctrl key {}", &kc);
         fake_input(&conn, KEY_RELEASE, kc, 0, root, 0, 0, 0)?;
     }
+    conn.flush()?;
 
-    while let Some(_e) = conn.poll_for_event()? {
-        thread::sleep(Duration::from_millis(200));
+    thread::sleep(Duration::from_millis(200));
+
+    while let Some(e) = conn.poll_for_event()? {
+        if let Event::XinputRawKeyPress(kr) = e.clone() {
+                println!("draining key press {}", &kr.detail);
+
+        }
+        if let Event::XinputRawKeyRelease(kr) = e.clone() {
+                println!("draining key release {}", &kr.detail);
+
+        }
     }
 
     conn.flush()?;
+    thread::sleep(Duration::from_millis(200));
 
     for ch in text.chars() {
         type_char(&conn, root, ch, xdevice as u8)?;
@@ -253,6 +264,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 if e.detail as u8 == hotkey_kc {
                     b_down = true;
+                    println!("b down");
                     physically_pressed.insert(e.detail as u8);
                 }
 
@@ -266,6 +278,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         &mut ctrl_keycodes.clone(),
                         "hello",
                     )?;
+                    triggered = false;
                 }
             }
             Event::XinputRawKeyRelease(e) => {
@@ -279,6 +292,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 if !(e.detail as u8 == hotkey_kc) && b_down {
                     b_down = false;
+                    println!("b up");
                     physically_pressed.remove(&(e.detail as u8));
                 }
 
