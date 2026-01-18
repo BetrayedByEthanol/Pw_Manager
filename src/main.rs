@@ -15,6 +15,7 @@ use std::error::Error;
 use std::io::Write;
 use std::thread;
 use std::time::Duration;
+use x11rb::CURRENT_TIME;
 use x11rb::connection::Connection;
 use x11rb::protocol::Event;
 use x11rb::protocol::xinput::DeviceId;
@@ -22,7 +23,6 @@ use x11rb::protocol::xinput::{self, ConnectionExt as _};
 use x11rb::protocol::xproto::*;
 use x11rb::protocol::xtest::fake_input;
 use x11rb::rust_connection::RustConnection;
-use x11rb::{CURRENT_TIME};
 
 fn prompt_pw() -> String {
     print!("Master password: ");
@@ -101,11 +101,17 @@ fn grab_keyboard(
 
             if reply.status == GrabStatus::SUCCESS {
                 // println!("Successfully grabbed device {}", device_id);
+                conn.xinput_xi_allow_events(
+                    x11rb::CURRENT_TIME,
+                    device_id,
+                    xinput::EventMode::ASYNC_DEVICE,
+                    0,
+                    root,
+                )?;
                 device_ids.push(device_id);
             } else {
                 println!("Failed to grab device {}: {:?}", device_id, reply.status);
             }
-
         }
         println!();
     }
@@ -168,9 +174,6 @@ fn freeze_inject_restore(
     let device_ids = keyboards.0;
     let xdevice = keyboards.1.unwrap();
 
-    // Make queue?
-    let mut ctrl_keycodes_to_press: HashSet<u8> = phys_down.intersection(ctrl_keycodes).cloned().collect();
-
     for &kc in ctrl_keycodes.union(&(phys_down.clone())) {
         println!("masking ctrl key {}", &kc);
         fake_input(&conn, KEY_RELEASE, kc, 0, root, 0, 0, 0)?;
@@ -181,12 +184,10 @@ fn freeze_inject_restore(
 
     while let Some(e) = conn.poll_for_event()? {
         if let Event::XinputRawKeyPress(kr) = e.clone() {
-                println!("draining key press {}", &kr.detail);
-
+            println!("draining key press {}", &kr.detail);
         }
         if let Event::XinputRawKeyRelease(kr) = e.clone() {
-                println!("draining key release {}", &kr.detail);
-
+            println!("draining key release {}", &kr.detail);
         }
     }
 
@@ -196,22 +197,33 @@ fn freeze_inject_restore(
     for ch in text.chars() {
         type_char(&conn, root, ch, xdevice as u8)?;
         println!();
+        while let Some(e) = conn.poll_for_event().unwrap() {
+            if let Event::XinputRawKeyPress(kr) = e.clone() {
+                if ctrl_keycodes.contains(&(kr.detail as u8)) {
+                    println!("pressed control key during typing {}", &kr.detail);
+                    phys_down.insert(kr.detail as u8);
+                }
+            }
+            if let Event::XinputRawKeyRelease(kr) = e.clone() {
+                if ctrl_keycodes.contains(&(kr.detail as u8)) {
+                    println!("released control key during typing {}", &kr.detail);
+                    phys_down.remove(&(kr.detail as u8));
+                }
+            }
+            if let Event::XinputKeyPress(kr) = e.clone() {
+                if ctrl_keycodes.contains(&(kr.detail as u8)) {
+                    println!("pressed control key during typing {}", &kr.detail);
+                    phys_down.insert(kr.detail as u8);
+                }
+            }
+            if let Event::XinputKeyRelease(kr) = e.clone() {
+                if ctrl_keycodes.contains(&(kr.detail as u8)) {
+                    println!("released control key during typing {}", &kr.detail);
+                    phys_down.remove(&(kr.detail as u8));
+                }
+            }
+        }
         thread::sleep(Duration::from_millis(200));
-    }
-
-    while let Some(e) = conn.poll_for_event().unwrap() {
-        if let Event::XinputRawKeyPress(kr) = e.clone() {
-            if ctrl_keycodes.contains(&(kr.detail as u8)) {
-                println!("pressed control key during typing {}", &kr.detail);
-                phys_down.insert(kr.detail as u8);
-            }
-        }
-        if let Event::XinputRawKeyRelease(kr) = e.clone() {
-            if ctrl_keycodes.contains(&(kr.detail as u8)) {
-                println!("released control key during typing {}", &kr.detail);
-                phys_down.remove(&(kr.detail as u8));
-            }
-        }
     }
 
     for &kc in phys_down.intersection(ctrl_keycodes) {
@@ -219,12 +231,6 @@ fn freeze_inject_restore(
         fake_input(&conn, KEY_PRESS, kc, 0, root, 0, 0, 0)?;
     }
     conn.flush()?;
-
-
-    // for &kc in ctrl_keycodes.iter() {
-    //     println!("masking ctrl key {}", &kc);
-    //     fake_input(&conn, KEY_RELEASE, kc, 0, root, 0, 0, 0)?;
-    // }
 
     ungrab_keyboard(conn, device_ids)?;
 
@@ -290,7 +296,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .iter()
                     .any(|kc| ctrl_keycodes.contains(kc));
 
-                if !(e.detail as u8 == hotkey_kc) && b_down {
+                if (e.detail as u8 == hotkey_kc) && b_down {
                     b_down = false;
                     println!("b up");
                     physically_pressed.remove(&(e.detail as u8));
@@ -303,5 +309,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => {}
         }
     }
-
 }
