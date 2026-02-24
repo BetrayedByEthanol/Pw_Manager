@@ -37,13 +37,12 @@ use ctap_hid_fido2::{
 fn prompt_pw() -> String {
     print!("Master password: ");
     std::io::stdout().flush().unwrap();
-    let password = read_password().unwrap_or_else(|_| {
+    read_password().unwrap_or_else(|_| {
         eprintln!("\nSecure input not available, falling back to visible input.");
         let mut pw = String::new();
         std::io::stdin().read_line(&mut pw).unwrap();
         pw.trim_end().to_string()
-    });
-    password
+    })
 }
 
 fn fido_rs() -> Result<(), Box<dyn std::error::Error>> {
@@ -114,6 +113,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .pin("miControl")
     .build();
 
+    // challenge
+    // rpId
+    // signature
+    // (optionally) sign_count
+    
     let publickey = hex::decode("0492C512FA21CFD44088E87A5479DEBF1616C13640DC8E2CFE1B1569EB0F981FF1724C2DFDB0207680BA36DEB2B320CC49058D693F8DE6386F8AF5F2CE2C9954D4")?;
     let assertion = device.get_assertion_with_args(&args)?;
     let verify = verifier::verify_assertion(RP_ID, &(PublicKey::with_der(&publickey, public_key::PublicKeyType::Ecdsa256)), &buf, &(assertion.get(0).unwrap()));
