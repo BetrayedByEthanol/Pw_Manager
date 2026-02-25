@@ -32,6 +32,8 @@ use ctap_hid_fido2::{
         GetAssertionArgsBuilder, MakeCredentialArgsBuilder, credential_management::credential_management_params::CredentialProtectionPolicy
     }, public_key::{self, PublicKey}, public_key_credential_user_entity::PublicKeyCredentialUserEntity, verifier
 };
+use crossterm::event::{read, Event, KeyCode};
+use crossterm::terminal::{enable_raw_mode, disable_raw_mode};
 
 
 fn prompt_pw() -> String {
@@ -99,9 +101,8 @@ fn ctap_register() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Ok");
-    let device = FidoKeyHidFactory::create(&ctap_hid_fido2::Cfg::init()).unwrap();    
+fn ctap_authenticate() -> Result<(), Box<dyn std::error::Error>> {
+        let device = FidoKeyHidFactory::create(&ctap_hid_fido2::Cfg::init()).unwrap();    
     print!("{:}", device.get_info()?);
     let mut buf = vec![0u8; 32];
     let mut rng = rand::rng();
@@ -122,5 +123,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let assertion = device.get_assertion_with_args(&args)?;
     let verify = verifier::verify_assertion(RP_ID, &(PublicKey::with_der(&publickey, public_key::PublicKeyType::Ecdsa256)), &buf, &(assertion.get(0).unwrap()));
     println!("{:}", verify);
+    Ok(())
+}
+
+fn prompt_yes_no(question: &str) -> bool {
+    print!("{} (y/n)", question);
+
+    std::io::stdout().flush().unwrap();
+
+    enable_raw_mode().unwrap();
+
+    let result = loop {
+        if let Event::Key(event) = read().unwrap() {
+            match event.code {
+                KeyCode::Char('y') | KeyCode::Char('Y') => break true,
+                KeyCode::Char('n') | KeyCode::Char('N') => break false,
+                _ => {}
+            }
+        }
+    };
+
+    disable_raw_mode().unwrap();
+    println!();
+    result
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let result = prompt_yes_no("Continue?");
+    println!("Result: {}", result);
+
     return Ok(());
 }
