@@ -7,34 +7,38 @@ mod util;
 mod vault;
 mod x11_keysyms;
 
-use std::fs::File;
 use crate::vault::LoadedVault;
+use std::fs::File;
 
-use rand::RngCore;
-use rpassword::read_password;
-use webauthn_rs::prelude::PublicKeyCredential;
-use std::io::Write;
-use std::path::Path;
 use aes_gcm::{
     Aes256Gcm, Nonce,
     aead::{Aead, KeyInit},
 };
 use base64::Engine;
 use base64::engine::GeneralPurpose;
-use scrypt::{Params, scrypt};
-use serde::Deserialize;
-use std::process::{Command, Stdio};
-use sha2::{Sha256, Digest};
-use fido2_rs::device::{ Device, DeviceList};
-use fido2_rs::credentials::{Credential, Opt};
+use rand::RngCore;
+use rpassword::read_password;
+use std::io::Write;
+use std::path::Path;
+use webauthn_rs::prelude::PublicKeyCredential;
+// use scrypt::{Params, scrypt};
+use crossterm::event::{Event, KeyCode, read};
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use ctap_hid_fido2::{
-    FidoKeyHid, FidoKeyHidFactory, fidokey::{
-        GetAssertionArgsBuilder, MakeCredentialArgsBuilder, credential_management::credential_management_params::CredentialProtectionPolicy
-    }, public_key::{self, PublicKey}, public_key_credential_user_entity::PublicKeyCredentialUserEntity, verifier
+    FidoKeyHid, FidoKeyHidFactory,
+    fidokey::{
+        AssertionExtension, GetAssertionArgsBuilder, MakeCredentialArgsBuilder,
+        credential_management::credential_management_params::CredentialProtectionPolicy,
+    },
+    public_key::{self, PublicKey},
+    public_key_credential_user_entity::PublicKeyCredentialUserEntity,
+    verifier,
 };
-use crossterm::event::{read, Event, KeyCode};
-use crossterm::terminal::{enable_raw_mode, disable_raw_mode};
-
+use fido2_rs::credentials::{Credential, Opt};
+use fido2_rs::device::{Device, DeviceList};
+use serde::Deserialize;
+use sha2::{Digest, Sha256};
+use std::process::{Command, Stdio};
 
 fn prompt_pw() -> String {
     print!("Master password: ");
@@ -73,12 +77,10 @@ fn fido_rs() -> Result<(), Box<dyn std::error::Error>> {
         break;
     }
     Ok(())
-
 }
 
-
 fn ctap_register() -> Result<(), Box<dyn std::error::Error>> {
-    let device = FidoKeyHidFactory::create(&ctap_hid_fido2::Cfg::init()).unwrap();    
+    let device = FidoKeyHidFactory::create(&ctap_hid_fido2::Cfg::init()).unwrap();
     println!("{:}", device.get_info()?);
     let mut buf = vec![0u8; 32];
     let mut rng = rand::rng();
@@ -86,10 +88,16 @@ fn ctap_register() -> Result<(), Box<dyn std::error::Error>> {
     const RP_ID: &str = "example.com";
     let username = "alice";
     let args = MakeCredentialArgsBuilder::new(RP_ID, &buf)
-    .user_entity(&(PublicKeyCredentialUserEntity::new(Some(username.as_bytes()), Some(username),Some( username))))
-    .pin("miControl")
-    .resident_key()
-    .build();
+        .user_entity(
+            &(PublicKeyCredentialUserEntity::new(
+                Some(username.as_bytes()),
+                Some(username),
+                Some(username),
+            )),
+        )
+        .pin("miControl")
+        .resident_key()
+        .build();
     let attestation = device.make_credential_with_args(&args)?;
     println!("{:}", attestation);
     let verify = verifier::verify_attestation(RP_ID, &buf, &attestation);
@@ -102,26 +110,51 @@ fn ctap_register() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn ctap_authenticate() -> Result<(), Box<dyn std::error::Error>> {
-        let device = FidoKeyHidFactory::create(&ctap_hid_fido2::Cfg::init()).unwrap();    
+    let device = FidoKeyHidFactory::create(&ctap_hid_fido2::Cfg::init()).unwrap();
     print!("{:}", device.get_info()?);
     let mut buf = vec![0u8; 32];
     let mut rng = rand::rng();
     rng.fill_bytes(&mut buf);
     const RP_ID: &str = "example.com";
     let username = "alice";
+    
+    let mut salt = [0u8; 32];
+    rng.fill_bytes(&mut salt);
+    
+    // let extension = AssertionExtension::create_hmac_secret_from_string("Test");
+    let extension = AssertionExtension::HmacSecret(Some(salt));
+
+
     let args = GetAssertionArgsBuilder::new(RP_ID, &buf)
-    .credential_id(&(hex::decode("92C512FA21CFD44088E87A547909403609D3A4064AC417F823C3BEBAC93AFEE3A9BDDD41557413FA530E30D2008E0E7E").unwrap()))
+    .credential_id(&(hex::decode("2F64CF4A6F7CBED2A1720CBAE18C2A14F5A6BE3C6B971BEF9DBC8713367D25BE45B524D7869B907070FA2074E3C3DE78").unwrap()))
     .pin("miControl")
+    .extensions(&[extension])
     .build();
 
     // challenge
     // rpId
     // signature
     // (optionally) sign_count
-    
-    let publickey = hex::decode("0492C512FA21CFD44088E87A5479DEBF1616C13640DC8E2CFE1B1569EB0F981FF1724C2DFDB0207680BA36DEB2B320CC49058D693F8DE6386F8AF5F2CE2C9954D4")?;
+
+    let publickey = hex::decode(
+        "042F64CF4A6F7CBED2A1720CBAE1F09563BFFFDE3965E2FD9B298448B466E8B152690A6E8F310AA3216BD9D9AD90D267C552EBE1F29A3C8A7BFF1635C4BEBBA9A6",
+    )?;
     let assertion = device.get_assertion_with_args(&args)?;
-    let verify = verifier::verify_assertion(RP_ID, &(PublicKey::with_der(&publickey, public_key::PublicKeyType::Ecdsa256)), &buf, &(assertion.get(0).unwrap()));
+    let assert = assertion.get(0).unwrap();
+    let prf: [u8; 32] = assert
+        .extensions
+        .iter()
+        .find_map(|e| match e {
+            AssertionExtension::HmacSecret(Some(bytes)) => Some(*bytes),
+            _ => None,
+        }).unwrap();
+    println!("{:?}", prf);
+    let verify = verifier::verify_assertion(
+        RP_ID,
+        &(PublicKey::with_der(&publickey, public_key::PublicKeyType::Ecdsa256)),
+        &buf,
+        &(assert),
+    );
     println!("{:}", verify);
     Ok(())
 }
@@ -149,8 +182,10 @@ fn prompt_yes_no(question: &str) -> bool {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let result = prompt_yes_no("Continue?");
-    println!("Result: {}", result);
+    // let result = prompt_yes_no("Continue?");
+    // println!("Result: {}", result);
+    // ctap_register();
 
+    ctap_authenticate();
     return Ok(());
 }
