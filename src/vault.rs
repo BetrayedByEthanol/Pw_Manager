@@ -16,6 +16,7 @@ mod session;
 mod entry;
 mod metadata;
 mod manager;
+pub mod header;
 
 pub struct LoadedVault {
     pub header: VaultHeader,

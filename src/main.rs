@@ -185,7 +185,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let result = prompt_yes_no("Continue?");
     // println!("Result: {}", result);
     // ctap_register();
-
+    let vh = vault::header::VaultyHeader::new(7);
     ctap_authenticate();
     return Ok(());
 }
