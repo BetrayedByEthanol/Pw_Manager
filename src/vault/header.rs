@@ -1,5 +1,6 @@
+use std::array::TryFromSliceError;
+use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
-
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -10,7 +11,7 @@ pub struct VaultyHeader {
 
     pub kdf: KdfSection,
     pub wrapping: WrappingSection,
-    pub fido2: Option<Fido2Section>,    
+    pub fido2: Fido2Section,
     pub cipher: CipherSection,
     pub metadata: MetadataSection,
 }
@@ -21,6 +22,17 @@ pub enum KdfId {
     Argon2id = 1,
 }
 
+impl TryFrom<u8> for KdfId {
+    type Error = VaultError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(KdfId::Argon2id),
+            _ => Err(VaultError::ParseError),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct KdfSection {
     pub version: u16,
@@ -29,7 +41,6 @@ pub struct KdfSection {
     pub memory_cost_kib: u32,
     pub time_cost: u32,
     pub parallelism: u32,
-    pub output_len: u16,
 }
 
 #[derive(Debug, Clone)]
@@ -39,29 +50,43 @@ pub struct WrappingSection {
     pub nonce: [u8; 24],
 }
 
-
 #[derive(Debug, Clone)]
 pub struct Fido2Section {
     pub version: u16,
+    pub credential_count: u16,
     pub credentials: Vec<Fido2Credential>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Fido2Credential {
+    pub credential_length: u32,
     pub credential_id: Vec<u8>,
+    pub credential_id_length: u16,
+    pub rp_id_length: u16,
     pub rp_id: String,
-    pub prf_salt: [u8; 32],   
+    pub prf_salt: [u8; 32],
+    pub public_key_length: u16,
     pub public_key: Vec<u8>,
     pub sign_count: u32,
-    pub hmac_secret_enabled: bool,
-    pub label: Option<String>,
     pub wrapped_wrapping_key: [u8; 48],
     pub wrap_nonce: [u8; 24],
 }
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum CipherId {
     XChaCha20Poly1305 = 1,
+}
+
+impl TryFrom<u8> for CipherId {
+    type Error = VaultError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(CipherId::XChaCha20Poly1305),
+            _ => Err(VaultError::ParseError),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -80,44 +105,421 @@ pub struct MetadataSection {
     pub vault_id: Uuid,
 }
 
+#[derive(Debug)]
+pub enum VaultError {
+    TooLarge,
+    Crypto(chacha20poly1305::Error),
+    Io(std::io::Error),
+    Slice(std::array::TryFromSliceError),
+    LengthMismatch,
+    ParseError,
+}
+
+impl fmt::Display for VaultError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            VaultError::TooLarge => write!(f, "data too large for vault format"),
+            VaultError::Crypto(e) => write!(f, "crypto error: {}", e),
+            VaultError::Io(e) => write!(f, "io error: {}", e),
+            VaultError::LengthMismatch => {
+                write!(f, "mismatch between data length and length header")
+            }
+            VaultError::Slice(e) => write!(f, "Slice invalid size: {}", e),
+            VaultError::ParseError => write!(f, "Could not parse value"),
+        }
+    }
+}
+
+impl std::error::Error for VaultError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            VaultError::Crypto(e) => None,
+            VaultError::Io(e) => Some(e),
+            VaultError::TooLarge => None,
+            VaultError::LengthMismatch => None,
+            VaultError::Slice(e) => Some(e),
+            VaultError::ParseError => None,
+        }
+    }
+}
+
+impl From<std::io::Error> for VaultError {
+    fn from(e: std::io::Error) -> Self {
+        VaultError::Io(e)
+    }
+}
+
+impl From<chacha20poly1305::Error> for VaultError {
+    fn from(e: chacha20poly1305::Error) -> Self {
+        VaultError::Crypto(e)
+    }
+}
+
 impl VaultyHeader {
     pub fn new() -> Self {
-        let now: u64 = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let mut slf = Self { magic: [0x56, 0x4C, 0x54, 0x31], 
-            version: 0x0100, 
-            header_len: 0, 
-            kdf: KdfSection { 
-                version: 0x0100, 
-                id: KdfId::Argon2id, 
-                salt: [0; 16], 
-                memory_cost_kib: 65536, 
-                time_cost: 3, 
-                parallelism: 2, 
-                output_len: 32 
-            }, 
-            wrapping: WrappingSection { 
-                version: 0x0100, 
-                wrapped_master_key: [0; 48],  
-                nonce: [0; 24]
-            }, 
-            fido2: Some(Fido2Section {
+        let now: u64 = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let slf = Self {
+            magic: [0x56, 0x4C, 0x54, 0x31],
+            version: 0x0100,
+            header_len: 0,
+            kdf: KdfSection {
                 version: 0x0100,
-                credentials: vec![]
-            }), 
-            cipher: CipherSection { 
-                version: 0x0100, 
-                id: CipherId::XChaCha20Poly1305, 
-                nonce_size: 24, 
-                tag_size: 16 
-            }, 
-            metadata: MetadataSection { 
-                version: 0x0100, 
-                created_at_unix: now, 
-                updated_at_unix: now, 
-                vault_id: Uuid::new_v4()
-            } 
+                id: KdfId::Argon2id,
+                salt: [0; 16],
+                memory_cost_kib: 65536,
+                time_cost: 3,
+                parallelism: 2,
+            },
+            wrapping: WrappingSection {
+                version: 0x0100,
+                wrapped_master_key: [0; 48],
+                nonce: [0; 24],
+            },
+            fido2: Fido2Section {
+                version: 0x0100,
+                credential_count: 0,
+                credentials: vec![],
+            },
+            cipher: CipherSection {
+                version: 0x0100,
+                id: CipherId::XChaCha20Poly1305,
+                nonce_size: 24,
+                tag_size: 16,
+            },
+            metadata: MetadataSection {
+                version: 0x0100,
+                created_at_unix: now,
+                updated_at_unix: now,
+                vault_id: Uuid::new_v4(),
+            },
         };
         return slf;
         // return VaultyHeader
+    }
+
+    pub fn serialize(&self) -> Result<Vec<u8>, VaultError> {
+        let mut data: Vec<u8> = vec![];
+        data.extend_from_slice(&self.magic);
+        data.extend_from_slice(&self.version.to_le_bytes());
+        let header_len_index: usize = data.len();
+        data.extend_from_slice(&self.header_len.to_le_bytes());
+
+        //Kdf Section
+        data.extend_from_slice(&self.kdf.version.to_le_bytes());
+        data.push(self.kdf.id as u8);
+        data.extend_from_slice(&self.kdf.salt);
+        data.extend_from_slice(&self.kdf.memory_cost_kib.to_le_bytes());
+        data.extend_from_slice(&self.kdf.time_cost.to_le_bytes());
+        data.extend_from_slice(&self.kdf.parallelism.to_le_bytes());
+
+        //Wrapping
+        data.extend_from_slice(&self.wrapping.version.to_le_bytes());
+        data.extend_from_slice(&self.wrapping.wrapped_master_key);
+        data.extend_from_slice(&self.wrapping.nonce);
+
+        //fido2
+        data.extend_from_slice(&self.fido2.version.to_le_bytes());
+        data.extend_from_slice(&self.fido2.credential_count.to_le_bytes());
+        for cred in self.fido2.credentials.iter() {
+            let credendial_len_index: usize = data.len();
+            data.extend_from_slice(&cred.credential_length.to_le_bytes());
+            let cred_id_len: u16 = cred
+                .credential_id
+                .len()
+                .try_into()
+                .map_err(|_| VaultError::TooLarge)?;
+            if cred_id_len != cred.credential_id_length {
+                return Err(VaultError::LengthMismatch);
+            }
+            data.extend_from_slice(&cred_id_len.to_le_bytes());
+            data.extend(&cred.credential_id);
+            let rp_id_len: u16 = cred
+                .rp_id
+                .len()
+                .try_into()
+                .map_err(|_| VaultError::TooLarge)?;
+            if rp_id_len != cred.rp_id_length {
+                return Err(VaultError::LengthMismatch);
+            }
+            data.extend_from_slice(&rp_id_len.to_le_bytes());
+            data.extend(cred.rp_id.as_bytes());
+            data.extend(&cred.prf_salt);
+            let pub_key_len: u16 = cred
+                .public_key
+                .len()
+                .try_into()
+                .map_err(|_| VaultError::TooLarge)?;
+            if pub_key_len != cred.public_key_length {
+                return Err(VaultError::LengthMismatch);
+            }
+            data.extend_from_slice(&pub_key_len.to_le_bytes());
+            data.extend(&cred.public_key);
+            data.extend_from_slice(&cred.sign_count.to_le_bytes());
+            data.extend(&cred.wrapped_wrapping_key);
+            data.extend(&cred.wrap_nonce);
+            //If ?
+            let credential_size: u32 = (data.len() - credendial_len_index)
+                .try_into()
+                .map_err(|_| VaultError::TooLarge)?;
+            data[credendial_len_index..credendial_len_index + 4]
+                .copy_from_slice(&credential_size.to_le_bytes());
+        }
+
+        //cipher
+        data.extend_from_slice(&self.cipher.version.to_le_bytes());
+        data.push(self.cipher.id as u8);
+        data.extend_from_slice(&self.cipher.nonce_size.to_le_bytes());
+        data.extend_from_slice(&self.cipher.tag_size.to_le_bytes());
+
+        //meta
+        data.extend_from_slice(&self.metadata.version.to_le_bytes());
+        data.extend_from_slice(&self.metadata.created_at_unix.to_le_bytes());
+        data.extend_from_slice(&self.metadata.updated_at_unix.to_le_bytes());
+
+        data.extend(self.metadata.vault_id.as_bytes());
+
+        let header_length: u32 = data.len().try_into().map_err(|_| VaultError::TooLarge)?;
+        //if length
+
+        data[header_len_index..header_len_index + 4].copy_from_slice(&header_length.to_le_bytes());
+
+        return Ok(data);
+    }
+
+    pub fn deserialize(data: &Vec<u8>) -> Result<Self, VaultError> {
+        let mut header = VaultyHeader::new();
+        let mut idx: usize = 0;
+        header.magic.copy_from_slice(&data[idx..idx + 4]);
+        idx += 4;
+
+        header.version = u16::from_le_bytes(
+            data[idx..idx + 2]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 2;
+
+        header.header_len = u32::from_le_bytes(
+            data[idx..idx + 4]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 4;
+
+        //Kdf
+        let kdf_ver = u16::from_le_bytes(
+            data[idx..idx + 2]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 2;
+        let kdf_id: KdfId = KdfId::try_from(data[idx])?;
+        idx += 1;
+        let kdf_salt: [u8; 16] = data[idx..idx + 16]
+            .try_into()
+            .map_err(|e| VaultError::Slice(e))?;
+        idx += 16;
+        let kdf_memory = u32::from_le_bytes(
+            data[idx..idx + 4]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 4;
+        let kdf_time = u32::from_le_bytes(
+            data[idx..idx + 4]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 4;
+        let kdf_parallelism = u32::from_le_bytes(
+            data[idx..idx + 4]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 4;
+
+        header.kdf = KdfSection {
+            version: kdf_ver,
+            id: kdf_id,
+            salt: kdf_salt,
+            memory_cost_kib: kdf_memory,
+            time_cost: kdf_time,
+            parallelism: kdf_parallelism,
+        };
+
+        //Wrapping
+        let wrapping_ver: u16 = u16::from_le_bytes(
+            data[idx..idx + 2]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 2;
+        let wrapping_key: [u8; 48] = data[idx..idx + 48]
+            .try_into()
+            .map_err(|e| VaultError::Slice(e))?;
+        idx += 48;
+        let wrapping_nonce: [u8; 24] = data[idx..idx + 24]
+            .try_into()
+            .map_err(|e| VaultError::Slice(e))?;
+        idx += 24;
+
+        header.wrapping = WrappingSection {
+            version: wrapping_ver,
+            wrapped_master_key: wrapping_key,
+            nonce: wrapping_nonce,
+        };
+
+        //Fido2
+        let fido_ver: u16 = u16::from_le_bytes(
+            data[idx..idx + 2]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 2;
+        let fido_count: u16 = u16::from_le_bytes(
+            data[idx..idx + 2]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 2;
+        let mut fido_creds: Vec<Fido2Credential> = vec![];
+        for _ in 0..fido_count {
+            let cred_length = u32::from_le_bytes(
+                data[idx..idx + 4]
+                    .try_into()
+                    .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+            );
+            idx += 4;
+            let cred_id_len: u16 = u16::from_le_bytes(
+                data[idx..idx + 2]
+                    .try_into()
+                    .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+            );
+            idx += 2;
+            let cred_id: Vec<u8> = data[idx..idx + usize::from(cred_id_len)].to_vec();
+            idx += usize::from(cred_id_len);
+            let rp_len: u16 = u16::from_le_bytes(
+                data[idx..idx + 2]
+                    .try_into()
+                    .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+            );
+            idx += 2;
+            let rp_id = String::from_utf8(data[idx..idx + usize::from(rp_len)].to_vec())
+                .map_err(|_| VaultError::ParseError)?;
+            idx += usize::from(rp_len);
+            let prf: [u8; 32] = data[idx..idx + 32]
+                .try_into()
+                .map_err(|e| VaultError::Slice(e))?;
+            idx += 32;
+            let pub_key_len: u16 = u16::from_le_bytes(
+                data[idx..idx + 2]
+                    .try_into()
+                    .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+            );
+            idx += 2;
+            let pub_key: Vec<u8> = data[idx..idx + usize::from(pub_key_len)].to_vec();
+            idx += usize::from(pub_key_len);
+            let sign_count = u32::from_le_bytes(
+                data[idx..idx + 4]
+                    .try_into()
+                    .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+            );
+            idx += 4;
+            let fido_wrapping: [u8; 48] = data[idx..idx + 48]
+                .try_into()
+                .map_err(|e| VaultError::Slice(e))?;
+            idx += 48;
+            let fido_nonce: [u8; 24] = data[idx..idx + 24]
+                .try_into()
+                .map_err(|e| VaultError::Slice(e))?;
+            idx += 48;
+
+            fido_creds.push(Fido2Credential {
+                credential_length: cred_length,
+                credential_id: cred_id,
+                credential_id_length: cred_id_len,
+                rp_id_length: rp_len,
+                rp_id: rp_id,
+                prf_salt: prf,
+                public_key_length: pub_key_len,
+                public_key: pub_key,
+                sign_count: sign_count,
+                wrapped_wrapping_key: fido_wrapping,
+                wrap_nonce: fido_nonce,
+            });
+        }
+
+        header.fido2 = Fido2Section {
+            version: fido_ver,
+            credential_count: fido_count,
+            credentials: fido_creds,
+        };
+
+        //Cipher
+        let cipher_ver = u16::from_le_bytes(
+            data[idx..idx + 2]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 2;
+        let cipher_id: CipherId = CipherId::try_from(data[idx])?;
+        idx += 1;
+        let cipher_nonce = u16::from_le_bytes(
+            data[idx..idx + 2]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 2;
+        let cipher_tag = u16::from_le_bytes(
+            data[idx..idx + 2]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 2;
+
+        header.cipher = CipherSection {
+            version: cipher_ver,
+            id: cipher_id,
+            nonce_size: cipher_nonce,
+            tag_size: cipher_tag,
+        };
+
+        //Meta
+        let meta_ver = u16::from_le_bytes(
+            data[idx..idx + 2]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 2;
+        let meta_create = u64::from_le_bytes(
+            data[idx..idx + 8]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 8;
+        let meta_update = u64::from_le_bytes(
+            data[idx..idx + 8]
+                .try_into()
+                .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
+        );
+        idx += 8;
+
+        let vault_id = Uuid::from_bytes(
+            data[idx..idx + 16]
+                .try_into()
+                .map_err(|e| VaultError::Slice(e))?,
+        );
+
+        header.metadata = MetadataSection {
+            version: meta_ver,
+            created_at_unix: meta_create,
+            updated_at_unix: meta_update,
+            vault_id: vault_id,
+        };
+
+        return Ok(header);
     }
 }

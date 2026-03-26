@@ -7,7 +7,7 @@ mod util;
 mod vault;
 mod x11_keysyms;
 
-use crate::vault::LoadedVault;
+use crate::vault::{LoadedVault, header::VaultyHeader};
 use std::fs::File;
 
 use aes_gcm::{
@@ -186,6 +186,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // println!("Result: {}", result);
     // ctap_register();
     let vh = vault::header::VaultyHeader::new();
+    println!("{:?}", &vh.metadata.vault_id);
+    let vh_bytes = vh.serialize()?;
+    println!("{:?}", &vh_bytes);
+    let dvh = VaultyHeader::deserialize(&vh_bytes)?;
+    println!("{:?}", &dvh.metadata.vault_id);
     //ctap_authenticate();
     return Ok(());
 }
