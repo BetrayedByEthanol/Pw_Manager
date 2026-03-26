@@ -289,7 +289,7 @@ impl VaultyHeader {
         return Ok(data);
     }
 
-    pub fn deserialize(data: &Vec<u8>) -> Result<Self, VaultError> {
+    pub fn deserialize(data: &Vec<u8>) -> Result<(Self, usize), VaultError> {
         let mut header = VaultyHeader::new();
         let mut idx: usize = 0;
         header.magic.copy_from_slice(&data[idx..idx + 4]);
@@ -512,6 +512,7 @@ impl VaultyHeader {
                 .try_into()
                 .map_err(|e| VaultError::Slice(e))?,
         );
+        idx += 16;
 
         header.metadata = MetadataSection {
             version: meta_ver,
@@ -520,6 +521,6 @@ impl VaultyHeader {
             vault_id: vault_id,
         };
 
-        return Ok(header);
+        return Ok((header, idx));
     }
 }

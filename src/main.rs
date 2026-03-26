@@ -189,7 +189,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{:?}", &vh.metadata.vault_id);
     let vh_bytes = vh.serialize()?;
     println!("{:?}", &vh_bytes);
-    let dvh = VaultyHeader::deserialize(&vh_bytes)?;
+    let (dvh, idx): (VaultyHeader, usize) = VaultyHeader::deserialize(&vh_bytes)?;
     println!("{:?}", &dvh.metadata.vault_id);
     //ctap_authenticate();
     return Ok(());
