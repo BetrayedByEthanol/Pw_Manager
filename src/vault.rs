@@ -16,6 +16,8 @@ mod session;
 mod entry;
 mod metadata;
 mod manager;
+mod error;
+pub mod body;
 pub mod header;
 
 pub struct LoadedVault {

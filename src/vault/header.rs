@@ -2,18 +2,47 @@ use std::array::TryFromSliceError;
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+use crate::vault::error::VaultError;
+use blake3::Hasher;
+use chacha20poly1305::aead::Buffer;
 
 #[derive(Debug, Clone)]
 pub struct VaultyHeader {
     pub magic: [u8; 4],
     pub version: u16,
-    pub header_len: u32,
+    pub header_len: u32, // drop for AAD
 
     pub kdf: KdfSection,
     pub wrapping: WrappingSection,
     pub fido2: Fido2Section,
     pub cipher: CipherSection,
-    pub metadata: MetadataSection,
+    pub metadata: MetadataSection, // drop for AAD
+    pub hash: [u8; 32], // drop for AAD
+}
+
+pub struct AADHeader {
+    pub magic: [u8; 4],
+    pub version: u16,
+
+    pub kdf: KdfSection,
+    pub wrapping: WrappingSection,
+    pub fido2: Fido2Section,
+    pub cipher: CipherSection,
+    pub vault_id: Uuid,
+}
+
+impl AADHeader {
+    fn from(header: VaultyHeader) -> Self {
+        AADHeader {
+            magic: header.magic,
+            version: header.version,
+            kdf: header.kdf,
+            wrapping: header.wrapping,
+            fido2: header.fido2,
+            cipher: header.cipher,
+            vault_id: header.metadata.vault_id,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +77,7 @@ pub struct WrappingSection {
     pub version: u16,
     pub wrapped_master_key: [u8; 48],
     pub nonce: [u8; 24],
+    pub wrapping_nonce: [u8; 24],
 }
 
 #[derive(Debug, Clone)]
@@ -105,55 +135,7 @@ pub struct MetadataSection {
     pub vault_id: Uuid,
 }
 
-#[derive(Debug)]
-pub enum VaultError {
-    TooLarge,
-    Crypto(chacha20poly1305::Error),
-    Io(std::io::Error),
-    Slice(std::array::TryFromSliceError),
-    LengthMismatch,
-    ParseError,
-}
 
-impl fmt::Display for VaultError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            VaultError::TooLarge => write!(f, "data too large for vault format"),
-            VaultError::Crypto(e) => write!(f, "crypto error: {}", e),
-            VaultError::Io(e) => write!(f, "io error: {}", e),
-            VaultError::LengthMismatch => {
-                write!(f, "mismatch between data length and length header")
-            }
-            VaultError::Slice(e) => write!(f, "Slice invalid size: {}", e),
-            VaultError::ParseError => write!(f, "Could not parse value"),
-        }
-    }
-}
-
-impl std::error::Error for VaultError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            VaultError::Crypto(e) => None,
-            VaultError::Io(e) => Some(e),
-            VaultError::TooLarge => None,
-            VaultError::LengthMismatch => None,
-            VaultError::Slice(e) => Some(e),
-            VaultError::ParseError => None,
-        }
-    }
-}
-
-impl From<std::io::Error> for VaultError {
-    fn from(e: std::io::Error) -> Self {
-        VaultError::Io(e)
-    }
-}
-
-impl From<chacha20poly1305::Error> for VaultError {
-    fn from(e: chacha20poly1305::Error) -> Self {
-        VaultError::Crypto(e)
-    }
-}
 
 impl VaultyHeader {
     pub fn new() -> Self {
@@ -176,6 +158,7 @@ impl VaultyHeader {
             wrapping: WrappingSection {
                 version: 0x0100,
                 wrapped_master_key: [0; 48],
+                wrapping_nonce: [0; 24],
                 nonce: [0; 24],
             },
             fido2: Fido2Section {
@@ -195,6 +178,7 @@ impl VaultyHeader {
                 updated_at_unix: now,
                 vault_id: Uuid::new_v4(),
             },
+            hash: [0; 32],
         };
         return slf;
         // return VaultyHeader
@@ -219,6 +203,7 @@ impl VaultyHeader {
         data.extend_from_slice(&self.wrapping.version.to_le_bytes());
         data.extend_from_slice(&self.wrapping.wrapped_master_key);
         data.extend_from_slice(&self.wrapping.nonce);
+        data.extend_from_slice(&self.wrapping.wrapping_nonce);
 
         //fido2
         data.extend_from_slice(&self.fido2.version.to_le_bytes());
@@ -281,10 +266,20 @@ impl VaultyHeader {
 
         data.extend(self.metadata.vault_id.as_bytes());
 
-        let header_length: u32 = data.len().try_into().map_err(|_| VaultError::TooLarge)?;
+
+
+
+        let mut header_length: u32 = data.len().try_into().map_err(|_| VaultError::TooLarge)? ;
+        header_length += 32;
         //if length
 
         data[header_len_index..header_len_index + 4].copy_from_slice(&header_length.to_le_bytes());
+
+        let mut hasher = Hasher::new();
+        hasher.update(&data);
+        let hash: [u8; 32] = hasher.finalize().into();
+        println!("Hash: {:?}", hash);
+        data.extend(&hash);
 
         return Ok(data);
     }
@@ -361,6 +356,10 @@ impl VaultyHeader {
             .try_into()
             .map_err(|e| VaultError::Slice(e))?;
         idx += 48;
+        let nonce: [u8; 24] = data[idx..idx + 24]
+            .try_into()
+            .map_err(|e| VaultError::Slice(e))?;
+        idx += 24;
         let wrapping_nonce: [u8; 24] = data[idx..idx + 24]
             .try_into()
             .map_err(|e| VaultError::Slice(e))?;
@@ -369,7 +368,8 @@ impl VaultyHeader {
         header.wrapping = WrappingSection {
             version: wrapping_ver,
             wrapped_master_key: wrapping_key,
-            nonce: wrapping_nonce,
+            wrapping_nonce: wrapping_nonce,
+            nonce: nonce,
         };
 
         //Fido2
@@ -520,6 +520,12 @@ impl VaultyHeader {
             updated_at_unix: meta_update,
             vault_id: vault_id,
         };
+        let vault_hash: [u8; 32] = data[idx..idx + 32].try_into().map_err(|e| VaultError::Slice(e))?;
+        header.hash = vault_hash;
+        let actual: [u8; 32] = blake3::hash(&data[0..idx].to_vec()).into();
+        println!("{:?}", actual);
+        println!("{:?}", vault_hash);
+        idx += 32;
 
         return Ok((header, idx));
     }
