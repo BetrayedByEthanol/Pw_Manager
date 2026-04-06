@@ -1,4 +1,4 @@
- #![allow(non_upper_case_globals)]
+#![allow(dead_code, non_upper_case_globals)]
 #![no_std]
 pub const XK_VoidSymbol: u32 = 0xffffff;
 

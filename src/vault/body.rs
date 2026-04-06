@@ -12,7 +12,7 @@ pub struct VaultyBody {
 impl VaultyBody {
     pub fn new() -> Self {
         Self {
-            version: 0,
+            version: 0x0100,
             entries_count: 0,
             entries: vec![],
             authorized_clients_count: 0,
