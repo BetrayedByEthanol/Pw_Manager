@@ -1,10 +1,9 @@
 use std::array::TryFromSliceError;
-use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 use crate::vault::error::VaultError;
 use blake3::Hasher;
-use chacha20poly1305::aead::Buffer;
+use crate::obfuscate::{obfuscate, unobfuscate};
 
 #[derive(Debug, Clone)]
 pub struct VaultyHeader {
@@ -25,23 +24,41 @@ pub struct AADHeader {
     pub version: u16,
 
     pub kdf: KdfSection,
-    pub wrapping: WrappingSection,
-    pub fido2: Fido2Section,
     pub cipher: CipherSection,
     pub vault_id: Uuid,
 }
 
+
 impl AADHeader {
-    fn from(header: VaultyHeader) -> Self {
+    pub fn from(header: &VaultyHeader) -> Self {
         AADHeader {
-            magic: header.magic,
-            version: header.version,
-            kdf: header.kdf,
-            wrapping: header.wrapping,
-            fido2: header.fido2,
-            cipher: header.cipher,
-            vault_id: header.metadata.vault_id,
+            magic: header.magic.clone(),
+            version: header.version.clone(),
+            kdf: header.kdf.clone(),
+            cipher: header.cipher.clone(),
+            vault_id: header.metadata.vault_id.clone(),
         }
+    }
+    pub fn to_aad_bytes(&self) -> Vec<u8> {
+        let mut data: Vec<u8> = vec![];
+        data.extend_from_slice(&self.magic);
+        data.extend_from_slice(&self.version.to_le_bytes());
+
+        //Kdf Section
+        data.extend_from_slice(&self.kdf.version.to_le_bytes());
+        data.push(self.kdf.id as u8);
+        data.extend_from_slice(&self.kdf.salt);
+        data.extend_from_slice(&self.kdf.memory_cost_kib.to_le_bytes());
+        data.extend_from_slice(&self.kdf.time_cost.to_le_bytes());
+        data.extend_from_slice(&self.kdf.parallelism.to_le_bytes());
+
+        data.extend_from_slice(&self.cipher.version.to_le_bytes());
+        data.push(self.cipher.id as u8);
+        data.extend_from_slice(&self.cipher.nonce_size.to_le_bytes());
+        data.extend_from_slice(&self.cipher.tag_size.to_le_bytes());
+
+        data.extend_from_slice(self.vault_id.as_bytes());
+        return data;
     }
 }
 
@@ -66,7 +83,7 @@ impl TryFrom<u8> for KdfId {
 pub struct KdfSection {
     pub version: u16,
     pub id: KdfId,
-    pub salt: [u8; 16],
+    pub salt: [u8; 32],
     pub memory_cost_kib: u32,
     pub time_cost: u32,
     pub parallelism: u32,
@@ -76,7 +93,7 @@ pub struct KdfSection {
 pub struct WrappingSection {
     pub version: u16,
     pub wrapped_master_key: [u8; 48],
-    pub nonce: [u8; 24],
+    pub master_nonce: [u8; 24],
     pub wrapping_nonce: [u8; 24],
 }
 
@@ -84,6 +101,7 @@ pub struct WrappingSection {
 pub struct Fido2Section {
     pub version: u16,
     pub credential_count: u16,
+    pub derive_input: [u8; 32],
     pub credentials: Vec<Fido2Credential>,
 }
 
@@ -94,12 +112,16 @@ pub struct Fido2Credential {
     pub credential_id_length: u16,
     pub rp_id_length: u16,
     pub rp_id: String,
-    pub prf_salt: [u8; 32],
     pub public_key_length: u16,
     pub public_key: Vec<u8>,
     pub sign_count: u32,
+    pub derive_key: [u8; 48],
+    pub derive_nonce: [u8; 24],
     pub wrapped_wrapping_key: [u8; 48],
     pub wrap_nonce: [u8; 24],
+    pub kdf_salt: [u8; 32],
+    pub prf_input: [u8; 32],
+    pub derive_salt: [u8; 32]
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -150,7 +172,7 @@ impl VaultyHeader {
             kdf: KdfSection {
                 version: 0x0100,
                 id: KdfId::Argon2id,
-                salt: [0; 16],
+                salt: [0; 32],
                 memory_cost_kib: 65536,
                 time_cost: 3,
                 parallelism: 2,
@@ -159,11 +181,12 @@ impl VaultyHeader {
                 version: 0x0100,
                 wrapped_master_key: [0; 48],
                 wrapping_nonce: [0; 24],
-                nonce: [0; 24],
+                master_nonce: [0; 24],
             },
             fido2: Fido2Section {
                 version: 0x0100,
                 credential_count: 0,
+                derive_input: [0; 32],
                 credentials: vec![],
             },
             cipher: CipherSection {
@@ -202,11 +225,12 @@ impl VaultyHeader {
         //Wrapping
         data.extend_from_slice(&self.wrapping.version.to_le_bytes());
         data.extend_from_slice(&self.wrapping.wrapped_master_key);
-        data.extend_from_slice(&self.wrapping.nonce);
+        data.extend_from_slice(&self.wrapping.master_nonce);
         data.extend_from_slice(&self.wrapping.wrapping_nonce);
 
         //fido2
         data.extend_from_slice(&self.fido2.version.to_le_bytes());
+        data.extend_from_slice(&self.fido2.derive_input);
         data.extend_from_slice(&self.fido2.credential_count.to_le_bytes());
         for cred in self.fido2.credentials.iter() {
             let credendial_len_index: usize = data.len();
@@ -230,8 +254,7 @@ impl VaultyHeader {
                 return Err(VaultError::LengthMismatch);
             }
             data.extend_from_slice(&rp_id_len.to_le_bytes());
-            data.extend(cred.rp_id.as_bytes());
-            data.extend(&cred.prf_salt);
+            data.extend(obfuscate(&cred.rp_id));
             let pub_key_len: u16 = cred
                 .public_key
                 .len()
@@ -245,12 +268,20 @@ impl VaultyHeader {
             data.extend_from_slice(&cred.sign_count.to_le_bytes());
             data.extend(&cred.wrapped_wrapping_key);
             data.extend(&cred.wrap_nonce);
+
+            data.extend_from_slice(&cred.derive_key);
+            data.extend_from_slice(&cred.derive_nonce);
+            data.extend_from_slice(&cred.kdf_salt);
+            data.extend_from_slice(&cred.prf_input);
+            data.extend_from_slice(&cred.derive_salt);
+
             //If ?
             let credential_size: u32 = (data.len() - credendial_len_index)
                 .try_into()
                 .map_err(|_| VaultError::TooLarge)?;
             data[credendial_len_index..credendial_len_index + 4]
                 .copy_from_slice(&credential_size.to_le_bytes());
+
         }
 
         //cipher
@@ -313,10 +344,10 @@ impl VaultyHeader {
         idx += 2;
         let kdf_id: KdfId = KdfId::try_from(data[idx])?;
         idx += 1;
-        let kdf_salt: [u8; 16] = data[idx..idx + 16]
+        let kdf_salt: [u8; 32] = data[idx..idx + 32]
             .try_into()
             .map_err(|e| VaultError::Slice(e))?;
-        idx += 16;
+        idx += 32;
         let kdf_memory = u32::from_le_bytes(
             data[idx..idx + 4]
                 .try_into()
@@ -369,7 +400,7 @@ impl VaultyHeader {
             version: wrapping_ver,
             wrapped_master_key: wrapping_key,
             wrapping_nonce: wrapping_nonce,
-            nonce: nonce,
+            master_nonce: nonce,
         };
 
         //Fido2
@@ -379,6 +410,9 @@ impl VaultyHeader {
                 .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
         );
         idx += 2;
+        let derive_input: [u8; 32] = data[idx..idx+32].try_into().map_err(|e| VaultError::Slice(e))?;
+        idx += 32;
+
         let fido_count: u16 = u16::from_le_bytes(
             data[idx..idx + 2]
                 .try_into()
@@ -407,13 +441,14 @@ impl VaultyHeader {
                     .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
             );
             idx += 2;
-            let rp_id = String::from_utf8(data[idx..idx + usize::from(rp_len)].to_vec())
-                .map_err(|_| VaultError::ParseError)?;
+            let rp_id = unobfuscate(&data[idx..idx + usize::from(rp_len)].to_vec());
+                // .map_err(|_| VaultError::ParseError)?;
+
             idx += usize::from(rp_len);
-            let prf: [u8; 32] = data[idx..idx + 32]
-                .try_into()
-                .map_err(|e| VaultError::Slice(e))?;
-            idx += 32;
+            // let prf: [u8; 32] = data[idx..idx + 32]
+            //     .try_into()
+            //     .map_err(|e| VaultError::Slice(e))?;
+            // idx += 32;
             let pub_key_len: u16 = u16::from_le_bytes(
                 data[idx..idx + 2]
                     .try_into()
@@ -435,7 +470,17 @@ impl VaultyHeader {
             let fido_nonce: [u8; 24] = data[idx..idx + 24]
                 .try_into()
                 .map_err(|e| VaultError::Slice(e))?;
+            idx += 24;
+            let derive_key: [u8; 48] = data[idx..idx+48].try_into().map_err(|e| VaultError::Slice(e))?;
             idx += 48;
+            let derive_nonce: [u8; 24] = data[idx..idx+24].try_into().map_err(|e| VaultError::Slice(e))?;
+            idx += 24;
+            let kdf_salt: [u8; 32] = data[idx..idx+32].try_into().map_err(|e| VaultError::Slice(e))?;
+            idx += 32;
+            let prf_input: [u8; 32] = data[idx..idx+32].try_into().map_err(|e| VaultError::Slice(e))?;
+            idx += 32;
+            let derive_salt: [u8; 32] = data[idx..idx+32].try_into().map_err(|e| VaultError::Slice(e))?;
+            idx += 32;
 
             fido_creds.push(Fido2Credential {
                 credential_length: cred_length,
@@ -443,17 +488,23 @@ impl VaultyHeader {
                 credential_id_length: cred_id_len,
                 rp_id_length: rp_len,
                 rp_id: rp_id,
-                prf_salt: prf,
+                // prf_salt: prf,
                 public_key_length: pub_key_len,
                 public_key: pub_key,
                 sign_count: sign_count,
                 wrapped_wrapping_key: fido_wrapping,
                 wrap_nonce: fido_nonce,
+                derive_key: derive_key,
+                derive_nonce: derive_nonce,
+                kdf_salt: kdf_salt,
+                prf_input: prf_input,
+                derive_salt: derive_salt
             });
         }
 
         header.fido2 = Fido2Section {
             version: fido_ver,
+            derive_input: derive_input,
             credential_count: fido_count,
             credentials: fido_creds,
         };

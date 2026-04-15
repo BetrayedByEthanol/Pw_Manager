@@ -1,10 +1,12 @@
+use std::any::Any;
+use secrecy::{ SecretString};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct PasswordEntry {
     pub title: String,
     pub username: Option<String>,
-    pub password: String,
+    pub password: SecretString,
     pub urls: Vec<String>,
     pub notes: Option<String>,
 }
@@ -36,4 +38,17 @@ pub struct CardEntry {
     pub expiry_year: u16,
     pub cvv: Option<String>,
     pub notes: Option<String>,
+}
+
+pub trait TypeEntry: Any {
+    fn as_any(&self) -> &dyn Any;
+    fn serialize(&self) -> Vec<u8>;
+}
+
+impl TypeEntry for PasswordEntry {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn serialize(&self) -> Vec<u8> {
+        return vec![0];
+    }
 }

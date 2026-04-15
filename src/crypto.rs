@@ -5,12 +5,16 @@ mod secure_bytes;
 use std::convert::TryInto;
 
 use argon2::{Algorithm, Argon2, Params, Version};
+use argon2::password_hash::rand_core::{OsRng, RngCore};
 use base64::Engine;
 use base64::engine::GeneralPurpose;
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
-use rand_core::{OsRng, RngCore};
+use hkdf::Hkdf;
+use hmac::Hmac;
+use secrecy::{ExposeSecret,  SecretString};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use zeroize::Zeroize;
 
 // ---------- Header / Payload structs ----------
@@ -124,9 +128,9 @@ pub fn create_new_header() -> VaultHeader {
     let engine = GeneralPurpose::new(&base64::alphabet::STANDARD, base64::engine::GeneralPurposeConfig::new());
     let mut salt_bytes = [0u8; 32];
     let mut nonce_bytes = [0u8; 24];
-
     OsRng.fill_bytes(&mut salt_bytes);
     OsRng.fill_bytes(&mut nonce_bytes);
+
 
     let kdf = KdfParams {
         alg: "argon2id".to_string(),
@@ -285,3 +289,75 @@ pub fn decrypt_vault(
 
     Ok((header, payload))
 }
+
+pub(crate) fn hash(pw: SecretString, m: u32, t: u32, p: u32) -> Result<([u8; 32], [u8; 32]), Box<dyn std::error::Error>> {
+    let params = Params::new(m, t, p, None)
+        .map_err(|e| CryptoError::Crypto(format!("Bad Argon2 params: {e}")))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut salt_bytes = [0u8; 32];
+
+    OsRng.fill_bytes(&mut salt_bytes);
+    let mut key = [0u8; 32];
+    argon2.hash_password_into(pw.expose_secret().as_bytes(), &salt_bytes, &mut key).unwrap();
+    Ok((key, salt_bytes))
+}
+
+pub(crate) fn hash_with_bytes(bytes: &[u8], m: u32, t: u32, p: u32) -> Result<([u8; 32], [u8; 32]), Box<dyn std::error::Error>> {
+    let params = Params::new(m, t, p, None)
+        .map_err(|e| CryptoError::Crypto(format!("Bad Argon2 params: {e}")))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut salt_bytes = [0u8; 32];
+
+    OsRng.fill_bytes(&mut salt_bytes);
+    let mut key = [0u8; 32];
+    argon2.hash_password_into(bytes, &salt_bytes, &mut key).unwrap();
+    Ok((key, salt_bytes))
+}
+
+pub(crate) fn hash_fix_salt(pw: SecretString,salt: &[u8; 32], m: u32, t: u32, p: u32) -> Result<([u8; 32]), Box<dyn std::error::Error>> {
+    let params = Params::new(m, t, p, None)
+        .map_err(|e| CryptoError::Crypto(format!("Bad Argon2 params: {e}")))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+
+    let mut key = [0u8; 32];
+    argon2.hash_password_into(pw.expose_secret().as_bytes(), salt, &mut key).unwrap();
+    Ok((key))
+}
+
+pub(crate) fn encrypt(message: &Vec<u8>, key: &[u8; 32], nonce: &[u8; 24], aad: &Vec<u8>) -> Result<(Vec<u8>), Box<dyn std::error::Error>> {
+    let nonce = XNonce::from_slice(nonce);
+    let key = Key::from_slice(key);
+
+    let cipher = XChaCha20Poly1305::new(key);
+
+    let ciphertext = cipher
+        .encrypt(
+            nonce,
+            Payload {
+                msg: message,
+                aad: aad,
+            },
+        )
+        .map_err(|e| CryptoError::Crypto(format!("Encrypt failed: {e}")))?;
+    Ok(ciphertext)
+}
+
+pub fn decrypt(ciphertext: &Vec<u8>, key_bytes: &[u8; 32], nonce: &[u8; 24], aad: &Vec<u8>) -> Result<(Vec<u8>), Box<dyn std::error::Error>> {
+    let nonce = XNonce::from_slice(nonce);
+    let key = Key::from_slice(key_bytes);
+    let cipher = XChaCha20Poly1305::new(key);
+    let plaintext = cipher
+        .decrypt(
+            nonce,
+            Payload {
+                msg: ciphertext,
+                aad: aad,
+            },
+        )
+        .map_err(|e| CryptoError::Crypto(format!("Decrypt failed: {e}")))?;
+
+    return Ok(plaintext);
+}
+
+
+
