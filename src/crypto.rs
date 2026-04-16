@@ -324,6 +324,17 @@ pub(crate) fn hash_fix_salt(pw: SecretString,salt: &[u8; 32], m: u32, t: u32, p:
     Ok((key))
 }
 
+pub(crate) fn hash_bytes_fix_salt(bytes: &[u8], salt: &[u8; 32], m: u32, t: u32, p: u32) -> Result<([u8; 32]), Box<dyn std::error::Error>> {
+    let params = Params::new(m, t, p, None)
+        .map_err(|e| CryptoError::Crypto(format!("Bad Argon2 params: {e}")))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+
+    let mut key = [0u8; 32];
+    argon2.hash_password_into(bytes, salt, &mut key).unwrap();
+    Ok((key))
+}
+
+
 pub(crate) fn encrypt(message: &Vec<u8>, key: &[u8; 32], nonce: &[u8; 24], aad: &Vec<u8>) -> Result<(Vec<u8>), Box<dyn std::error::Error>> {
     let nonce = XNonce::from_slice(nonce);
     let key = Key::from_slice(key);

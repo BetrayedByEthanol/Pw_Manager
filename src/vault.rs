@@ -6,6 +6,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 use std::process::{Command, Stdio};
+use std::time::{SystemTime, UNIX_EPOCH};
 use aes_gcm::aead::Buffer;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use hmac::{Hmac, Mac, KeyInit};
@@ -29,7 +30,7 @@ use crate::vault::body::VaultyBody;
 use crate::vault::header::{AADHeader, Fido2Credential, VaultyHeader};
 use crate::cli::prompt_yes_no;
 use crate::vault::derived::VaultyDerived;
-use crate::vault::entry::{VaultAAD, VaultyEntry};
+use crate::vault::entry::{EntraAAD, EntryType, VaultyEntry};
 use crate::vault::header::CipherId::XChaCha20Poly1305;
 use crate::vault::payload::{PasswordEntry, TypeEntry};
 
@@ -263,7 +264,7 @@ impl Vault {
         base_aad.extend_from_slice(&entry.public_key.clone());
 
         let kek_master = hkdf_derive(&mix, Some(&entry.kdf_salt), "vault-master-wrap-v1".as_bytes());
-        
+
         let mut master_key: [u8; 32] =  crypto::decrypt(&entry.wrapped_wrapping_key.to_vec(), &kek_master, &entry.wrap_nonce, &base_aad)?.as_slice().try_into()?;
         let cipher_text = crypto::encrypt(&payload, &master_key, &self.header.wrapping.master_nonce, &AADHeader::from(&self.header).to_aad_bytes())?;
         master_key.zeroize();
@@ -274,12 +275,21 @@ impl Vault {
 
     pub fn add_entry(&mut self, is_default: bool, title: String, username: Option<String>, password: SecretString, urls: Vec<String>, notes: Option<String>) {
         let payload = PasswordEntry {
+            title_length: title.len().try_into().unwrap(),
             title: title,
+            username_length: if username.is_some() {username.as_ref().unwrap().len().try_into().unwrap()} else {0},
             username: username,
+            password_length: password.expose_secret().len().try_into().unwrap(),
             password: password,
+            url_count: urls.len().try_into().unwrap(),
             urls: urls,
+            notes_length: if notes.is_some() {notes.as_ref().unwrap().len().try_into().unwrap()} else {0},
             notes: notes,
         };
+        let now: u64 = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         let mut entry_key : [u8; 32] = [0u8; 32];
         OsRng.fill_bytes(&mut entry_key);
 
@@ -289,37 +299,47 @@ impl Vault {
         let mut wrapping_nonce: [u8; 24] = [0u8; 24];
         OsRng.fill_bytes(&mut wrapping_nonce);
 
-        let domain = String::from("vaulty.com");
-        let target = String::from("vaulty.com");
+        let domain = String::from("amazon");    // could be broader like bank or e-mail
+        let target = String::from("amazon.de"); // target top level url
 
-
-        let mut entry = VaultyEntry::new();
-        entry.is_default = is_default;
-        entry.target_length = target.len().try_into().unwrap();
-        entry.target = target;
-        entry.domain_tag_length = domain.len().try_into().unwrap();
-        entry.domain_tag = domain;
 
         let (hash, salt) = if is_default {crypto::hash_with_bytes(self.derived.vault_secret.expose_secret(), self.header.kdf.memory_cost_kib, self.header.kdf.time_cost, self.header.kdf.parallelism).unwrap()} else {crypto::hash(prompt_pw("Entry Password:".parse().unwrap()).unwrap(), self.header.kdf.memory_cost_kib, self.header.kdf.time_cost, self.header.kdf.parallelism).unwrap()};
-        entry.salt = salt;
 
+        let mut entry = VaultyEntry {
+            entry_length: 0,
+            wrapped_key: [0u8; 48],
+            domain_tag_length: domain.len().try_into().unwrap(),
+            domain_tag: domain,
+            entry_type: EntryType::Password,
+            nonce: entry_nonce.as_slice().try_into().unwrap(),
+            salt,
+            wrapping_nonce,
+            version: 0x0100,
+            entry_id: Uuid::new_v4(),
+            payload_length:0,
+            payload: vec![],
+            target_length: target.len().try_into().unwrap(),
+            target,
+            is_default,
+            created_at: now,
+            updated_at: now,
+        };
         let payload_bytes = payload.serialize();
-        let aad = VaultAAD::from(&entry, self.header.metadata.vault_id).to_aad_bytes();
-        let encrypted_payload = crypto::encrypt(&payload_bytes, &entry_key, &entry_nonce, &aad).unwrap();
 
+        let aad = EntraAAD::from(&entry, self.header.metadata.vault_id).to_aad_bytes();
+        let encrypted_payload = crypto::encrypt(&payload_bytes, &entry_key, &entry_nonce, &aad).unwrap();
         entry.payload_length = encrypted_payload.len().try_into().unwrap();
         entry.payload = encrypted_payload;
 
+
         let wrapped_key = crypto::encrypt(&entry_key.to_vec(), &hash, &wrapping_nonce, &aad).unwrap();
+        entry.wrapped_key = wrapped_key.as_slice().try_into().unwrap();
         entry_key.zeroize();
 
-        entry.wrapped_key = wrapped_key.as_slice().try_into().unwrap();
-        entry.nonce = entry_nonce.as_slice().try_into().unwrap();
-        entry.wrapping_nonce = wrapping_nonce.as_slice().try_into().unwrap();
 
         self.body.entries.push(entry);
         self.body.entries_count += 1;
-
+        self.header.metadata.updated_at_unix = now;
     }
 }
 
@@ -336,7 +356,7 @@ impl SealedVault {
         }
     }
 
-    fn serialize(&self) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub fn serialize(&self) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let mut buf = self.header.serialize()?;
         buf.extend_from_slice(&self.payload);
         Ok(buf)

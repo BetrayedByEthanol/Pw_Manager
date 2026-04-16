@@ -73,14 +73,14 @@ pub fn ctap_authenticate(kek: &[u8; 32],  pin: &SecretString, cred_id: Vec<Vec<u
     // println!("{:?}", prf);
     let idx = cred_id.iter().position(|e| e == &assert.credential_id).unwrap();
 
-    let verify = true;
+    // let verify = true;
 
-    // let verify = verifier::verify_assertion(
-    //     rp,
-    //     &(PublicKey::with_der(pub_key.get(idx).unwrap(), public_key::PublicKeyType::Ecdsa256)),
-    //     &buf,
-    //     &(assert),
-    // );
+    let verify = verifier::verify_assertion(
+        rp,
+        &(PublicKey::with_der(pub_key.get(idx).unwrap(), public_key::PublicKeyType::Ecdsa256)),
+        &buf,
+        &(assert),
+    );
     let credential_id = assert.credential_id.clone();
     println!("{:}", verify);
     println!("{:}", pub_key.len());

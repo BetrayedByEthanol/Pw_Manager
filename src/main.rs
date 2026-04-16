@@ -30,9 +30,10 @@ use ctap_hid_fido2::{
 };
 use fido2_rs::credentials::{Credential, Opt};
 use fido2_rs::device::{Device, DeviceList};
+use secrecy::SecretString;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use crate::fsutil::{read_vault, vault_exists};
+use crate::fsutil::{atomic_write, read_vault, vault_exists};
 use crate::vault::entry::VaultyEntry;
 
 fn prompt_pw() -> String {
@@ -88,9 +89,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let entry = VaultyEntry::new();
     // entry.print_entry();
 
-    let vault = if !vault_exists() {init_vault()?} else {load_vault()?};
+    let mut vault = if !vault_exists() {init_vault()?} else {load_vault()?};
+    // vault.add_entry(true, "amazon".to_string(), Some(String::from("Js_Ram38@hotmail.com")), SecretString::from("asdasdas"), vec![String::from("amazon.de")], None);
+    // atomic_write(&vault.seal_vault()?.serialize()?)?;
     println!("{:?}", vault.header.metadata.vault_id);
-    
+    if vault.body.entries.len() > 0 {
+        vault.body.entries[0].print_entry(vault.header.metadata.vault_id, &vault.header.kdf, &vault.derived.vault_secret);
+    }
+
     // let vh = vault::header::VaultyHeader::new();
     // println!("{:?}", &vh.metadata.vault_id);
     // let vh_bytes = vh.serialize()?;

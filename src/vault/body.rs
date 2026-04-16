@@ -64,7 +64,7 @@ impl VaultyBody {
             idx += 2;
             let entry_id: Uuid = Uuid::from_bytes(data[idx..idx+16].try_into().unwrap());
             idx += 16;
-            let payload_len: u16 = u16::from_le_bytes(data[idx..idx + 4].try_into().unwrap());
+            let payload_len: u16 = u16::from_le_bytes(data[idx..idx + 2].try_into().unwrap());
             idx += 2;
             let payload: Vec<u8> = data[idx..idx + usize::from(payload_len)].to_vec();
             idx += usize::from(payload_len);

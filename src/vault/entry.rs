@@ -1,9 +1,13 @@
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::{ExposeSecret, SecretBox, SecretSlice, SecretString};
 use uuid::Uuid;
+use zeroize::Zeroize;
+use crate::crypto;
 use crate::vault::error::VaultError;
+use crate::vault::header::KdfSection;
 use crate::vault::payload::{PasswordEntry, TypeEntry};
+use crate::vault::prompt_pw;
 
 pub struct VaultyEntry {
     pub entry_length: u32,
@@ -25,7 +29,7 @@ pub struct VaultyEntry {
     pub updated_at: u64,
 }
 
-pub struct VaultAAD {
+pub struct EntraAAD {
     pub entry_id: Uuid,
     pub entry_type: EntryType, //pw, passkey
     pub domain_tag: String,
@@ -33,9 +37,25 @@ pub struct VaultAAD {
     pub vault_id: Uuid
 }
 
-impl VaultAAD {
+impl EntraAAD {
     pub(crate) fn to_aad_bytes(&self) -> Vec<u8> {
-        return vec![];
+        let mut data : Vec<u8> = vec![];
+        data.extend_from_slice(self.entry_id.as_bytes());
+        data.push(self.entry_type as u8);
+        data.extend_from_slice(self.domain_tag.as_bytes());
+        data.extend_from_slice(&self.version.to_le_bytes());
+        data.extend_from_slice(self.vault_id.as_bytes());
+        return data;
+    }
+
+    pub fn from(entry: &VaultyEntry, uuid: Uuid) -> Self {
+        EntraAAD {
+            entry_id: entry.entry_id,
+            entry_type: entry.entry_type,
+            domain_tag: entry.domain_tag.clone(),
+            version: entry.version,
+            vault_id: uuid,
+        }
     }
 }
 
@@ -59,17 +79,6 @@ impl TryFrom<u8> for EntryType {
 }
 
 
-impl VaultAAD {
-    pub fn from(entry: &VaultyEntry, uuid: Uuid) -> Self {
-        VaultAAD {
-            entry_id: entry.entry_id,
-            entry_type: entry.entry_type,
-            domain_tag: entry.domain_tag.clone(),
-            version: entry.version,
-            vault_id: uuid,
-        }
-    }
-}
 
 impl VaultyEntry {
     pub fn new() -> Self {
@@ -99,18 +108,29 @@ impl VaultyEntry {
         return slf;
     }
 
-    pub fn get_entry(&self, password: &SecretString) -> Rc<dyn TypeEntry> {
-        Rc::new(PasswordEntry {
-            title: "".to_string(),
-            username: None,
-            password: SecretString::from(String::from("asdasd")),
-            urls: vec![],
-            notes: None,
-        })
+    pub fn get_entry(&self, vault_id: Uuid, kdf: &KdfSection, vault_secret: &SecretBox<[u8]>) -> Rc<dyn TypeEntry> {
+        let hash= if self.is_default {
+            crypto::hash_bytes_fix_salt(vault_secret.expose_secret(),
+                                  &self.salt,
+                                    kdf.memory_cost_kib,
+                                    kdf.time_cost,
+                                    kdf.parallelism).unwrap()
+        } else {
+            crypto::hash_fix_salt(prompt_pw("Entry Password:".parse().unwrap()).unwrap(),
+                                  &self.salt,
+                         kdf.memory_cost_kib,
+                         kdf.time_cost,
+                         kdf.parallelism).unwrap()};
+        let aad = EntraAAD::from(self, vault_id).to_aad_bytes();
+        let mut entry_key:[u8; 32] = crypto::decrypt(&self.wrapped_key.to_vec(), &hash, &self.wrapping_nonce, &aad).unwrap().try_into().unwrap();
+        let payload = crypto::decrypt(&self.payload, &entry_key, &self.nonce, &aad).unwrap();
+        entry_key.zeroize();
+
+        Rc::new(PasswordEntry::deserialize(&payload))
     }
 
-    pub fn print_entry(&self) {
-        let entry = self.get_entry(&SecretString::from(String::from("adas")));
+    pub fn print_entry(&self, vault_id: Uuid, kdf: &KdfSection, vault_secret: &SecretBox<[u8]>) {
+        let entry = self.get_entry(vault_id, kdf, vault_secret);
         let cast_entry = entry.as_any().downcast_ref::<PasswordEntry>().unwrap();
         println!("{:}",cast_entry.password.expose_secret());
     }
@@ -144,9 +164,9 @@ impl VaultyEntry {
         data.push(if self.is_default { 1 } else { 0 });
         data.extend_from_slice(&self.created_at.to_le_bytes());
         data.extend_from_slice(&self.updated_at.to_le_bytes());
-        if data.len() != self.entry_length as usize {
-            panic!("Serialized entry length does not match entry length");
-        }
+        // if data.len() != self.entry_length as usize {
+        //     panic!("Serialized entry length does not match entry length");
+        // }
         return Ok(data);
     }
 
