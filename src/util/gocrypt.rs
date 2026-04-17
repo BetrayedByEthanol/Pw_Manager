@@ -8,19 +8,19 @@ fn init_gocryptfs() -> Result<(), Box<dyn Error>> {
     let mut status = Command::new("pwd").output()?;
     println!(
         "{}",
-        String::from_utf8(status.stdout).expect("Our bytes should be valid utf8")
+        String::from_utf8(status.stdout)?
     );
     println!("Before mkdir");
     status = Command::new("ls").output()?;
     println!(
         "{}",
-        String::from_utf8(status.stdout).expect("Our bytes should be valid utf8")
+        String::from_utf8(status.stdout)?
     );
 
     let mut exit_status = Command::new("mkdir")
         .arg("new_directory")
         .status()
-        .expect("Failed to execute mkdir");
+        ?;
     if exit_status.success() {
         println!("Directory created successfully");
     } else {
@@ -31,7 +31,7 @@ fn init_gocryptfs() -> Result<(), Box<dyn Error>> {
     status = Command::new("ls").output()?;
     println!(
         "{}",
-        String::from_utf8(status.stdout).expect("Our bytes should be valid utf8")
+        String::from_utf8(status.stdout)?
     );
 
     let mut derived_key = [0u8; 32];
@@ -48,7 +48,7 @@ fn init_gocryptfs() -> Result<(), Box<dyn Error>> {
         // .stdout(Stdio::piped())
         .spawn()?;
 
-    child.stdin.as_mut().unwrap().write_all(&derived_key)?;
+    child.stdin.as_mut().ok_or("Our bytes should be valid utf8")?.write_all(&derived_key)?;
     let child_out = child.wait_with_output()?;
 
 
@@ -56,20 +56,20 @@ fn init_gocryptfs() -> Result<(), Box<dyn Error>> {
     println!("{:?}", String::from_utf8(child_out.stdout));
 
     let mut child2 = Command::new("gocryptfs-xray").args(["-dumpmasterkey", "new_directory/gocryptfs.conf"]).stdin(Stdio::piped()).spawn()?;
-    child2.stdin.as_mut().unwrap().write_all(&derived_key)?;
+    child2.stdin.as_mut().ok_or("Our bytes should be valid utf8")?.write_all(&derived_key)?;
     let child_status = child2.wait_with_output()?;
 
     let err = child_status.stderr;
     println!(
-        "XRAY: {:?}\n{:?}",
-        String::from_utf8(child_status.stdout).expect("Our bytes should be valid utf8"), String::from_utf8(err)
+        "XRAY: {:?}",
+        String::from_utf8(child_status.stdout)?
     );
 
     println!("before rm");
     status = Command::new("ls").arg("new_directory").output()?;
     println!(
         "{}",
-        String::from_utf8(status.stdout).expect("Our bytes should be valid utf8")
+        String::from_utf8(status.stdout)?
     );
 
     exit_status = Command::new("rm")
@@ -77,7 +77,7 @@ fn init_gocryptfs() -> Result<(), Box<dyn Error>> {
         .arg("-f")
         .arg("new_directory")
         .status()
-        .expect("Failed to execute rm");
+        ?;
     if exit_status.success() {
         println!("Directory created successfully");
     } else {
@@ -88,16 +88,16 @@ fn init_gocryptfs() -> Result<(), Box<dyn Error>> {
     status = Command::new("ls").output()?;
     println!(
         "{}",
-        String::from_utf8(status.stdout).expect("Our bytes should be valid utf8")
+        String::from_utf8(status.stdout)?
     );
     Ok(())
 }
 
 fn init_gocryptfs_v2() -> Result<(), Box<dyn Error>> {
 
-    println!("{}", env::current_dir().unwrap().display());
-    let exe_path = env::current_exe().expect("Failed to get executable path");
-    let exe_dir = exe_path.parent().expect("Failed to get executable directory");
+    println!("{}", env::current_dir()?.display());
+    let exe_path = env::current_exe()?;
+    let exe_dir = exe_path.parent().ok_or("Could not get parent directory")?;
 
     println!("Executable directory: {}", exe_dir.display());
     let vault_dir = exe_dir.join("vault");
@@ -122,33 +122,33 @@ fn init_gocryptfs_v2() -> Result<(), Box<dyn Error>> {
             "-aessiv",
             "-passfile",
             "/dev/stdin",
-            vault_dir.to_str().unwrap(),
+            vault_dir.to_str().ok_or("Could not get vault directory path")?,
         ])
         .stdin(Stdio::piped())
         // .stdout(Stdio::piped())
         .spawn()?;
     // println!("{:?}", vault_pw.expose_secret());
-    child.stdin.as_mut().unwrap().write_all("asdasd".as_bytes())?;
+    child.stdin.as_mut().ok_or("Could ")?.write_all("asdasd".as_bytes())?;
     let child_out = child.wait_with_output()?;
     println!("Mounting vault: {:}", child_out.status);
-    // child = Command::new("gocryptfs-xray").args(["-dumpmasterkey", vault_dir.to_str().unwrap()]).stdin(Stdio::piped()).spawn()?;
+    // child = Command::new("gocryptfs-xray").args(["-dumpmasterkey", vault_dir.to_str()?]).stdin(Stdio::piped()).spawn()?;
 
     child = Command::new("gocryptfs")
         .args([
-            vault_dir.to_str().unwrap(),
-            mount_dir.to_str().unwrap()
+            vault_dir.to_str().ok_or("Could not get vault directory path")?,
+            mount_dir.to_str().ok_or("Could not get mount directory path")?,
         ])
         .stdin(Stdio::piped())
         .spawn()?;
 
-    child.stdin.as_mut().unwrap().write_all("asdasd".as_bytes())?;
+    child.stdin.as_mut().ok_or("Our bytes should be valid utf8")?.write_all("asdasd".as_bytes())?;
     child.wait()?;
     println!("Creating test file");
     File::create(mount_dir.join("test.txt"))?.write_all(
         "Hello, world!".as_bytes()
-    ).expect("Failed to write file");
+    )?;
 
-    child = Command::new("umount").args([mount_dir.to_str().unwrap()]).spawn()?;
+    child = Command::new("umount").args([mount_dir.to_str().ok_or("Could not get mount directory path")?]).spawn()?;
     child.wait()?;
     Ok(())
 }

@@ -160,11 +160,8 @@ pub struct MetadataSection {
 
 
 impl VaultyHeader {
-    pub fn new() -> Self {
-        let now: u64 = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+    pub fn new(now: u64) -> Self {
+
         let slf = Self {
             magic: [0x56, 0x4C, 0x54, 0x31],
             version: 0x0100,
@@ -315,8 +312,11 @@ impl VaultyHeader {
         return Ok(data);
     }
 
-    pub fn deserialize(data: &Vec<u8>) -> Result<(Self, usize), VaultError> {
-        let mut header = VaultyHeader::new();
+    pub fn deserialize(data: &Vec<u8>) -> Result<(Self, usize), Box<dyn std::error::Error>> {
+        let now: u64 = SystemTime::now()
+            .duration_since(UNIX_EPOCH)?
+            .as_secs();
+        let mut header = VaultyHeader::new(now);
         let mut idx: usize = 0;
         header.magic.copy_from_slice(&data[idx..idx + 4]);
         idx += 4;
@@ -441,7 +441,7 @@ impl VaultyHeader {
                     .map_err(|e: TryFromSliceError| VaultError::Slice(e))?,
             );
             idx += 2;
-            let rp_id = unobfuscate(&data[idx..idx + usize::from(rp_len)].to_vec());
+            let rp_id = unobfuscate(&data[idx..idx + usize::from(rp_len)].to_vec())?;
                 // .map_err(|_| VaultError::ParseError)?;
 
             idx += usize::from(rp_len);
@@ -488,7 +488,6 @@ impl VaultyHeader {
                 credential_id_length: cred_id_len,
                 rp_id_length: rp_len,
                 rp_id: rp_id,
-                // prf_salt: prf,
                 public_key_length: pub_key_len,
                 public_key: pub_key,
                 sign_count: sign_count,

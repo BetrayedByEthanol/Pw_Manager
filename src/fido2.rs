@@ -13,7 +13,7 @@ use ctap_hid_fido2::fidokey::credential_management::credential_management_params
 use secrecy::{ExposeSecret, SecretSlice, SecretString};
 
 pub fn ctap_register(pin: &SecretString) -> Result<(Vec<u8>, String, Vec<u8>), Box<dyn std::error::Error>> {
-    let device = FidoKeyHidFactory::create(&ctap_hid_fido2::Cfg::init()).unwrap();
+    let device = FidoKeyHidFactory::create(&ctap_hid_fido2::Cfg::init())?;
     // println!("{:}", device.get_info()?);
     let mut buf = vec![0u8; 32];
     OsRng.fill_bytes(&mut buf);
@@ -42,7 +42,7 @@ pub fn ctap_register(pin: &SecretString) -> Result<(Vec<u8>, String, Vec<u8>), B
 }
 
 pub fn ctap_authenticate(kek: &[u8; 32],  pin: &SecretString, cred_id: Vec<Vec<u8>>, rp: &String, pub_key: Vec<Vec<u8>>) -> Result<([u8; 32], bool, Vec<u8>), Box<dyn std::error::Error>> {
-    let device = FidoKeyHidFactory::create(&ctap_hid_fido2::Cfg::init()).unwrap();
+    let device = FidoKeyHidFactory::create(&ctap_hid_fido2::Cfg::init())?;
     // print!("{:}", device.get_info()?);
     let mut buf = vec![0u8; 32];
     OsRng.fill_bytes(&mut buf);
@@ -62,22 +62,22 @@ pub fn ctap_authenticate(kek: &[u8; 32],  pin: &SecretString, cred_id: Vec<Vec<u
 
 
     let assertion = device.get_assertion_with_args(&args)?;
-    let assert = assertion.get(0).unwrap();
+    let assert = assertion.get(0).ok_or("Could not find assertion")?;
     let prf: [u8; 32] = assert
         .extensions
         .iter()
         .find_map(|e| match e {
             AssertionExtension::HmacSecret(Some(bytes)) => Some(*bytes),
             _ => None,
-        }).unwrap();
+        }).ok_or("Could not find hmac secret in extensions")?;
     // println!("{:?}", prf);
-    let idx = cred_id.iter().position(|e| e == &assert.credential_id).unwrap();
+    let idx = cred_id.iter().position(|e| e == &assert.credential_id).ok_or("Could not find credential id in list")?;
 
     // let verify = true;
 
     let verify = verifier::verify_assertion(
         rp,
-        &(PublicKey::with_der(pub_key.get(idx).unwrap(), public_key::PublicKeyType::Ecdsa256)),
+        &(PublicKey::with_der(pub_key.get(idx).ok_or("Index out of bounds")?, public_key::PublicKeyType::Ecdsa256)),
         &buf,
         &(assert),
     );

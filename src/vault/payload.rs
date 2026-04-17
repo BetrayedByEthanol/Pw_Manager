@@ -18,23 +18,23 @@ pub struct PasswordEntry {
 }
 
 impl PasswordEntry {
-    pub fn deserialize(data: &Vec<u8>) -> PasswordEntry {
+    pub fn deserialize(data: &Vec<u8>) -> Result<PasswordEntry, Box<dyn std::error::Error>> {
         let mut idx : usize = 0;
         let title_length: u16 = u16::from_le_bytes([data[idx], data[idx+1]]);
         idx += 2;
-        let title = String::from_utf8(data[idx..idx+title_length as usize].to_vec()).unwrap();
+        let title = String::from_utf8(data[idx..idx+title_length as usize].to_vec())?;
         idx += title_length as usize;
         let username_length: u16 = u16::from_le_bytes([data[idx], data[idx+1]]);
         idx += 2;
         let username = if username_length > 0 {
-            Some(String::from_utf8(data[idx..idx+username_length as usize].to_vec()).unwrap())
+            Some(String::from_utf8(data[idx..idx+username_length as usize].to_vec())?)
         } else {
             None
         };
         idx += username_length as usize;
         let password_length: u16 = u16::from_le_bytes([data[idx], data[idx+1]]);
         idx += 2;
-        let password = SecretString::from(String::from_utf8(data[idx..idx+password_length as usize].to_vec()).unwrap());
+        let password = SecretString::from(String::from_utf8(data[idx..idx+password_length as usize].to_vec())?);
         idx += password_length as usize;
         let url_count: u16 = u16::from_le_bytes([data[idx], data[idx+1]]);
         idx += 2;
@@ -42,7 +42,7 @@ impl PasswordEntry {
         for _ in 0..url_count {
             let url_length: u16 = u16::from_le_bytes([data[idx], data[idx+1]]);
             idx += 2;
-            let url = String::from_utf8(data[idx..idx+url_length as usize].to_vec()).unwrap();
+            let url = String::from_utf8(data[idx..idx+url_length as usize].to_vec())?;
             idx += url_length as usize;
             urls.push(url);
         }
@@ -50,13 +50,13 @@ impl PasswordEntry {
         idx += 2;
 
         let notes = if notes_length > 0 {
-            Some(String::from_utf8(data[idx..idx+notes_length as usize].to_vec()).unwrap())
+            Some(String::from_utf8(data[idx..idx+notes_length as usize].to_vec())?)
         } else {
             None
         };
         idx += notes_length as usize;
 
-        Self {
+        Ok(Self {
             title_length,
             title,
             username_length,
@@ -67,7 +67,7 @@ impl PasswordEntry {
             urls,
             notes_length,
             notes,
-        }
+        })
     }
 }
 

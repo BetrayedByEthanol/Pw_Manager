@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use secrecy::{ExposeSecret, SecretBox, SecretSlice, SecretString};
@@ -81,11 +82,8 @@ impl TryFrom<u8> for EntryType {
 
 
 impl VaultyEntry {
-    pub fn new() -> Self {
-        let now: u64 = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+    pub fn new(now: u64) -> Self {
+
         let slf= VaultyEntry{
             entry_length: 0,
             wrapped_key: [0; 48],
@@ -108,31 +106,34 @@ impl VaultyEntry {
         return slf;
     }
 
-    pub fn get_entry(&self, vault_id: Uuid, kdf: &KdfSection, vault_secret: &SecretBox<[u8]>) -> Rc<dyn TypeEntry> {
+    pub fn get_entry(&self, vault_id: Uuid, kdf: &KdfSection, vault_secret: &SecretBox<[u8]>) -> Result<Rc<dyn TypeEntry>, Box<dyn Error>> {
         let hash= if self.is_default {
             crypto::hash_bytes_fix_salt(vault_secret.expose_secret(),
                                   &self.salt,
                                     kdf.memory_cost_kib,
                                     kdf.time_cost,
-                                    kdf.parallelism).unwrap()
+                                    kdf.parallelism)?
         } else {
-            crypto::hash_fix_salt(prompt_pw("Entry Password:".parse().unwrap()).unwrap(),
+            crypto::hash_fix_salt(prompt_pw("Entry Password:".parse()?)?,
                                   &self.salt,
                          kdf.memory_cost_kib,
                          kdf.time_cost,
-                         kdf.parallelism).unwrap()};
+                         kdf.parallelism)?};
         let aad = EntraAAD::from(self, vault_id).to_aad_bytes();
-        let mut entry_key:[u8; 32] = crypto::decrypt(&self.wrapped_key.to_vec(), &hash, &self.wrapping_nonce, &aad).unwrap().try_into().unwrap();
-        let payload = crypto::decrypt(&self.payload, &entry_key, &self.nonce, &aad).unwrap();
+        let mut entry_key:[u8; 32] = crypto::decrypt(&self.wrapped_key.to_vec(), &hash, &self.wrapping_nonce, &aad)?.try_into().map_err(|v: Vec<u8>| std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("expected 32 bytes, got {}", v.len()),
+        ))?;
+        let payload = crypto::decrypt(&self.payload, &entry_key, &self.nonce, &aad)?;
         entry_key.zeroize();
-
-        Rc::new(PasswordEntry::deserialize(&payload))
+        Ok(Rc::new(PasswordEntry::deserialize(&payload)?))
     }
 
-    pub fn print_entry(&self, vault_id: Uuid, kdf: &KdfSection, vault_secret: &SecretBox<[u8]>) {
-        let entry = self.get_entry(vault_id, kdf, vault_secret);
-        let cast_entry = entry.as_any().downcast_ref::<PasswordEntry>().unwrap();
+    pub fn print_entry(&self, vault_id: Uuid, kdf: &KdfSection, vault_secret: &SecretBox<[u8]>) -> Result<(), Box<dyn Error>> {
+        let entry = self.get_entry(vault_id, kdf, vault_secret)?;
+        let cast_entry = entry.as_any().downcast_ref::<PasswordEntry>().ok_or("Failed to downcast entry")?;
         println!("{:}",cast_entry.password.expose_secret());
+        Ok(())
     }
 
     pub fn set_entry(&mut self, title: String, username: String, password: SecretString, url: String) {
@@ -170,9 +171,12 @@ impl VaultyEntry {
         return Ok(data);
     }
 
-    pub fn deserialize(data: &Vec<u8>) -> Result<(Self, usize), VaultError> {
-        let mut entry = VaultyEntry::new();
-        let mut idx: usize = 0;
+    pub fn deserialize(data: &Vec<u8>) -> Result<(Self, usize), Box<dyn Error>> {
+        let now: u64 = SystemTime::now()
+            .duration_since(UNIX_EPOCH)?
+            .as_secs();
+        let entry = VaultyEntry::new(now);
+        let idx: usize = 0;
 
         return Ok((entry, idx));
     }

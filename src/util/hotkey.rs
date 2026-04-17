@@ -130,7 +130,7 @@ fn enable_xi2_raw_keys(
     conn: &RustConnection,
     root: Window,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    conn.xinput_xi_query_version(2, 0).unwrap().reply()?;
+    conn.xinput_xi_query_version(2, 0)?.reply()?;
     let mask = xinput::EventMask {
         deviceid: xinput::Device::ALL_MASTER.into(),
         mask: vec![xinput::XIEventMask::RAW_KEY_PRESS | xinput::XIEventMask::RAW_KEY_RELEASE],
@@ -149,7 +149,7 @@ fn freeze_inject_restore(
 ) -> Result<(), Box<dyn Error>> {
     let keyboards = grab_keyboard(&conn, root)?;
     let device_ids = keyboards.0;
-    let xdevice = keyboards.1.unwrap();
+    let xdevice = keyboards.1.ok_or("Could not find XTEST device")?;
 
     for &kc in ctrl_keycodes.union(&(phys_down.clone())) {
         println!("masking ctrl key {}", &kc);
@@ -174,7 +174,7 @@ fn freeze_inject_restore(
     for ch in text.chars() {
         type_char(&conn, root, ch, xdevice as u8)?;
         println!();
-        while let Some(e) = conn.poll_for_event().unwrap() {
+        while let Some(e) = conn.poll_for_event()? {
             if let Event::XinputRawKeyPress(kr) = e.clone() {
                 if ctrl_keycodes.contains(&(kr.detail as u8)) {
                     println!("pressed control key during typing {}", &kr.detail);
@@ -222,7 +222,7 @@ fn register_hotkey() -> Result<(), Box<dyn Error>> {
     enable_xi2_raw_keys(&conn, root)?;
 
     let hotkey_kc = find_keycode_for_keysym(&conn, xk::XK_b as u32)?
-        .or_else(|| find_keycode_for_keysym(&conn, xk::XK_B as u32).unwrap())
+        .or_else(|| find_keycode_for_keysym(&conn, xk::XK_B as u32).ok()?)
         .ok_or("Could not find keycode for B")?;
 
     // Resolve Control keycodes

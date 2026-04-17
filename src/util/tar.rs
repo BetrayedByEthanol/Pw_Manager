@@ -17,7 +17,7 @@ fn compress() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut tar = Builder::new(enc);
 
-    tar.append_dir_all(source.file_name().unwrap() , source)?;
+    tar.append_dir_all(source.file_name().ok_or("Could not get file")? , source)?;
 
     tar.finish()?;
     Ok(())
@@ -27,7 +27,7 @@ fn decompress() -> Result<(), Box<dyn std::error::Error>> {
     let status = Command::new("ls").arg("/tmp").output()?;
     println!(
         "{}",
-        String::from_utf8(status.stdout).expect("Our bytes should be valid utf8")
+        String::from_utf8(status.stdout)?
     );
     let target = Path::new("/tmp/test.tar.gz");
     let output_dir = Path::new("/tmp/tar_out");

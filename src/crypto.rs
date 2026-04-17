@@ -116,7 +116,7 @@ fn derive_key(master_password: &str, kdf: &KdfParams) -> Result<[u8; 32], Crypto
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
     let mut key = [0u8; 32];
-    argon2.hash_password_into(master_password.as_bytes(), &salt_bytes, &mut key).unwrap();
+    argon2.hash_password_into(master_password.as_bytes(), &salt_bytes, &mut key).map_err(|e| CryptoError::InvalidFormat("Invalid bytes".to_string()))?;
 
     Ok(key)
 }
@@ -298,7 +298,8 @@ pub(crate) fn hash(pw: SecretString, m: u32, t: u32, p: u32) -> Result<([u8; 32]
 
     OsRng.fill_bytes(&mut salt_bytes);
     let mut key = [0u8; 32];
-    argon2.hash_password_into(pw.expose_secret().as_bytes(), &salt_bytes, &mut key).unwrap();
+    argon2.hash_password_into(pw.expose_secret().as_bytes(), &salt_bytes, &mut key).map_err(|e|
+        CryptoError::Crypto(format!("Invalid bytes: {e}")))?;
     Ok((key, salt_bytes))
 }
 
@@ -310,7 +311,7 @@ pub(crate) fn hash_with_bytes(bytes: &[u8], m: u32, t: u32, p: u32) -> Result<([
 
     OsRng.fill_bytes(&mut salt_bytes);
     let mut key = [0u8; 32];
-    argon2.hash_password_into(bytes, &salt_bytes, &mut key).unwrap();
+    argon2.hash_password_into(bytes, &salt_bytes, &mut key).map_err(|e| CryptoError::Crypto(format!("Invalid bytes: {e}")))?;
     Ok((key, salt_bytes))
 }
 
@@ -320,7 +321,7 @@ pub(crate) fn hash_fix_salt(pw: SecretString,salt: &[u8; 32], m: u32, t: u32, p:
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
     let mut key = [0u8; 32];
-    argon2.hash_password_into(pw.expose_secret().as_bytes(), salt, &mut key).unwrap();
+    argon2.hash_password_into(pw.expose_secret().as_bytes(), salt, &mut key).map_err(|e| CryptoError::Crypto(format!("Invalid bytes: {e}")))?;
     Ok((key))
 }
 
@@ -330,7 +331,7 @@ pub(crate) fn hash_bytes_fix_salt(bytes: &[u8], salt: &[u8; 32], m: u32, t: u32,
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
     let mut key = [0u8; 32];
-    argon2.hash_password_into(bytes, salt, &mut key).unwrap();
+    argon2.hash_password_into(bytes, salt, &mut key).map_err(|e| CryptoError::Crypto(format!("Invalid bytes: {e}")))?;
     Ok((key))
 }
 

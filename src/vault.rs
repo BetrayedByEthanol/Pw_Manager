@@ -23,7 +23,8 @@ use sha2::Sha256;
 use uuid::Uuid;
 use uuid::Version::Random;
 use hkdf::Hkdf;
-
+use hmac::block_api::HmacCore;
+use hmac::digest::{CtOutput, Output};
 use zeroize::Zeroize;
 use crate::{crypto, fido2};
 use crate::vault::body::VaultyBody;
@@ -48,19 +49,29 @@ mod derived;
 
 type HmacSha256 = Hmac<Sha256>;
 
-pub fn hmac_sha256(key: &[u8; 32], data: &[u8]) -> Vec<u8> {
-    let mut mac = HmacSha256::new_from_slice(key)
-        .expect("HMAC accepts any key length");
+pub fn hmac_sha256(key: &[u8; 32], data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut mac: HmacSha256 = HmacSha256::new_from_slice(key)
+        ?;
     mac.update(data);
-    mac.finalize().into_bytes().to_vec()
+
+    let mac_out:CtOutput<HmacSha256> = mac.finalize();
+    Ok(mac_out.into_bytes().to_vec())
 }
 
-fn hkdf_derive(ikm: &[u8], salt: Option<&[u8]>, info: &[u8]) -> [u8; 32] {
+pub fn hmac_core_sha256(key: &[u8; 32], data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut mm: Hmac<Sha256> = Hmac::new_from_slice(key)?;
+    mm.update(data);
+    let mac :CtOutput<Hmac<Sha256>> = mm.finalize();
+    Ok(mac.into_bytes().to_vec())
+
+
+}
+
+fn hkdf_derive(ikm: &[u8], salt: Option<&[u8]>, info: &[u8]) -> Result<[u8; 32], Box<dyn Error>> {
     let hk = Hkdf::<Sha256>::new(salt, ikm);
     let mut okm = [0u8; 32];
-    hk.expand(info, &mut okm)
-        .expect("HKDF expand length must be <= 255 * HashLen");
-    okm
+    hk.expand(info, &mut okm)?;
+    Ok(okm)
 }
 
 
@@ -81,7 +92,10 @@ fn prompt_pw(question: String) -> Result<SecretString, Box<dyn std::error::Error
     }
 }
 pub fn init_vault() -> Result<Vault, Box<dyn std::error::Error>> {
-    let mut vh = VaultyHeader::new();
+    let now: u64 = SystemTime::now()
+        .duration_since(UNIX_EPOCH)?
+        .as_secs();
+    let mut vh = VaultyHeader::new(now);
 
     let (master_hash, salt) = crypto::hash(prompt_pw("Master password: ".parse()?)?, vh.kdf.memory_cost_kib, vh.kdf.time_cost, vh.kdf.parallelism)?;
     vh.kdf.salt = salt;
@@ -110,7 +124,7 @@ pub fn init_vault() -> Result<Vault, Box<dyn std::error::Error>> {
     vh.wrapping.master_nonce = master_nonce;
 
 
-    while prompt_yes_no("Register Fido2 device?") {
+    while prompt_yes_no("Register Fido2 device?")? {
         fido2_device_count += 1;
         let mut cred_length: usize = 170;
 
@@ -143,15 +157,15 @@ pub fn init_vault() -> Result<Vault, Box<dyn std::error::Error>> {
         let cred_ids = vec![credential_id.clone()];
         let pub_keys = vec![pub_key.clone()];
 
-        let ws_prf_salt = hkdf_derive(&wrapping_secret, None, "vault-wrapping-salt-v1".as_bytes());
-        let ws_hmac_key = hkdf_derive(&wrapping_secret, None, "vault-wrapping-hmac-v1".as_bytes());
+        let ws_prf_salt = hkdf_derive(&wrapping_secret, None, "vault-wrapping-salt-v1".as_bytes())?;
+        let ws_hmac_key = hkdf_derive(&wrapping_secret, None, "vault-wrapping-hmac-v1".as_bytes())?;
 
 
         let (prf_out, verify, credential_id) = fido2::ctap_authenticate(&ws_prf_salt, &pin, cred_ids.clone(), &rp_id, pub_keys.clone())?;
 
 
-        let mix = hmac_sha256(&ws_hmac_key, &prf_out);
-        let kek_master = hkdf_derive(&mix, Some(&kdf_salt), "vault-master-wrap-v1".as_bytes());
+        let mix = hmac_sha256(&ws_hmac_key, &prf_out)?;
+        let kek_master = hkdf_derive(&mix, Some(&kdf_salt), "vault-master-wrap-v1".as_bytes())?;
 
         let wrapped_key = crypto::encrypt(&master_key.to_vec(), &kek_master, &master_wrapping_nonce, &base_aad)?;
         if !verify {
@@ -161,9 +175,9 @@ pub fn init_vault() -> Result<Vault, Box<dyn std::error::Error>> {
 
         let (prf_out_derive, verify_derive, credential_id_derive) = fido2::ctap_authenticate(&prf_input, &pin, cred_ids.clone(), &rp_id, pub_keys.clone())?;
 
-        let derive_mix = hmac_sha256(&derive_input, &prf_out_derive);
+        let derive_mix = hmac_sha256(&derive_input, &prf_out_derive)?;
 
-        let kek_derive = hkdf_derive(&derive_mix, Some(&derive_salt), "vault-master-derive-v1".as_bytes());
+        let kek_derive = hkdf_derive(&derive_mix, Some(&derive_salt), "vault-master-derive-v1".as_bytes())?;
 
         let wrapped_derive = crypto::encrypt(&derive_master.to_vec(), &kek_derive, &derive_nonce, &base_aad )?;
 
@@ -244,26 +258,26 @@ impl Vault {
         let mut wrapping_secret = crypto::decrypt(&self.header.wrapping.wrapped_master_key.as_slice().try_into()?, &master_hash, &self.header.wrapping.wrapping_nonce, &AADHeader::from(&self.header).to_aad_bytes())?;
         let pin = prompt_pw("Pin: ".parse()?)?;
         let cred_ids = self.header.fido2.credentials.iter().map(|e| e.credential_id.clone()).collect::<Vec<Vec<u8>>>();
-        let rp_id = self.header.fido2.credentials.get(0).unwrap().rp_id.clone();
+        let rp_id = self.header.fido2.credentials.get(0).ok_or("Index out of bounds")?.rp_id.clone();
         let pub_key = self.header.fido2.credentials.iter().map(|e| e.public_key.clone()).collect::<Vec<Vec<u8>>>();
 
-        let ws_prf_salt = hkdf_derive(&wrapping_secret, None, "vault-wrapping-salt-v1".as_bytes());
-        let ws_hmac_key = hkdf_derive(&wrapping_secret, None, "vault-wrapping-hmac-v1".as_bytes());
+        let ws_prf_salt = hkdf_derive(&wrapping_secret, None, "vault-wrapping-salt-v1".as_bytes())?;
+        let ws_hmac_key = hkdf_derive(&wrapping_secret, None, "vault-wrapping-hmac-v1".as_bytes())?;
 
         let (prf_out, verify, credential_id) = fido2::ctap_authenticate(&ws_prf_salt, &pin, cred_ids.clone(), &rp_id, pub_key.clone())?;
 
 
-        let mix = hmac_sha256(&ws_hmac_key, &prf_out);
+        let mix = hmac_sha256(&ws_hmac_key, &prf_out)?;
 
         wrapping_secret.zeroize();
 
-        let entry = self.header.fido2.credentials.iter().find(|e| e.credential_id == credential_id).unwrap();
+        let entry = self.header.fido2.credentials.iter().find(|e| e.credential_id == credential_id).ok_or("No matching credential found")?;
         let mut base_aad = AADHeader::from(&self.header).to_aad_bytes();
         base_aad.extend_from_slice(&credential_id);
         base_aad.extend_from_slice(&rp_id.as_bytes());
         base_aad.extend_from_slice(&entry.public_key.clone());
 
-        let kek_master = hkdf_derive(&mix, Some(&entry.kdf_salt), "vault-master-wrap-v1".as_bytes());
+        let kek_master = hkdf_derive(&mix, Some(&entry.kdf_salt), "vault-master-wrap-v1".as_bytes())?;
 
         let mut master_key: [u8; 32] =  crypto::decrypt(&entry.wrapped_wrapping_key.to_vec(), &kek_master, &entry.wrap_nonce, &base_aad)?.as_slice().try_into()?;
         let cipher_text = crypto::encrypt(&payload, &master_key, &self.header.wrapping.master_nonce, &AADHeader::from(&self.header).to_aad_bytes())?;
@@ -273,22 +287,21 @@ impl Vault {
     }
 
 
-    pub fn add_entry(&mut self, is_default: bool, title: String, username: Option<String>, password: SecretString, urls: Vec<String>, notes: Option<String>) {
+    pub fn add_entry(&mut self, is_default: bool, title: String, username: Option<String>, password: SecretString, urls: Vec<String>, notes: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         let payload = PasswordEntry {
-            title_length: title.len().try_into().unwrap(),
+            title_length: title.len().try_into()?,
             title: title,
-            username_length: if username.is_some() {username.as_ref().unwrap().len().try_into().unwrap()} else {0},
+            username_length: if username.is_some() {username.as_ref().ok_or("No user reference")?.len().try_into()?} else {0},
             username: username,
-            password_length: password.expose_secret().len().try_into().unwrap(),
+            password_length: password.expose_secret().len().try_into()?,
             password: password,
-            url_count: urls.len().try_into().unwrap(),
+            url_count: urls.len().try_into()?,
             urls: urls,
-            notes_length: if notes.is_some() {notes.as_ref().unwrap().len().try_into().unwrap()} else {0},
+            notes_length: if notes.is_some() {notes.as_ref().ok_or("No note reference")?.len().try_into()?} else {0},
             notes: notes,
         };
         let now: u64 = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .duration_since(UNIX_EPOCH)?
             .as_secs();
         let mut entry_key : [u8; 32] = [0u8; 32];
         OsRng.fill_bytes(&mut entry_key);
@@ -303,22 +316,22 @@ impl Vault {
         let target = String::from("amazon.de"); // target top level url
 
 
-        let (hash, salt) = if is_default {crypto::hash_with_bytes(self.derived.vault_secret.expose_secret(), self.header.kdf.memory_cost_kib, self.header.kdf.time_cost, self.header.kdf.parallelism).unwrap()} else {crypto::hash(prompt_pw("Entry Password:".parse().unwrap()).unwrap(), self.header.kdf.memory_cost_kib, self.header.kdf.time_cost, self.header.kdf.parallelism).unwrap()};
+        let (hash, salt) = if is_default {crypto::hash_with_bytes(self.derived.vault_secret.expose_secret(), self.header.kdf.memory_cost_kib, self.header.kdf.time_cost, self.header.kdf.parallelism)?} else {crypto::hash(prompt_pw("Entry Password:".parse()?)?, self.header.kdf.memory_cost_kib, self.header.kdf.time_cost, self.header.kdf.parallelism)?};
 
         let mut entry = VaultyEntry {
             entry_length: 0,
             wrapped_key: [0u8; 48],
-            domain_tag_length: domain.len().try_into().unwrap(),
+            domain_tag_length: domain.len().try_into()?,
             domain_tag: domain,
             entry_type: EntryType::Password,
-            nonce: entry_nonce.as_slice().try_into().unwrap(),
+            nonce: entry_nonce.as_slice().try_into()?,
             salt,
             wrapping_nonce,
             version: 0x0100,
             entry_id: Uuid::new_v4(),
             payload_length:0,
             payload: vec![],
-            target_length: target.len().try_into().unwrap(),
+            target_length: target.len().try_into()?,
             target,
             is_default,
             created_at: now,
@@ -327,19 +340,20 @@ impl Vault {
         let payload_bytes = payload.serialize();
 
         let aad = EntraAAD::from(&entry, self.header.metadata.vault_id).to_aad_bytes();
-        let encrypted_payload = crypto::encrypt(&payload_bytes, &entry_key, &entry_nonce, &aad).unwrap();
-        entry.payload_length = encrypted_payload.len().try_into().unwrap();
+        let encrypted_payload = crypto::encrypt(&payload_bytes, &entry_key, &entry_nonce, &aad)?;
+        entry.payload_length = encrypted_payload.len().try_into()?;
         entry.payload = encrypted_payload;
 
 
-        let wrapped_key = crypto::encrypt(&entry_key.to_vec(), &hash, &wrapping_nonce, &aad).unwrap();
-        entry.wrapped_key = wrapped_key.as_slice().try_into().unwrap();
+        let wrapped_key = crypto::encrypt(&entry_key.to_vec(), &hash, &wrapping_nonce, &aad)?;
+        entry.wrapped_key = wrapped_key.as_slice().try_into()?;
         entry_key.zeroize();
 
 
         self.body.entries.push(entry);
         self.body.entries_count += 1;
         self.header.metadata.updated_at_unix = now;
+        Ok(())
     }
 }
 
@@ -375,26 +389,26 @@ impl SealedVault {
         let mut wrapping_secret = crypto::decrypt(&self.header.wrapping.wrapped_master_key.as_slice().try_into()?, &master_hash, &self.header.wrapping.wrapping_nonce, &AADHeader::from(&self.header).to_aad_bytes())?;
         let pin = prompt_pw("Pin: ".parse()?)?;
         let cred_ids = self.header.fido2.credentials.iter().map(|e| e.credential_id.clone()).collect::<Vec<Vec<u8>>>();
-        let rp_id = self.header.fido2.credentials.get(0).unwrap().rp_id.clone();
+        let rp_id = self.header.fido2.credentials.get(0).ok_or("Index out of bounds")?.rp_id.clone();
         let pub_key = self.header.fido2.credentials.iter().map(|e| e.public_key.clone()).collect::<Vec<Vec<u8>>>();
 
-        let ws_prf_salt = hkdf_derive(&wrapping_secret, None, "vault-wrapping-salt-v1".as_bytes());
-        let ws_hmac_key = hkdf_derive(&wrapping_secret, None, "vault-wrapping-hmac-v1".as_bytes());
+        let ws_prf_salt = hkdf_derive(&wrapping_secret, None, "vault-wrapping-salt-v1".as_bytes())?;
+        let ws_hmac_key = hkdf_derive(&wrapping_secret, None, "vault-wrapping-hmac-v1".as_bytes())?;
 
         let (prf_out, verify, credential_id) = fido2::ctap_authenticate(&ws_prf_salt, &pin, cred_ids.clone(), &rp_id, pub_key.clone())?;
 
 
-        let mix = hmac_sha256(&ws_hmac_key, &prf_out);
+        let mix = hmac_sha256(&ws_hmac_key, &prf_out)?;
 
         wrapping_secret.zeroize();
 
-        let entry = self.header.fido2.credentials.iter().find(|e| e.credential_id == credential_id).unwrap();
+        let entry = self.header.fido2.credentials.iter().find(|e| e.credential_id == credential_id).ok_or("No matching credential found")?;
         let mut base_aad = AADHeader::from(&self.header).to_aad_bytes();
         base_aad.extend_from_slice(&credential_id);
         base_aad.extend_from_slice(&rp_id.as_bytes());
         base_aad.extend_from_slice(&entry.public_key.clone());
 
-        let kek_master = hkdf_derive(&mix, Some(&entry.kdf_salt), "vault-master-wrap-v1".as_bytes());
+        let kek_master = hkdf_derive(&mix, Some(&entry.kdf_salt), "vault-master-wrap-v1".as_bytes())?;
 
         let mut master_key: [u8; 32] =  crypto::decrypt(&entry.wrapped_wrapping_key.to_vec(), &kek_master, &entry.wrap_nonce, &base_aad)?.as_slice().try_into()?;
         let cipher_text = crypto::decrypt(&self.payload, &master_key, &self.header.wrapping.master_nonce, &AADHeader::from(&self.header).to_aad_bytes())?;
@@ -404,9 +418,9 @@ impl SealedVault {
 
 
         let (prf_out_derive, derive_verify, derive_credential_id) =  fido2::ctap_authenticate(&entry.prf_input, &pin, cred_ids.clone(), &rp_id, pub_key.clone())?;
-        let derive_mix = hmac_sha256(&self.header.fido2.derive_input, &prf_out_derive);
+        let derive_mix = hmac_sha256(&self.header.fido2.derive_input, &prf_out_derive)?;
 
-        let derive_kek = hkdf_derive(&derive_mix, Some(&entry.derive_salt), "vault-master-derive-v1".as_bytes());
+        let derive_kek = hkdf_derive(&derive_mix, Some(&entry.derive_salt), "vault-master-derive-v1".as_bytes())?;
 
         let mut derive_key = crypto::decrypt(&entry.derive_key.to_vec(), &derive_kek, &entry.derive_nonce, &base_aad)?;
 
