@@ -134,6 +134,31 @@ impl TypeEntry for PasswordEntry {
         return data;
     }
 
-
 }
 
+use std::fmt;
+
+impl fmt::Display for PasswordEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Title   : {}", self.title)?;
+
+        if let Some(username) = &self.username {
+            writeln!(f, "Username: {}", username)?;
+        }
+
+        writeln!(f, "Password: {}", self.password.expose_secret())?;
+
+        if !self.urls.is_empty() {
+            writeln!(f, "URLs    :")?;
+            for url in &self.urls {
+                writeln!(f, "  - {}", url)?;
+            }
+        }
+
+        if let Some(notes) = &self.notes {
+            writeln!(f, "Notes   : {}", notes)?;
+        }
+
+        Ok(())
+    }
+}

@@ -5,7 +5,10 @@ use crossterm::{cursor, event::{self, Event, KeyCode}, execute, queue, terminal,
 use crossterm::event::{read, KeyEvent};
 use crossterm::style::{Color, Print, ResetColor, SetForegroundColor, Stylize};
 use crossterm::terminal::ClearType;
+use crate::vault::entry::{EntryType, VaultyEntry};
+use crate::vault::payload::PasswordEntry;
 use crate::vault::Vault;
+use dialoguer::{Select, Input};
 
 mod commands;
 mod ui;
@@ -32,6 +35,19 @@ pub fn prompt_yes_no(question: &str) -> Result<bool, Box<dyn Error>> {
     disable_raw_mode()?;
     println!();
     Ok(result)
+}
+
+pub fn prompt_question(question: &str) -> Result<String, Box<dyn Error>> {
+    print!("{}", question);
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let answer = input.trim().to_string();
+    println!();
+    io::stdout().flush()?;
+
+    Ok(answer)
 }
 
 pub fn menu(vault : &Vault) -> Result<(), Box<dyn Error>> {
@@ -204,10 +220,110 @@ fn remove_entry(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
 }
 
 fn show_entry(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
+    let entry = find_entry(vault)?;
+    let payload = entry.decrypt_entry_payload(vault.header.metadata.vault_id, &vault.header.kdf, &vault.derived.vault_secret)?;
+    let cast_entry = payload.as_any().downcast_ref::<PasswordEntry>().ok_or("Failed to downcast entry")?;
+    println!("{:}", cast_entry);
     Ok(())
 }
 
 fn update_entry(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
+    let mut entry = find_entry(vault)?.clone();
+    let payload = entry.decrypt_entry_payload(vault.header.metadata.vault_id, &vault.header.kdf, &vault.derived.vault_secret)?;
+    let mut cast_entry = payload.as_any().downcast_ref::<PasswordEntry>().ok_or("Failed to downcast entry")?;
+    entry.domain_tag = "asdasd".to_string();
+
+    entry.updated_at = now();
+    let mut new = VaultyEntry {
+        entry_length: 0,
+        wrapped_key: entry.wrapped_key.clone(),
+        domain_tag: "".to_string(),
+        domain_tag_length: 0,
+        entry_type: EntryType::Password,
+        nonce: entry.nonce.clone(),
+        salt: entry.salt.clone(),
+        wrapping_nonce: entry.wrapping_nonce.clone(),
+        version: 0,
+        entry_id: Default::default(),
+        payload: vec![],
+        payload_length: 0,
+        target: "".to_string(),
+        target_length: 0,
+        is_default: false,
+        created_at: 0,
+        updated_at: 0,
+    };
+    let mut new_payload = PasswordEntry{
+        title_length: 0,
+        title: "".to_string(),
+        username_length: 0,
+        username: None,
+        password_length: 0,
+        password: Default::default(),
+        url_count: 0,
+        urls: vec![],
+        notes_length: 0,
+        notes: None,
+    };
+
+    loop {
+        let options = vec!["Title", "Username", "Password", "URLs", "Notes", "Done"];
+
+        // extra pw        //entry pw
+        // title          // Amazon
+        // username
+        // password
+        // urls ?         // allowed urls -> amazon.de/login
+        // notes
+        // target        // target domain -> amazon.de
+        // domain_tag    // amazon ... title.lower
+
+        let choice = Select::new()
+            .with_prompt("Edit field")
+            .items(&options)
+            .default(0)
+            .interact()?;
+
+        match options[choice] {
+            "Title" => {
+                new_payload.title = Input::new()
+                    .with_prompt("New title")
+                    .with_initial_text(&cast_entry.title)
+                    .interact_text()?;
+            }
+            // "Username" => {
+            //     let input: String = Input::new()
+            //         .with_prompt("Username (empty = None)")
+            //         .allow_empty(true)
+            //         .interact_text()?;
+            //
+            //     entry.username = if input.is_empty() { None } else { Some(input) };
+            // }
+            // "URLs" => {
+            //     let input: String = Input::new()
+            //         .with_prompt("Comma-separated URLs")
+            //         .with_initial_text(entry.urls.join(","))
+            //         .interact_text()?;
+            //
+            //     entry.urls = input
+            //         .split(',')
+            //         .map(|s| s.trim().to_string())
+            //         .filter(|s| !s.is_empty())
+            //         .collect();
+            // }
+            // "Notes" => {
+            //     let input: String = Input::new()
+            //         .with_prompt("Notes (empty = None)")
+            //         .allow_empty(true)
+            //         .interact_text()?;
+            //
+            //     entry.notes = if input.is_empty() { None } else { Some(input) };
+            // }
+            "Done" => break,
+            _ => {}
+        }
+    }
+
     Ok(())
 }
 
@@ -216,7 +332,17 @@ fn add_entry(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
 }
 
 fn load_entry(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
+    let entry = find_entry(vault)?;
+    let payload = entry.decrypt_entry_payload(vault.header.metadata.vault_id, &vault.header.kdf, &vault.derived.vault_secret)?;
+    let cast_entry = payload.as_any().downcast_ref::<PasswordEntry>().ok_or("Failed to downcast entry")?;
     Ok(())
+}
+
+fn find_entry(vault: &Vault) -> Result<&VaultyEntry, Box<dyn Error>> {
+    let entry_id = prompt_question("Enter entry name: ")?;
+
+    let entry = vault.body.entries.iter().find(|&e| e.domain_tag == entry_id).ok_or("Entry not found")?;
+    Ok(entry)
 }
 
 fn list_devices(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
@@ -232,4 +358,11 @@ fn list_entries(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
         println!("{:?}", entry.domain_tag);
     }
     Ok(())
+}
+
+fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }

@@ -10,6 +10,7 @@ use crate::vault::header::KdfSection;
 use crate::vault::payload::{PasswordEntry, TypeEntry};
 use crate::vault::prompt_pw;
 
+#[derive(Debug, Clone)]
 pub struct VaultyEntry {
     pub entry_length: u32,
     pub wrapped_key: [u8; 48],
@@ -106,7 +107,7 @@ impl VaultyEntry {
         return slf;
     }
 
-    pub fn get_entry(&self, vault_id: Uuid, kdf: &KdfSection, vault_secret: &SecretBox<[u8]>) -> Result<Rc<dyn TypeEntry>, Box<dyn Error>> {
+    pub fn decrypt_entry_payload(&self, vault_id: Uuid, kdf: &KdfSection, vault_secret: &SecretBox<[u8]>) -> Result<Rc<dyn TypeEntry>, Box<dyn Error>> {
         let hash= if self.is_default {
             crypto::hash_bytes_fix_salt(vault_secret.expose_secret(),
                                   &self.salt,
@@ -130,7 +131,7 @@ impl VaultyEntry {
     }
 
     pub fn print_entry(&self, vault_id: Uuid, kdf: &KdfSection, vault_secret: &SecretBox<[u8]>) -> Result<(), Box<dyn Error>> {
-        let entry = self.get_entry(vault_id, kdf, vault_secret)?;
+        let entry = self.decrypt_entry_payload(vault_id, kdf, vault_secret)?;
         let cast_entry = entry.as_any().downcast_ref::<PasswordEntry>().ok_or("Failed to downcast entry")?;
         println!("{:}",cast_entry.password.expose_secret());
         Ok(())

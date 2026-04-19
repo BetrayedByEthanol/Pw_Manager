@@ -44,7 +44,7 @@ mod manager;
 mod error;
 pub mod body;
 pub mod header;
-mod payload;
+pub mod payload;
 mod derived;
 
 type HmacSha256 = Hmac<Sha256>;
