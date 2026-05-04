@@ -34,6 +34,7 @@ use crate::vault::derived::VaultyDerived;
 use crate::vault::entry::{EntraAAD, EntryType, VaultyEntry};
 use crate::vault::header::CipherId::XChaCha20Poly1305;
 use crate::vault::payload::{PasswordEntry, TypeEntry};
+use crate::cli::prompt_pw;
 
 mod schema;
 mod operations;
@@ -75,22 +76,7 @@ fn hkdf_derive(ikm: &[u8], salt: Option<&[u8]>, info: &[u8]) -> Result<[u8; 32],
 }
 
 
-fn prompt_pw(question: String) -> Result<SecretString, Box<dyn std::error::Error>> {
-    print!("{}", question);
-    let var = if question.contains("password") {"MASTER_PASSWORD"} else { "PIN" };
-    if let Ok(val) = env::var(var) {
-        return Ok(SecretString::from(val));
-    }
-    std::io::stdout().flush()?;
-    match read_password() {
-        Ok(pw) => Ok(SecretString::from(pw)),
-        Err(e) => {
-            eprintln!("\n[ERROR] Secure input unavailable: {e}");
-            eprintln!("[ERROR] Aborting — refusing to prompt with echo enabled.");
-            Err(e.into())
-        }
-    }
-}
+
 pub fn init_vault() -> Result<Vault, Box<dyn std::error::Error>> {
     let now: u64 = SystemTime::now()
         .duration_since(UNIX_EPOCH)?

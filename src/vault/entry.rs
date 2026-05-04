@@ -8,7 +8,7 @@ use crate::crypto;
 use crate::vault::error::VaultError;
 use crate::vault::header::KdfSection;
 use crate::vault::payload::{PasswordEntry, TypeEntry};
-use crate::vault::prompt_pw;
+use crate::cli::prompt_pw;
 
 #[derive(Debug, Clone)]
 pub struct VaultyEntry {

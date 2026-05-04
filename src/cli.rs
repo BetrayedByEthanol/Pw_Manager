@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::io;
+use std::{env, io};
 use std::io::Write;
 use crossterm::{cursor, event::{self, Event, KeyCode}, execute, queue, terminal, terminal::{disable_raw_mode, enable_raw_mode}};
 use crossterm::event::{read, KeyEvent};
@@ -9,6 +9,10 @@ use crate::vault::entry::{EntryType, VaultyEntry};
 use crate::vault::payload::PasswordEntry;
 use crate::vault::Vault;
 use dialoguer::{Select, Input};
+use rpassword::read_password;
+use secrecy::SecretString;
+use crate::fsutil::atomic_write;
+use crate::util::pw_generator::{generate_password, CharSet};
 
 mod commands;
 mod ui;
@@ -50,7 +54,33 @@ pub fn prompt_question(question: &str) -> Result<String, Box<dyn Error>> {
     Ok(answer)
 }
 
-pub fn menu(vault : &Vault) -> Result<(), Box<dyn Error>> {
+pub fn prompt_pw(question: String) -> Result<SecretString, Box<dyn std::error::Error>> {
+    print!("{}", question);
+    let var = if question.contains("password") {"MASTER_PASSWORD"} else { "PIN" };
+    if let Ok(val) = env::var(var) {
+        return Ok(SecretString::from(val));
+    }
+    std::io::stdout().flush()?;
+    match read_password() {
+        Ok(pw) => Ok(SecretString::from(pw)),
+        Err(e) => {
+            eprintln!("\n[ERROR] Secure input unavailable: {e}");
+            eprintln!("[ERROR] Aborting — refusing to prompt with echo enabled.");
+            Err(e.into())
+        }
+    }
+}
+
+fn parse_semicolon_list(input: &str) -> Vec<String> {
+    input
+        .split(';')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+pub fn menu(vault : &mut Vault) -> Result<(), Box<dyn Error>> {
     let items = vec![
         "list entries",
         "list devices",
@@ -178,7 +208,7 @@ pub fn menu(vault : &Vault) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn handle_selection(selection: usize, vault : &Vault) -> Result<(), Box<dyn Error>> {
+fn handle_selection(selection: usize, vault : &mut Vault) -> Result<(), Box<dyn Error>> {
     match selection {
         0 => list_entries(vault)?,
         1 => list_devices(vault)?,
@@ -191,7 +221,8 @@ fn handle_selection(selection: usize, vault : &Vault) -> Result<(), Box<dyn Erro
         8 => update_master(vault)?,
         9 => start_server(vault)?,
         10 => stop_server(vault)?,
-
+        11 => println!("Add fido2 device"),
+        12 => println!("Remove fido2 device"),
         _ => println!("Invalid selection"),
     }
 
@@ -327,7 +358,33 @@ fn update_entry(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
     Ok(())
 }
 
-fn add_entry(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
+fn add_entry(vault: &mut Vault) ->  Result<(), Box<dyn Error>>  {
+    let title = prompt_question("Title")?;
+
+    let username_or_email = prompt_question("Username or email")?;
+
+    let is_generate_password = prompt_yes_no("Generate password?")?;
+
+    let password_source = if is_generate_password {
+        let charset = prompt_question(
+            "Character set? Example: lower,upper,digits,symbols or custom chars"
+        )?;
+        generate_password(CharSet::ALL)?
+
+    } else {
+        prompt_pw("Password".to_string())?
+    };
+
+    let allowed_uris_raw = prompt_question(
+        "Allowed URIs, separated by semicolon ; leave empty for none"
+    )?;
+
+
+    let allowed_uris = parse_semicolon_list(&allowed_uris_raw);
+    vault.add_entry(true, title, Some(username_or_email), password_source, allowed_uris, None)?;
+
+    let sealed_vault = vault.seal_vault()?;
+    atomic_write(&sealed_vault.serialize()?)?;
     Ok(())
 }
 
@@ -366,3 +423,4 @@ fn now() -> u64 {
         .unwrap()
         .as_secs()
 }
+

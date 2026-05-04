@@ -89,3 +89,4 @@ atomic vault update
 
 Recovery Code for Password
 Recovery Code for Fido2 into Virtual Device HMAC2
+Fido2 Fallback device
