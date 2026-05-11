@@ -8,7 +8,7 @@ use secrecy::SecretString;
 const UPPERCASE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const LOWERCASE: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
 const DIGITS: &[u8] = b"0123456789";
-const SPECIAL: &[u8] = b"!@#$%^&*()-_=+[]{}|;:,.<>?";
+const SPECIAL: &[u8] = b"!@#$%^&*()-_=+[]{};:,.?";
 
 const DEFAULT_LENGTH: usize = 24;
 
