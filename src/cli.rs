@@ -1,27 +1,29 @@
+use std::env;
 use std::error::Error;
-use std::{env, io};
-use std::io::Write;
-use crossterm::{cursor, event::{self, Event, KeyCode}, execute, queue, terminal, terminal::{disable_raw_mode, enable_raw_mode}};
-use crossterm::event::{read, KeyEvent};
-use crossterm::style::{Color, Print, ResetColor, SetForegroundColor, Stylize};
-use crossterm::terminal::ClearType;
-use crate::vault::entry::{EntryType, VaultyEntry};
-use crate::vault::payload::PasswordEntry;
-use crate::vault::Vault;
-use dialoguer::{Select, Input};
+use std::io::{self, Write};
+
+use crossterm::{
+    cursor,
+    event::{self, read, Event, KeyCode, KeyEvent},
+    execute, queue,
+    style::{Color, Print, ResetColor, SetForegroundColor},
+    terminal::{self, disable_raw_mode, enable_raw_mode, ClearType},
+};
+use dialoguer::{Input, MultiSelect, Select};
 use rpassword::read_password;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
+
 use crate::fsutil::atomic_write;
 use crate::util::pw_generator::{generate_password, CharSet};
+use crate::vault::payload::PasswordEntry;
+use crate::vault::Vault;
 
+mod args;
 mod commands;
 mod ui;
-mod args;
-
 
 pub fn prompt_yes_no(question: &str) -> Result<bool, Box<dyn Error>> {
-    print!("{} (y/n)", question);
-
+    print!("{} (y/n) ", question);
     io::stdout().flush()?;
 
     enable_raw_mode()?;
@@ -38,6 +40,7 @@ pub fn prompt_yes_no(question: &str) -> Result<bool, Box<dyn Error>> {
 
     disable_raw_mode()?;
     println!();
+
     Ok(result)
 }
 
@@ -47,40 +50,98 @@ pub fn prompt_question(question: &str) -> Result<String, Box<dyn Error>> {
 
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
-    let answer = input.trim().to_string();
+
     println!();
     io::stdout().flush()?;
 
-    Ok(answer)
+    Ok(input.trim().to_string())
 }
 
-pub fn prompt_pw(question: String) -> Result<SecretString, Box<dyn std::error::Error>> {
+pub fn prompt_pw(question: String) -> Result<SecretString, Box<dyn Error>> {
     print!("{}", question);
-    let var = if question.contains("password") {"MASTER_PASSWORD"} else { "PIN" };
-    if let Ok(val) = env::var(var) {
-        return Ok(SecretString::from(val));
+
+    let env_var = if question.to_lowercase().contains("password") {
+        "MASTER_PASSWORD"
+    } else {
+        "PIN"
+    };
+
+    if let Ok(value) = env::var(env_var) {
+        return Ok(SecretString::from(value));
     }
-    std::io::stdout().flush()?;
+
+    io::stdout().flush()?;
+
     match read_password() {
-        Ok(pw) => Ok(SecretString::from(pw)),
-        Err(e) => {
-            eprintln!("\n[ERROR] Secure input unavailable: {e}");
+        Ok(password) => Ok(SecretString::from(password)),
+        Err(err) => {
+            eprintln!("\n[ERROR] Secure input unavailable: {err}");
             eprintln!("[ERROR] Aborting — refusing to prompt with echo enabled.");
-            Err(e.into())
+            Err(err.into())
         }
     }
+}
+
+/// Prompts for an optional entry-specific password.
+///
+/// Returns `(password, is_default)`. If the user leaves the password empty,
+/// `is_default` is true and the caller should use the vault default secret.
+pub fn prompt_entry_pw(hint: &str) -> Result<(SecretString, bool), Box<dyn Error>> {
+    print!("{} (leave empty to use default vault secret): ", hint);
+    io::stdout().flush()?;
+
+    let raw = read_password().map_err(|err| {
+        eprintln!("\n[ERROR] Secure input unavailable: {err}");
+        err
+    })?;
+
+    let is_default = raw.trim().is_empty();
+    Ok((SecretString::from(raw), is_default))
 }
 
 fn parse_semicolon_list(input: &str) -> Vec<String> {
     input
         .split(';')
         .map(str::trim)
-        .filter(|s| !s.is_empty())
+        .filter(|value| !value.is_empty())
         .map(str::to_string)
         .collect()
 }
 
-pub fn menu(vault : &mut Vault) -> Result<(), Box<dyn Error>> {
+fn prompt_charset() -> Result<CharSet, Box<dyn Error>> {
+    let options = vec![
+        "Uppercase (A-Z)",
+        "Lowercase (a-z)",
+        "Digits (0-9)",
+        "Special (!@#$...)",
+    ];
+
+    let selected = MultiSelect::new()
+        .with_prompt("Character sets")
+        .items(&options)
+        .defaults(&[true, true, true, false])
+        .interact()?;
+
+    if selected.is_empty() {
+        eprintln!("[WARN] No charset selected, defaulting to all.");
+        return Ok(CharSet::ALL);
+    }
+
+    let mut charset = CharSet(0);
+    for index in selected {
+        charset = match index {
+            0 => charset | CharSet::UPPERCASE,
+            1 => charset | CharSet::LOWERCASE,
+            2 => charset | CharSet::DIGITS,
+            3 => charset | CharSet::SPECIAL,
+            _ => charset,
+        };
+    }
+
+    Ok(charset)
+}
+
+pub fn menu(vault: &mut Vault) -> Result<(), Box<dyn Error>> {
     let items = vec![
         "list entries",
         "list devices",
@@ -92,21 +153,21 @@ pub fn menu(vault : &mut Vault) -> Result<(), Box<dyn Error>> {
         "remove device",
         "update master",
         "start server",
-        "stop server"
+        "stop server",
+        "add fido2 device",
+        "remove fido2 device",
     ];
 
     let mut stdout = io::stdout();
-
     let mut selected = 0usize;
     let len = items.len();
+    let prompt = "Choose your target";
 
     enable_raw_mode()?;
-    let prompt = "Choose your target";
     execute!(stdout, cursor::Hide)?;
 
     let render = |stdout: &mut io::Stdout, selected: usize| -> io::Result<()> {
         queue!(stdout, terminal::Clear(ClearType::FromCursorDown))?;
-
         queue!(
             stdout,
             SetForegroundColor(Color::Green),
@@ -116,14 +177,14 @@ pub fn menu(vault : &mut Vault) -> Result<(), Box<dyn Error>> {
             Print("\r\n"),
         )?;
 
-        for (i, item) in items.iter().enumerate() {
-            if i == selected {
+        for (index, item) in items.iter().enumerate() {
+            if index == selected {
                 queue!(
                     stdout,
                     SetForegroundColor(Color::Cyan),
                     Print("> "),
                     SetForegroundColor(Color::Yellow),
-                    Print(format!("{}. {}", i + 1, item)),
+                    Print(format!("{}. {}", index + 1, item)),
                     ResetColor,
                     Print("\r\n"),
                 )?;
@@ -132,16 +193,14 @@ pub fn menu(vault : &mut Vault) -> Result<(), Box<dyn Error>> {
                     stdout,
                     Print("  "),
                     SetForegroundColor(Color::DarkGrey),
-                    Print(format!("{}. {}", i + 1, item)),
+                    Print(format!("{}. {}", index + 1, item)),
                     ResetColor,
                     Print("\r\n"),
                 )?;
             }
         }
 
-        let lines = (len + 1) as u16;
-        queue!(stdout, cursor::MoveUp(lines))?;
-
+        queue!(stdout, cursor::MoveUp((len + 1) as u16))?;
         stdout.flush()
     };
 
@@ -151,9 +210,7 @@ pub fn menu(vault : &mut Vault) -> Result<(), Box<dyn Error>> {
         if let Event::Key(KeyEvent { code, .. }) = event::read()? {
             match code {
                 KeyCode::Up | KeyCode::Char('k') => {
-                    if selected > 0 {
-                        selected -= 1;
-                    }
+                    selected = selected.saturating_sub(1);
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
                     if selected < len - 1 {
@@ -162,20 +219,14 @@ pub fn menu(vault : &mut Vault) -> Result<(), Box<dyn Error>> {
                 }
                 KeyCode::Char(c) if c.is_ascii_digit() => {
                     let n = c as usize - '0' as usize;
-                    if n >= 1 && n <= len {
+                    if (1..=len).contains(&n) {
                         selected = n - 1;
                         break;
                     }
                 }
                 KeyCode::Enter => break,
                 KeyCode::Esc | KeyCode::Char('q') => {
-                    let lines = (len + 1) as u16;
-                    execute!(
-                        stdout,
-                        cursor::MoveDown(lines),
-                        cursor::Show,
-                        ResetColor,
-                    )?;
+                    execute!(stdout, cursor::MoveDown((len + 1) as u16), cursor::Show, ResetColor)?;
                     disable_raw_mode()?;
                     return Err(io::Error::new(io::ErrorKind::Interrupted, "cancelled").into());
                 }
@@ -186,29 +237,13 @@ pub fn menu(vault : &mut Vault) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let lines = (len + 1) as u16;
-    execute!(
-        stdout,
-        cursor::MoveDown(lines),
-        cursor::Show,
-    )?;
-
+    execute!(stdout, cursor::MoveDown((len + 1) as u16), cursor::Show, ResetColor)?;
     disable_raw_mode()?;
 
-    // println!(
-    //     "{} {}  {}. {}",
-    //     "✔".green(),
-    //     prompt,
-    //     selected + 1,
-    //     items[selected].yellow(),
-    // );
-
-    handle_selection(selected, vault)?;
-
-    Ok(())
+    handle_selection(selected, vault)
 }
 
-fn handle_selection(selection: usize, vault : &mut Vault) -> Result<(), Box<dyn Error>> {
+fn handle_selection(selection: usize, vault: &mut Vault) -> Result<(), Box<dyn Error>> {
     match selection {
         0 => list_entries(vault)?,
         1 => list_devices(vault)?,
@@ -221,93 +256,238 @@ fn handle_selection(selection: usize, vault : &mut Vault) -> Result<(), Box<dyn 
         8 => update_master(vault)?,
         9 => start_server(vault)?,
         10 => stop_server(vault)?,
-        11 => println!("Add fido2 device"),
-        12 => println!("Remove fido2 device"),
+        11 => add_fido2_device(vault)?,
+        12 => remove_fido2_device(vault)?,
         _ => println!("Invalid selection"),
     }
 
     Ok(())
 }
 
-fn stop_server(vault : &Vault) -> Result<(), Box<dyn Error>> {
-    Ok(())
+// ── Stubs ────────────────────────────────────────────────────────────────────
 
-}
-
-fn start_server(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
+fn stop_server(_vault: &Vault) -> Result<(), Box<dyn Error>> {
+    println!("[WIP] stop server not yet implemented.");
     Ok(())
 }
 
-fn update_master(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
+fn start_server(_vault: &Vault) -> Result<(), Box<dyn Error>> {
+    println!("[WIP] start server not yet implemented.");
     Ok(())
 }
 
-fn remove_device(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
+fn add_fido2_device(_vault: &mut Vault) -> Result<(), Box<dyn Error>> {
+    println!("[WIP] FIDO2 device registration not yet implemented.");
     Ok(())
 }
 
-fn remove_entry(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
+fn remove_fido2_device(_vault: &mut Vault) -> Result<(), Box<dyn Error>> {
+    println!("[WIP] FIDO2 device removal not yet implemented.");
     Ok(())
 }
 
-fn show_entry(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
-    let entry = find_entry(vault)?;
-    let payload = entry.decrypt_entry_payload(vault.header.metadata.vault_id, &vault.header.kdf, &vault.derived.vault_secret)?;
-    let cast_entry = payload.as_any().downcast_ref::<PasswordEntry>().ok_or("Failed to downcast entry")?;
-    println!("{:}", cast_entry);
+fn remove_device(_vault: &mut Vault) -> Result<(), Box<dyn Error>> {
+    println!("[WIP] device/client management not yet implemented.");
     Ok(())
 }
 
-fn update_entry(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
-    let mut entry = find_entry(vault)?.clone();
-    let payload = entry.decrypt_entry_payload(vault.header.metadata.vault_id, &vault.header.kdf, &vault.derived.vault_secret)?;
-    let mut cast_entry = payload.as_any().downcast_ref::<PasswordEntry>().ok_or("Failed to downcast entry")?;
-    entry.domain_tag = "asdasd".to_string();
+fn list_devices(vault: &Vault) -> Result<(), Box<dyn Error>> {
+    if vault.body.authorized_clients.is_empty() {
+        println!("No authorized clients.");
+        return Ok(());
+    }
 
-    entry.updated_at = now();
-    let mut new = VaultyEntry {
-        entry_length: 0,
-        wrapped_key: entry.wrapped_key.clone(),
-        domain_tag: "".to_string(),
-        domain_tag_length: 0,
-        entry_type: EntryType::Password,
-        nonce: entry.nonce.clone(),
-        salt: entry.salt.clone(),
-        wrapping_nonce: entry.wrapping_nonce.clone(),
-        version: 0,
-        entry_id: Default::default(),
-        payload: vec![],
-        payload_length: 0,
-        target: "".to_string(),
-        target_length: 0,
-        is_default: false,
-        created_at: 0,
-        updated_at: 0,
+    println!("Authorized clients:");
+    for (index, device) in vault.body.authorized_clients.iter().enumerate() {
+        println!("  {}. {:?}", index + 1, device);
+    }
+
+    Ok(())
+}
+
+// ── Entry helpers ─────────────────────────────────────────────────────────────
+
+fn pick_entry(vault: &Vault) -> Result<usize, Box<dyn Error>> {
+    if vault.body.entries.is_empty() {
+        return Err("No entries in vault.".into());
+    }
+
+    let labels: Vec<String> = vault
+        .body
+        .entries
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| format!("{}. {} ({})", index + 1, entry.domain_tag, entry.entry_id))
+        .collect();
+
+    let choice = Select::new()
+        .with_prompt("Select entry")
+        .items(&labels)
+        .default(0)
+        .interact()?;
+
+    Ok(choice)
+}
+
+fn list_entries(vault: &Vault) -> Result<(), Box<dyn Error>> {
+    if vault.body.entries.is_empty() {
+        println!("No entries.");
+        return Ok(());
+    }
+
+    println!("{:<4} {:<24} {:<36} {}", "#", "Tag", "ID", "Default key");
+    println!("{}", "-".repeat(72));
+
+    for (index, entry) in vault.body.entries.iter().enumerate() {
+        println!(
+            "{:<4} {:<24} {:<36} {}",
+            index + 1,
+            entry.domain_tag,
+            entry.entry_id,
+            if entry.is_default { "yes" } else { "no" }
+        );
+    }
+
+    Ok(())
+}
+
+fn show_entry(vault: &Vault) -> Result<(), Box<dyn Error>> {
+    let index = pick_entry(vault)?;
+    let entry = &vault.body.entries[index];
+    let payload = entry.decrypt_entry_payload(
+        vault.header.metadata.vault_id,
+        &vault.header.kdf,
+        &vault.derived.vault_secret,
+    )?;
+
+    let password_entry = payload
+        .as_any()
+        .downcast_ref::<PasswordEntry>()
+        .ok_or("Failed to downcast entry")?;
+
+    println!("{}", password_entry);
+    Ok(())
+}
+
+fn load_entry(vault: &Vault) -> Result<(), Box<dyn Error>> {
+    let index = pick_entry(vault)?;
+    let entry = &vault.body.entries[index];
+    let payload = entry.decrypt_entry_payload(
+        vault.header.metadata.vault_id,
+        &vault.header.kdf,
+        &vault.derived.vault_secret,
+    )?;
+
+    let password_entry = payload
+        .as_any()
+        .downcast_ref::<PasswordEntry>()
+        .ok_or("Failed to downcast entry")?;
+
+    println!("Loaded: {} ({})", password_entry.title, entry.domain_tag);
+    Ok(())
+}
+
+// ── CRUD ──────────────────────────────────────────────────────────────────────
+
+fn add_entry(vault: &mut Vault) -> Result<(), Box<dyn Error>> {
+    let title: String = Input::new().with_prompt("Title").interact_text()?;
+
+    let username_raw: String = Input::new()
+        .with_prompt("Username / email (leave empty to skip)")
+        .allow_empty(true)
+        .interact_text()?;
+    let username = match username_raw.trim() {
+        "" => None,
+        _ => Some(username_raw),
     };
-    let mut new_payload = PasswordEntry{
-        title_length: 0,
-        title: "".to_string(),
-        username_length: 0,
-        username: None,
-        password_length: 0,
-        password: Default::default(),
-        url_count: 0,
-        urls: vec![],
-        notes_length: 0,
-        notes: None,
+
+    let generate = prompt_yes_no("Generate password?")?;
+    let (password, is_default) = if generate {
+        let charset = prompt_charset()?;
+        let length_raw: String = Input::new()
+            .with_prompt("Password length")
+            .default("20".to_string())
+            .interact_text()?;
+        let length = length_raw.trim().parse().unwrap_or(20);
+        (generate_password(charset, length)?, true)
+    } else {
+        prompt_entry_pw("Entry password")?
     };
+
+    let target: String = Input::new()
+        .with_prompt("Target domain (e.g. amazon.de)")
+        .interact_text()?;
+
+    let domain_tag: String = Input::new()
+        .with_prompt("Tag / slug (e.g. amazon)")
+        .with_initial_text(&title.to_lowercase().replace(' ', "-"))
+        .interact_text()?;
+
+    let uris_raw: String = Input::new()
+        .with_prompt("Allowed URIs, semicolon-separated (leave empty to skip)")
+        .allow_empty(true)
+        .interact_text()?;
+    let allowed_uris = parse_semicolon_list(&uris_raw);
+
+    let notes_raw: String = Input::new()
+        .with_prompt("Notes (leave empty to skip)")
+        .allow_empty(true)
+        .interact_text()?;
+    let notes = match notes_raw.trim() {
+        "" => None,
+        _ => Some(notes_raw),
+    };
+
+    vault.add_entry(
+        is_default,
+        domain_tag,
+        target,
+        title,
+        username,
+        password,
+        allowed_uris,
+        notes,
+    )?;
+
+    save_vault(vault)?;
+    println!("Entry added.");
+    Ok(())
+}
+
+fn update_entry(vault: &mut Vault) -> Result<(), Box<dyn Error>> {
+    let index = pick_entry(vault)?;
+    let entry = &vault.body.entries[index];
+    let payload = entry.decrypt_entry_payload(
+        vault.header.metadata.vault_id,
+        &vault.header.kdf,
+        &vault.derived.vault_secret,
+    )?;
+
+    let current = payload
+        .as_any()
+        .downcast_ref::<PasswordEntry>()
+        .ok_or("Failed to downcast entry")?;
+
+    let mut new_title = current.title.clone();
+    let mut new_username = current.username.clone();
+    let mut new_password: Option<SecretString> = None;
+    let mut new_is_default = vault.body.entries[index].is_default;
+    let mut new_urls = current.urls.clone();
+    let mut new_notes = current.notes.clone();
+    let mut new_target = vault.body.entries[index].target.clone();
+    let mut new_domain_tag = vault.body.entries[index].domain_tag.clone();
 
     loop {
-        let options = vec!["Title", "Username", "Password", "URLs", "Notes", "Done"];
-
-        // extra pw        //entry pw
-        // title          // Amazon
-        // username
-        // password
-        // urls ?         // allowed urls -> amazon.de/login
-        // notes
-        // target        // target domain -> amazon.de
-        // domain_tag    // amazon ... title.lower
+        let options = vec![
+            "Title",
+            "Username",
+            "Password",
+            "Target domain",
+            "Tag / slug",
+            "Allowed URIs",
+            "Notes",
+            "Done",
+        ];
 
         let choice = Select::new()
             .with_prompt("Edit field")
@@ -317,110 +497,114 @@ fn update_entry(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
 
         match options[choice] {
             "Title" => {
-                new_payload.title = Input::new()
-                    .with_prompt("New title")
-                    .with_initial_text(&cast_entry.title)
+                new_title = Input::new()
+                    .with_prompt("Title")
+                    .with_initial_text(&new_title)
                     .interact_text()?;
             }
-            // "Username" => {
-            //     let input: String = Input::new()
-            //         .with_prompt("Username (empty = None)")
-            //         .allow_empty(true)
-            //         .interact_text()?;
-            //
-            //     entry.username = if input.is_empty() { None } else { Some(input) };
-            // }
-            // "URLs" => {
-            //     let input: String = Input::new()
-            //         .with_prompt("Comma-separated URLs")
-            //         .with_initial_text(entry.urls.join(","))
-            //         .interact_text()?;
-            //
-            //     entry.urls = input
-            //         .split(',')
-            //         .map(|s| s.trim().to_string())
-            //         .filter(|s| !s.is_empty())
-            //         .collect();
-            // }
-            // "Notes" => {
-            //     let input: String = Input::new()
-            //         .with_prompt("Notes (empty = None)")
-            //         .allow_empty(true)
-            //         .interact_text()?;
-            //
-            //     entry.notes = if input.is_empty() { None } else { Some(input) };
-            // }
+            "Username" => {
+                let raw: String = Input::new()
+                    .with_prompt("Username / email (leave empty to clear)")
+                    .with_initial_text(new_username.as_deref().unwrap_or(""))
+                    .allow_empty(true)
+                    .interact_text()?;
+                new_username = match raw.trim() {
+                    "" => None,
+                    _ => Some(raw),
+                };
+            }
+            "Password" => {
+                let (password, is_default) = prompt_entry_pw("New entry password")?;
+                new_password = Some(password);
+                new_is_default = is_default;
+            }
+            "Target domain" => {
+                new_target = Input::new()
+                    .with_prompt("Target domain (e.g. amazon.de)")
+                    .with_initial_text(&new_target)
+                    .interact_text()?;
+            }
+            "Tag / slug" => {
+                new_domain_tag = Input::new()
+                    .with_prompt("Tag / slug")
+                    .with_initial_text(&new_domain_tag)
+                    .interact_text()?;
+            }
+            "Allowed URIs" => {
+                let raw: String = Input::new()
+                    .with_prompt("Allowed URIs, semicolon-separated (leave empty to clear)")
+                    .with_initial_text(&new_urls.join(";"))
+                    .allow_empty(true)
+                    .interact_text()?;
+                new_urls = parse_semicolon_list(&raw);
+            }
+            "Notes" => {
+                let raw: String = Input::new()
+                    .with_prompt("Notes (leave empty to clear)")
+                    .with_initial_text(new_notes.as_deref().unwrap_or(""))
+                    .allow_empty(true)
+                    .interact_text()?;
+                new_notes = match raw.trim() {
+                    "" => None,
+                    _ => Some(raw),
+                };
+            }
             "Done" => break,
             _ => {}
         }
     }
 
+    vault.update_entry(
+        index,
+        new_is_default,
+        new_domain_tag,
+        new_target,
+        new_title,
+        new_username,
+        new_password,
+        new_urls,
+        new_notes,
+    )?;
+
+    save_vault(vault)?;
+    println!("Entry updated.");
     Ok(())
 }
 
-fn add_entry(vault: &mut Vault) ->  Result<(), Box<dyn Error>>  {
-    let title = prompt_question("Title")?;
+fn remove_entry(vault: &mut Vault) -> Result<(), Box<dyn Error>> {
+    let index = pick_entry(vault)?;
+    let tag = vault.body.entries[index].domain_tag.clone();
 
-    let username_or_email = prompt_question("Username or email")?;
+    if !prompt_yes_no(&format!("Remove entry \"{}\"?", tag))? {
+        println!("Aborted.");
+        return Ok(());
+    }
 
-    let is_generate_password = prompt_yes_no("Generate password?")?;
+    vault.body.entries.remove(index);
+    save_vault(vault)?;
 
-    let password_source = if is_generate_password {
-        let charset = prompt_question(
-            "Character set? Example: lower,upper,digits,symbols or custom chars"
-        )?;
-        generate_password(CharSet::ALL)?
+    println!("Entry \"{}\" removed.", tag);
+    Ok(())
+}
 
-    } else {
-        prompt_pw("Password".to_string())?
-    };
+fn update_master(vault: &mut Vault) -> Result<(), Box<dyn Error>> {
+    let current = prompt_pw("Current master password: ".to_string())?;
+    let new_password = prompt_pw("New master password: ".to_string())?;
+    let confirm = prompt_pw("Confirm new master password: ".to_string())?;
 
-    let allowed_uris_raw = prompt_question(
-        "Allowed URIs, separated by semicolon ; leave empty for none"
-    )?;
+    if new_password.expose_secret() != confirm.expose_secret() {
+        return Err("Passwords do not match.".into());
+    }
 
+    vault.change_master(current, new_password)?;
+    save_vault(vault)?;
 
-    let allowed_uris = parse_semicolon_list(&allowed_uris_raw);
-    vault.add_entry(true, title, Some(username_or_email), password_source, allowed_uris, None)?;
+    println!("Master password updated.");
+    Ok(())
+}
 
+fn save_vault(vault: &mut Vault) -> Result<(), Box<dyn Error>> {
     let sealed_vault = vault.seal_vault()?;
     atomic_write(&sealed_vault.serialize()?)?;
     Ok(())
 }
-
-fn load_entry(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
-    let entry = find_entry(vault)?;
-    let payload = entry.decrypt_entry_payload(vault.header.metadata.vault_id, &vault.header.kdf, &vault.derived.vault_secret)?;
-    let cast_entry = payload.as_any().downcast_ref::<PasswordEntry>().ok_or("Failed to downcast entry")?;
-    Ok(())
-}
-
-fn find_entry(vault: &Vault) -> Result<&VaultyEntry, Box<dyn Error>> {
-    let entry_id = prompt_question("Enter entry name: ")?;
-
-    let entry = vault.body.entries.iter().find(|&e| e.domain_tag == entry_id).ok_or("Entry not found")?;
-    Ok(entry)
-}
-
-fn list_devices(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
-    for device in vault.body.authorized_clients.iter() {
-        println!("{:?}", device);
-    }
-    Ok(())
-}
-
-fn list_entries(vault : &Vault) ->  Result<(), Box<dyn Error>>  {
-    println!("list entries");
-    for entry in vault.body.entries.iter() {
-        println!("{:?}", entry.domain_tag);
-    }
-    Ok(())
-}
-
-fn now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-}
-
