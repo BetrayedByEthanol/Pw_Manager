@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vaulty</title>
+
+  <style>
+    :root {
+      --bg: #111318;
+      --panel: #181b22;
+      --panel-soft: #20242d;
+      --text: #f4f5f7;
+      --muted: #a7adba;
+      --border: #2b303b;
+      --accent: #7c5cff;
+      --accent-hover: #8d73ff;
+      --danger: #ff5c7a;
+      --success: #39d98a;
+      --radius: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 340px;
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      padding: 14px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, var(--accent), #35d0ff);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      color: white;
+    }
+
+    .title {
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .subtitle {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 12px;
+      background: var(--panel);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--danger);
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 11px;
+      font-size: 13px;
+      font-weight: 650;
+      cursor: pointer;
+      color: var(--text);
+      background: var(--panel-soft);
+    }
+
+    button:hover {
+      filter: brightness(1.08);
+    }
+
+    button.primary {
+      background: var(--accent);
+    }
+
+    button.primary:hover {
+      background: var(--accent-hover);
+    }
+
+    button.full {
+      grid-column: 1 / -1;
+    }
+
+    button.secondary {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .field-list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .field-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px;
+      border-radius: 9px;
+      background: var(--panel-soft);
+      border: 1px solid var(--border);
+    }
+
+    .field-label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .field-value {
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: var(--text);
+      max-width: 190px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font-size: 11px;
+      padding: 2px 2px 0;
+    }
+
+    .kbd {
+      border: 1px solid var(--border);
+      border-bottom-width: 2px;
+      border-radius: 5px;
+      padding: 1px 5px;
+      color: var(--text);
+      background: var(--panel);
+      font-size: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="app">
+    <header class="header">
+      <div class="brand">
+        <div class="logo">V</div>
+        <div>
+          <div class="title">Vaulty</div>
+          <div class="subtitle">Browser helper</div>
+        </div>
+      </div>
+
+      <div class="status" title="Native host not connected yet">
+        <span class="status-dot"></span>
+        Local only
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="card-title">Page actions</div>
+
+      <div class="actions">
+        <button id="select" class="primary full" type="button">
+          Select page element
+        </button>
+
+        <button id="select-username" type="button">
+          Username field
+        </button>
+
+        <button id="select-password" type="button">
+          Password field
+        </button>
+
+        <button id="test-fill" class="secondary full" type="button">
+          Test fill later
+        </button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">Last selected element</div>
+
+      <div id="selected-empty" class="empty">
+        No element selected yet. Click “Select page element”, then click something on the page.
+      </div>
+
+      <div id="selected-details" class="field-list" hidden>
+        <div class="field-row">
+          <span class="field-label">Tag</span>
+          <span id="selected-tag" class="field-value">—</span>
+        </div>
+
+        <div class="field-row">
+          <span class="field-label">Type</span>
+          <span id="selected-type" class="field-value">—</span>
+        </div>
+
+        <div class="field-row">
+          <span class="field-label">ID</span>
+          <span id="selected-id" class="field-value">—</span>
+        </div>
+
+        <div class="field-row">
+          <span class="field-label">Class</span>
+          <span id="selected-class" class="field-value">—</span>
+        </div>
+
+        <div class="field-row">
+          <span class="field-label">Text</span>
+          <span id="selected-text" class="field-value">—</span>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span>Selector mode uses next click</span>
+      <span><span class="kbd">Esc</span> cancel later</span>
+    </footer>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>
