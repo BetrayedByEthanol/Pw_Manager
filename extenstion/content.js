@@ -21,6 +21,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
 
+  if (message?.type === "VAULTY_SCAN_PAGE_SECURITY") {
+    const result = scanPageSecurity(message.payload || {});
+    sendResponse(result);
+    return;
+  }
+
   if (message?.type === "VAULTY_TEST_FILL") {
     const result = testFill(message.payload || {});
     sendResponse(result);
@@ -34,11 +40,168 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "VAULTY_VALIDATE_MAPPING") {
-  const result = validateMapping(message.payload || {});
-  sendResponse(result);
-  return;
-}
+   const result = validateMapping(message.payload || {});
+   sendResponse(result);
+   return;
+  }
+
+  if (message?.type === "VAULTY_SCAN_LOGIN_FIELDS") {
+    const result = scanLoginFields(message.payload || {});
+    sendResponse(result);
+    return;
+  }
+
 });
+
+function scanPageSecurity(payload) {
+  const originError = getOriginLockError(payload);
+
+  if (originError) {
+    return originError;
+  }
+
+  const iframes = detectIframes();
+  const oauthProviders = detectOAuthProviders();
+  const forms = detectLoginForms();
+
+  return {
+    ok: true,
+    mode: "page-security-scan",
+    origin: window.location.origin,
+    url: window.location.href,
+
+    iframes,
+    oauthProviders,
+    forms,
+
+    summary: {
+      iframeCount: iframes.length,
+      visibleIframeCount: iframes.filter((frame) => frame.visible).length,
+      crossOriginIframeCount: iframes.filter((frame) => frame.likelyCrossOrigin).length,
+      oauthProviderCount: oauthProviders.length,
+      passwordFieldCount: forms.passwordFieldCount,
+      possibleUsernameFieldCount: forms.possibleUsernameFieldCount,
+    },
+  };
+}
+
+function resolveStoredField(role, field) {
+  const attempts = buildSelectorFallbacks(role, field);
+
+  for (const attempt of attempts) {
+    const element = safeQuerySelector(attempt.selector);
+
+    if (!element) {
+      continue;
+    }
+
+    const validation = validateElementForFill(role, field, element);
+
+    if (!validation.ok) {
+      continue;
+    }
+
+    return {
+      element,
+      resolved: true,
+      resolvedBy: attempt.method,
+      resolvedSelector: attempt.selector,
+      attemptedSelectors: attempts.map((item) => item.selector),
+    };
+  }
+
+  return {
+    element: null,
+    resolved: false,
+    resolvedBy: "",
+    resolvedSelector: "",
+    attemptedSelectors: attempts.map((item) => item.selector),
+  };
+}
+
+function buildSelectorFallbacks(role, field) {
+  const attempts = [];
+  const seen = new Set();
+
+  function add(method, selector) {
+    if (!selector || typeof selector !== "string") {
+      return;
+    }
+
+    const trimmed = selector.trim();
+
+    if (!trimmed || seen.has(trimmed)) {
+      return;
+    }
+
+    seen.add(trimmed);
+    attempts.push({ method, selector: trimmed });
+  }
+
+  add("stored-selector", field?.selector);
+
+  if (field?.id) {
+    add("id", `#${cssEscape(field.id)}`);
+  }
+
+  if (field?.name) {
+    add("name", `[name="${cssEscapeAttribute(field.name)}"]`);
+  }
+
+  if (field?.autocomplete) {
+    add("autocomplete", `[autocomplete="${cssEscapeAttribute(field.autocomplete)}"]`);
+  }
+
+  if (field?.placeholder) {
+    add("placeholder", `[placeholder="${cssEscapeAttribute(field.placeholder)}"]`);
+  }
+
+  for (const selector of getRoleHeuristicSelectors(role)) {
+    add("role-heuristic", selector);
+  }
+
+  return attempts;
+}
+
+function getRoleHeuristicSelectors(role) {
+  if (role === "password" || role === "passwordConfirm") {
+    return [
+      'input[type="password"]',
+      'input[autocomplete="current-password"]',
+      'input[autocomplete="new-password"]',
+    ];
+  }
+
+  if (role === "email") {
+    return [
+      'input[type="email"]',
+      'input[autocomplete="email"]',
+      'input[name*="email" i]',
+      'input[id*="email" i]',
+      'input[placeholder*="email" i]',
+    ];
+  }
+
+  if (role === "username") {
+    return [
+      'input[autocomplete="username"]',
+      'input[type="email"]',
+      'input[name*="email" i]',
+      'input[id*="email" i]',
+      'input[name*="user" i]',
+      'input[id*="user" i]',
+      'input[name*="login" i]',
+      'input[id*="login" i]',
+      'input[type="text"]',
+    ];
+  }
+
+  return [];
+}
+
+function cssEscapeAttribute(value) {
+  return String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
 
 function startSelectorMode(message) {
   if (selectorMode) {
@@ -383,50 +546,94 @@ function buildCssSelector(element) {
   return parts.join(" > ");
 }
 
+function getNearbyText(element) {
+  const parts = [];
+
+  if (element.labels) {
+    for (const label of Array.from(element.labels)) {
+      parts.push(label.innerText || label.textContent || "");
+    }
+  }
+
+  const parent = element.parentElement;
+
+  if (parent) {
+    parts.push(parent.innerText || parent.textContent || "");
+  }
+
+  const previous = element.previousElementSibling;
+  const next = element.nextElementSibling;
+
+  if (previous) {
+    parts.push(previous.innerText || previous.textContent || "");
+  }
+
+  if (next) {
+    parts.push(next.innerText || next.textContent || "");
+  }
+
+  return parts
+    .join(" ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 160);
+}
+
 function fillBySelectors(payload) {
+  const originError = getOriginLockError(payload);
+
+  if (originError) {
+    console.warn("Vaulty: blocked fill due to origin lock", originError);
+    return originError;
+  }
+
   const mapping = payload.mapping || {};
 
-  const usernameSelector =
-    payload.usernameSelector ||
-    mapping.username?.selector ||
-    "";
+  const usernameField =
+    mapping.username ||
+    mapping.login?.username ||
+    null;
 
-  const passwordSelector =
-    payload.passwordSelector ||
-    mapping.password?.selector ||
-    "";
+  const passwordField =
+    mapping.password ||
+    mapping.login?.password ||
+    null;
 
   const username = payload.username ?? "demo@example.com";
   const password = payload.password ?? "demo-password";
 
-  const usernameField = usernameSelector
-    ? safeQuerySelector(usernameSelector)
-    : null;
+  const usernameResult = usernameField
+    ? fillMappedField("username", usernameField, username)
+    : {
+        ok: false,
+        filled: false,
+        role: "username",
+        reason: "no-username-mapping",
+      };
 
-  const passwordField = passwordSelector
-    ? safeQuerySelector(passwordSelector)
-    : null;
-
-  let usernameFilled = false;
-  let passwordFilled = false;
-
-  if (usernameField) {
-    usernameFilled = setElementValue(usernameField, username);
-  }
-
-  if (passwordField) {
-    passwordFilled = setElementValue(passwordField, password);
-  }
+  const passwordResult = passwordField
+    ? fillMappedField("password", passwordField, password)
+    : {
+        ok: false,
+        filled: false,
+        role: "password",
+        reason: "no-password-mapping",
+      };
 
   return {
-    ok: usernameFilled || passwordFilled,
+    ok: usernameResult.filled || passwordResult.filled,
     mode: "selectors",
-    usernameSelector,
-    passwordSelector,
-    usernameFound: Boolean(usernameField),
-    passwordFound: Boolean(passwordField),
-    usernameFilled,
-    passwordFilled,
+
+    usernameFound: usernameResult.reason !== "missing",
+    passwordFound: passwordResult.reason !== "missing",
+
+    usernameFilled: usernameResult.filled,
+    passwordFilled: passwordResult.filled,
+
+    fields: {
+      username: usernameResult,
+      password: passwordResult,
+    },
   };
 }
 
@@ -466,6 +673,12 @@ function testFill(payload) {
 }
 
 function validateMapping(payload) {
+  const originError = getOriginLockError(payload);
+
+  if (originError) {
+    return originError;
+  }
+
   const mapping = payload.mapping || {};
 
   const fieldsToCheck = {
@@ -502,6 +715,7 @@ function validateMapping(payload) {
     mode: "validate",
     origin: window.location.origin,
     url: window.location.href,
+    iframeWarnings: detectIframes(),
     fields,
     summary,
   };
@@ -516,33 +730,94 @@ function validateStoredField(role, field) {
       selector,
       found: false,
       fillable: false,
+      visible: false,
+      enabled: false,
+      readOnly: false,
+      hiddenInput: false,
+      interactable: false,
+      roleSafe: false,
+      stable: false,
+      drift: {
+        stable: false,
+        mismatchCount: 0,
+        mismatches: [],
+      },
       reason: "no-selector",
     };
   }
 
-  const element = safeQuerySelector(selector);
+  const resolution = resolveStoredField(role, field);
+  const element = resolution.element;
 
   if (!element) {
     return {
       role,
       selector,
       found: false,
+      resolved: false,
+      resolvedBy: "",
+      resolvedSelector: "",
+      attemptedSelectors: resolution.attemptedSelectors,
+
       fillable: false,
+      visible: false,
+      enabled: false,
+      readOnly: false,
+      hiddenInput: false,
+      interactable: false,
+      roleSafe: false,
+      stable: false,
+      drift: {
+        stable: false,
+        mismatchCount: 0,
+        mismatches: [],
+      },
       reason: "missing",
     };
   }
 
+  const visible = isVisibleElement(element);
+  const enabled = isEnabledElement(element);
+  const readOnly = isReadOnlyElement(element);
+  const hiddenInput = isHiddenInput(element);
+  const fillable = isFillableElement(element);
+  const interactable = isInteractableElement(element);
+  const roleSafe = isSafeElementForRole(role, element);
+  const drift = compareStoredFieldToLiveElement(field, element);
+
   return {
     role,
     selector,
+
     found: true,
-    fillable: isFillableElement(element),
+    fillable,
+    visible,
+    enabled,
+    readOnly,
+    hiddenInput,
+    interactable,
+    roleSafe,
+
+    stable: drift.stable,
+    drift,
+
+    resolved: true,
+    resolvedBy: resolution.resolvedBy,
+    resolvedSelector: resolution.resolvedSelector,
+    attemptedSelectors: resolution.attemptedSelectors,
+
     tag: element.tagName?.toLowerCase() || "",
-    type: element.getAttribute("type") || "",
+    type: getNormalizedElementType(element),
     name: element.getAttribute("name") || "",
     id: element.id || "",
-    visible: isVisibleElement(element),
-    reason: "found",
+    autocomplete: element.getAttribute("autocomplete") || "",
+    placeholder: element.getAttribute("placeholder") || "",
+
+    reason: getValidationReason({
+      interactable,
+      roleSafe,
+      drift,
+    }),
   };
 }
 
@@ -607,6 +882,23 @@ function setElementValue(element, value) {
     return false;
   }
 
+  if (!isInteractableElement(element)) {
+    console.warn("Vaulty: blocked fill because element is not interactable", {
+      tag: element.tagName?.toLowerCase() || "",
+      type: element.getAttribute("type") || "",
+      name: element.getAttribute("name") || "",
+      id: element.id || "",
+      visible: isVisibleElement(element),
+      enabled: isEnabledElement(element),
+      readOnly: isReadOnlyElement(element),
+      hiddenInput: isHiddenInput(element),
+      fillable: isFillableElement(element),
+    });
+
+
+    return false;
+  }
+
   if (element.isContentEditable) {
     element.focus();
     element.textContent = value;
@@ -651,3 +943,667 @@ function cssEscape(value) {
 
   return String(value).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
 }
+
+function isEnabledElement(element) {
+  if (!element) {
+    return false;
+  }
+
+  if (element.disabled) {
+    return false;
+  }
+
+  if (element.getAttribute("aria-disabled") === "true") {
+    return false;
+  }
+
+  return true;
+}
+
+function isReadOnlyElement(element) {
+  return Boolean(element.readOnly || element.getAttribute("readonly") !== null);
+}
+
+function isHiddenInput(element) {
+  const tag = element.tagName?.toLowerCase();
+  const type = (element.getAttribute("type") || "").toLowerCase();
+
+  return tag === "input" && type === "hidden";
+}
+
+function isInteractableElement(element) {
+  return (
+    isFillableElement(element) &&
+    isVisibleElement(element) &&
+    isEnabledElement(element) &&
+    !isReadOnlyElement(element) &&
+    !isHiddenInput(element)
+  );
+}
+
+function compareStoredFieldToLiveElement(field, element) {
+  const mismatches = [];
+
+  const checks = [
+    ["tag", element.tagName?.toLowerCase() || ""],
+    ["type", getNormalizedElementType(element)],
+    ["name", element.getAttribute("name") || ""],
+    ["id", element.id || ""],
+    ["autocomplete", element.getAttribute("autocomplete") || ""],
+    ["placeholder", element.getAttribute("placeholder") || ""],
+  ];
+
+  for (const [key, liveValue] of checks) {
+    const storedValue = field?.[key] || "";
+
+    // Only compare attributes we actually captured originally.
+    if (!storedValue) {
+      continue;
+    }
+
+    if (String(storedValue) !== String(liveValue || "")) {
+      mismatches.push({
+        key,
+        stored: String(storedValue),
+        live: String(liveValue || ""),
+      });
+    }
+  }
+
+  return {
+    stable: mismatches.length === 0,
+    mismatchCount: mismatches.length,
+    mismatches,
+  };
+}
+
+function detectIframes() {
+  const iframes = Array.from(document.querySelectorAll("iframe"));
+
+  return iframes.map((iframe, index) => {
+    const src = iframe.getAttribute("src") || "";
+    const rect = iframe.getBoundingClientRect();
+
+    let sameOriginAccessible = false;
+
+    try {
+      sameOriginAccessible = Boolean(iframe.contentDocument);
+    } catch {
+      sameOriginAccessible = false;
+    }
+
+    const frameOrigin = src ? safeOriginFromPage(src) : "";
+    const likelyCrossOrigin =
+      Boolean(frameOrigin) && frameOrigin !== window.location.origin;
+
+    return {
+      index,
+      src,
+      origin: frameOrigin,
+      visible: isVisibleElement(iframe),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      sameOriginAccessible,
+      likelyCrossOrigin,
+    };
+  });
+}
+
+function safeOrigin(url) {
+  try {
+    return new URL(url, window.location.href).origin;
+  } catch {
+    return "";
+  }
+}
+
+function getOriginLockError(payload) {
+  const expectedOrigin = payload?.origin || "";
+  const actualOrigin = window.location.origin;
+
+  if (!expectedOrigin) {
+    return {
+      ok: false,
+      reason: "missing-origin",
+      actualOrigin,
+    };
+  }
+
+  if (expectedOrigin !== actualOrigin) {
+    return {
+      ok: false,
+      reason: "origin-mismatch",
+      expectedOrigin,
+      actualOrigin,
+      url: window.location.href,
+    };
+  }
+
+  return null;
+}
+
+function isSafeElementForRole(role, element) {
+  if (!element) {
+    return false;
+  }
+
+  const tag = element.tagName?.toLowerCase() || "";
+  const type = (element.getAttribute("type") || "text").toLowerCase();
+
+  if (role === "password") {
+    return tag === "input" && type === "password";
+  }
+
+  if (role === "username" || role === "email") {
+    return (
+      isFillableElement(element) &&
+      type !== "password" &&
+      type !== "hidden"
+    );
+  }
+
+  if (role === "passwordConfirm") {
+    return tag === "input" && type === "password";
+  }
+
+  return isFillableElement(element);
+}
+
+function scanLoginFields(payload) {
+  const originError = getOriginLockError(payload);
+
+  if (originError) {
+    return originError;
+  }
+
+  const candidates = getFillableInputCandidates();
+
+  const usernameCandidates = candidates
+    .map((candidate) => scoreUsernameCandidate(candidate))
+    .filter((candidate) => candidate.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+
+  const passwordCandidates = candidates
+    .map((candidate) => scorePasswordCandidate(candidate))
+    .filter((candidate) => candidate.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+
+  const bestUsername = usernameCandidates[0] || null;
+  const bestPassword = passwordCandidates[0] || null;
+
+  const confidence = calculateLoginScanConfidence(bestUsername, bestPassword);
+
+  return {
+    ok: true,
+    mode: "login-field-scan",
+    origin: window.location.origin,
+    url: window.location.href,
+
+    usernameCandidates,
+    passwordCandidates,
+
+    best: {
+      username: bestUsername,
+      password: bestPassword,
+    },
+
+    confidence,
+    hasLikelyLoginForm: Boolean(bestPassword && confidence >= 0.45),
+  };
+}
+
+function getFillableInputCandidates() {
+  const elements = Array.from(
+    document.querySelectorAll("input, textarea, [contenteditable='true']")
+  );
+
+  return elements
+    .filter((element) => isInteractableElement(element))
+    .map((element, index) => toFieldCandidate(element, index));
+}
+
+function toFieldCandidate(element, index) {
+  const tag = element.tagName?.toLowerCase() || "";
+  const type = (element.getAttribute("type") || "text").toLowerCase();
+  const name = element.getAttribute("name") || "";
+  const id = element.id || "";
+  const autocomplete = element.getAttribute("autocomplete") || "";
+  const placeholder = element.getAttribute("placeholder") || "";
+  const ariaLabel = element.getAttribute("aria-label") || "";
+  const htmlRole = element.getAttribute("role") || "";
+  const text = getNearbyText(element);
+  const selector = buildCssSelector(element);
+  const rect = element.getBoundingClientRect();
+
+  return {
+    index,
+    selector,
+    tag,
+    type,
+    name,
+    id,
+    autocomplete,
+    placeholder,
+    ariaLabel,
+    htmlRole,
+    text,
+    visible: isVisibleElement(element),
+    enabled: isEnabledElement(element),
+    fillable: isFillableElement(element),
+    interactable: isInteractableElement(element),
+    width: Math.round(rect.width),
+    height: Math.round(rect.height),
+  };
+}
+
+function validateElementForFill(role, field, element) {
+  if (!element) {
+    return {
+      ok: false,
+      role,
+      reason: "missing",
+    };
+  }
+
+  const visible = isVisibleElement(element);
+  const enabled = isEnabledElement(element);
+  const readOnly = isReadOnlyElement(element);
+  const hiddenInput = isHiddenInput(element);
+  const fillable = isFillableElement(element);
+  const interactable = isInteractableElement(element);
+  const roleSafe = isSafeElementForRole(role, element);
+
+  return {
+    ok: interactable && roleSafe,
+    role,
+    reason: interactable && roleSafe ? "ready" : "unsafe-target",
+
+    visible,
+    enabled,
+    readOnly,
+    hiddenInput,
+    fillable,
+    interactable,
+    roleSafe,
+
+    tag: element.tagName?.toLowerCase() || "",
+    type: element.getAttribute("type") || "",
+    name: element.getAttribute("name") || "",
+    id: element.id || "",
+    selector: field?.selector || "",
+  };
+}
+
+function fillMappedField(role, field, value) {
+  const selector = field?.selector || "";
+
+  if (!selector) {
+    return {
+      ok: false,
+      filled: false,
+      role,
+      reason: "missing-selector",
+    };
+  }
+
+  const resolution = resolveStoredField(role, field);
+  const element = resolution.element;
+  const validation = validateElementForFill(role, field, element);
+
+  if (!validation.ok) {
+    console.warn("Vaulty: blocked unsafe fill target", {
+      ...validation,
+      resolvedBy: resolution.resolvedBy,
+      resolvedSelector: resolution.resolvedSelector,
+    });
+
+    return {
+      ...validation,
+      resolved: resolution.resolved,
+      resolvedBy: resolution.resolvedBy,
+      resolvedSelector: resolution.resolvedSelector,
+      attemptedSelectors: resolution.attemptedSelectors,
+      filled: false,
+    };
+  }
+
+  const filled = setElementValue(element, value);
+
+  return {
+    ...validation,
+    resolved: resolution.resolved,
+    resolvedBy: resolution.resolvedBy,
+    resolvedSelector: resolution.resolvedSelector,
+    attemptedSelectors: resolution.attemptedSelectors,
+    ok: filled,
+    filled,
+    reason: filled ? "filled" : "fill-failed",
+  };
+}
+
+function getValidationReason({ interactable, roleSafe, drift }) {
+  if (!interactable) {
+    return "not-interactable";
+  }
+
+  if (!roleSafe) {
+    return "unsafe-role-target";
+  }
+
+  if (!drift?.stable) {
+    return "field-drift";
+  }
+
+  return "ready";
+}
+
+function detectOAuthProviders() {
+  const providers = [
+    {
+      id: "google",
+      label: "Google",
+      patterns: [
+        "accounts.google.com",
+        "continue with google",
+        "sign in with google",
+        "login with google",
+      ],
+    },
+    {
+      id: "github",
+      label: "GitHub",
+      patterns: [
+        "github.com/login",
+        "continue with github",
+        "sign in with github",
+        "login with github",
+      ],
+    },
+    {
+      id: "microsoft",
+      label: "Microsoft",
+      patterns: [
+        "login.microsoftonline.com",
+        "live.com",
+        "continue with microsoft",
+        "sign in with microsoft",
+        "login with microsoft",
+      ],
+    },
+    {
+      id: "apple",
+      label: "Apple",
+      patterns: [
+        "appleid.apple.com",
+        "continue with apple",
+        "sign in with apple",
+        "login with apple",
+      ],
+    },
+    {
+      id: "facebook",
+      label: "Facebook",
+      patterns: [
+        "facebook.com",
+        "continue with facebook",
+        "sign in with facebook",
+        "login with facebook",
+      ],
+    },
+  ];
+
+  const pageText = getPageTextForSecurityScan();
+  const linksAndButtons = getLinkButtonHints();
+
+  const haystack = [
+    window.location.href,
+    pageText,
+    linksAndButtons.join(" "),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  const found = [];
+
+  for (const provider of providers) {
+    const matchedPattern = provider.patterns.find((pattern) =>
+      haystack.includes(pattern.toLowerCase())
+    );
+
+    if (matchedPattern) {
+      found.push({
+        id: provider.id,
+        label: provider.label,
+        matchedPattern,
+      });
+    }
+  }
+
+  return found;
+}
+
+function getPageTextForSecurityScan() {
+  const text = document.body?.innerText || "";
+  return text.trim().replace(/\s+/g, " ").slice(0, 5000);
+}
+
+function getLinkButtonHints() {
+  const elements = Array.from(
+    document.querySelectorAll("a, button, [role='button'], input[type='button'], input[type='submit']")
+  );
+
+  return elements.slice(0, 200).map((element) => {
+    const href = element.getAttribute("href") || "";
+    const aria = element.getAttribute("aria-label") || "";
+    const title = element.getAttribute("title") || "";
+    const value = element.getAttribute("value") || "";
+    const text = element.innerText || element.textContent || "";
+
+    return [href, aria, title, value, text]
+      .join(" ")
+      .trim()
+      .replace(/\s+/g, " ")
+      .slice(0, 300);
+  });
+}
+
+function detectLoginForms() {
+  const inputs = Array.from(document.querySelectorAll("input, textarea"));
+
+  const passwordFields = inputs.filter((input) => {
+    const type = (input.getAttribute("type") || "").toLowerCase();
+    return type === "password";
+  });
+
+  const possibleUsernameFields = inputs.filter((input) => {
+    const type = (input.getAttribute("type") || "text").toLowerCase();
+    const name = (input.getAttribute("name") || "").toLowerCase();
+    const id = (input.id || "").toLowerCase();
+    const autocomplete = (input.getAttribute("autocomplete") || "").toLowerCase();
+    const placeholder = (input.getAttribute("placeholder") || "").toLowerCase();
+
+    if (type === "password" || type === "hidden") {
+      return false;
+    }
+
+    const combined = `${type} ${name} ${id} ${autocomplete} ${placeholder}`;
+
+    return (
+      type === "email" ||
+      combined.includes("email") ||
+      combined.includes("user") ||
+      combined.includes("login") ||
+      combined.includes("account") ||
+      autocomplete === "username"
+    );
+  });
+
+  return {
+    passwordFieldCount: passwordFields.length,
+    possibleUsernameFieldCount: possibleUsernameFields.length,
+    hasLikelyLoginForm: passwordFields.length > 0,
+  };
+}
+
+function safeOriginFromPage(url) {
+  try {
+    return new URL(url, window.location.href).origin;
+  } catch {
+    return "";
+  }
+}
+
+function scoreUsernameCandidate(candidate) {
+  let score = 0;
+  const reasons = [];
+
+  const haystack = candidateHaystack(candidate);
+
+  if (candidate.type === "email") {
+    score += 35;
+    reasons.push("type=email");
+  }
+
+  if (candidate.autocomplete === "username") {
+    score += 40;
+    reasons.push("autocomplete=username");
+  }
+
+  if (candidate.autocomplete === "email") {
+    score += 35;
+    reasons.push("autocomplete=email");
+  }
+
+  if (containsAny(haystack, ["email", "e-mail", "mail"])) {
+    score += 30;
+    reasons.push("email keyword");
+  }
+
+  if (containsAny(haystack, ["user", "username", "login", "account"])) {
+    score += 24;
+    reasons.push("username keyword");
+  }
+
+  if (candidate.type === "text") {
+    score += 8;
+    reasons.push("type=text");
+  }
+
+  if (candidate.type === "password" || candidate.type === "hidden") {
+    score -= 100;
+    reasons.push("bad type for username");
+  }
+
+  if (!candidate.interactable) {
+    score -= 100;
+    reasons.push("not interactable");
+  }
+
+  return {
+    ...candidate,
+    role: "username",
+    score: clampScore(score),
+    confidence: scoreToConfidence(score),
+    reasons,
+  };
+}
+
+function scorePasswordCandidate(candidate) {
+  let score = 0;
+  const reasons = [];
+
+  const haystack = candidateHaystack(candidate);
+
+  if (candidate.type === "password") {
+    score += 70;
+    reasons.push("type=password");
+  }
+
+  if (candidate.autocomplete === "current-password") {
+    score += 25;
+    reasons.push("autocomplete=current-password");
+  }
+
+  if (candidate.autocomplete === "new-password") {
+    score += 12;
+    reasons.push("autocomplete=new-password");
+  }
+
+  if (containsAny(haystack, ["password", "passwort", "passcode"])) {
+    score += 20;
+    reasons.push("password keyword");
+  }
+
+  if (candidate.type !== "password") {
+    score -= 80;
+    reasons.push("not password type");
+  }
+
+  if (!candidate.interactable) {
+    score -= 100;
+    reasons.push("not interactable");
+  }
+
+  return {
+    ...candidate,
+    role: "password",
+    score: clampScore(score),
+    confidence: scoreToConfidence(score),
+    reasons,
+  };
+}
+
+function candidateHaystack(candidate) {
+  return [
+    candidate.type,
+    candidate.name,
+    candidate.id,
+    candidate.autocomplete,
+    candidate.placeholder,
+    candidate.ariaLabel,
+    candidate.htmlRole,
+    candidate.text,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function containsAny(value, needles) {
+  return needles.some((needle) => value.includes(needle));
+}
+
+function clampScore(score) {
+  return Math.max(0, Math.min(100, score));
+}
+
+function scoreToConfidence(score) {
+  return Math.max(0, Math.min(1, score / 100));
+}
+
+function calculateLoginScanConfidence(username, password) {
+  if (!password) {
+    return 0;
+  }
+
+  const passwordConfidence = password.confidence || 0;
+  const usernameConfidence = username?.confidence || 0;
+
+  if (!username) {
+    return Math.min(0.7, passwordConfidence);
+  }
+
+  return Math.min(1, passwordConfidence * 0.6 + usernameConfidence * 0.4);
+}
+
+function getNormalizedElementType(element) {
+  const tag = element.tagName?.toLowerCase() || "";
+
+  if (tag !== "input") {
+    return element.getAttribute("type") || "";
+  }
+
+  return (element.getAttribute("type") || "text").toLowerCase();
+}
+

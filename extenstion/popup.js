@@ -1,3 +1,5 @@
+let latestLoginScan = null;
+
 const STORAGE_KEYS = {
   lastSelected: "vaulty.lastSelectedElement",
   selectionIntent: "vaulty.selectionIntent",
@@ -28,6 +30,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   wireSelectorButtons();
   wireTestFillButton();
   wireClearMappingButton();
+  wireUseDetectedLoginFieldsButton();
 
   await renderPopupState();
 });
@@ -49,6 +52,16 @@ function ensureSiteMappingUi() {
     <div id="site-origin" class="empty">
       No active site.
     </div>
+
+    <div id="page-security-warning" class="empty" hidden style="margin-top: 8px; color: #ffcc66;">
+    </div>
+
+    <div id="login-scan-result" class="empty" hidden style="margin-top: 8px;">
+    </div>
+
+    <button id="use-detected-login-fields" class="secondary full" type="button" hidden>
+      Use detected login fields
+    </button>
 
     <div id="site-mapping-empty" class="empty" style="margin-top: 8px;">
       No username/password fields stored for this site yet.
@@ -133,14 +146,15 @@ function wireTestFillButton() {
       return;
     }
 
-    const fillResponse = await sendMessageToTab(tab.id, {
-      type: "VAULTY_FILL_BY_SELECTORS",
-      payload: {
-        mapping,
-        username: "demo@example.com",
-        password: "demo-password",
-      },
-    });
+  const fillResponse = await sendMessageToTab(tab.id, {
+    type: "VAULTY_FILL_BY_SELECTORS",
+    payload: {
+      origin,
+      mapping,
+      username: "demo@example.com",
+      password: "demo-password",
+    },
+  });
 
     if (fillResponse?.ok) {
       flashButton(button, "Filled");
@@ -184,7 +198,57 @@ function wireClearMappingButton() {
   });
 }
 
+function wireUseDetectedLoginFieldsButton() {
+  const button = document.getElementById("use-detected-login-fields");
+
+  if (!button) {
+    return;
+  }
+
+  button.addEventListener("click", async () => {
+    const tab = await getActiveTab();
+    const origin = safeOrigin(tab?.url);
+
+    if (!tab?.id || !origin || !isSelectablePage(tab.url)) {
+      flashButton(button, "Unavailable");
+      return;
+    }
+
+    let scan = latestLoginScan;
+
+    if (!scan?.ok || !scan.best?.password) {
+      scan = await sendMessageToTab(tab.id, {
+        type: "VAULTY_SCAN_LOGIN_FIELDS",
+        payload: { origin },
+      });
+    }
+
+    if (!scan?.ok || !scan.best?.password) {
+      flashButton(button, "No login found");
+      return;
+    }
+
+    const response = await sendMessageToBackground({
+      type: "SAVE_DETECTED_LOGIN_MAPPING",
+      origin,
+      url: tab.url,
+      username: scan.best.username || null,
+      password: scan.best.password || null,
+    });
+
+    if (response?.ok) {
+      flashButton(button, "Saved");
+      await renderPopupState();
+    } else {
+      console.warn("Vaulty popup: failed to save detected mapping", response);
+      flashButton(button, "Save failed");
+    }
+  });
+}
+
 async function renderPopupState() {
+  await renderPageSecurityWarning();
+  await renderLoginScanResult();
   await renderLastSelectedElement();
   await renderCurrentSiteMapping();
 }
@@ -288,8 +352,16 @@ async function renderCurrentSiteMapping() {
     return;
   }
 
-  const validation = await validateCurrentMapping(tab.id, mapping);
-
+  const validation = await validateCurrentMapping(tab.id, origin, mapping);
+  
+  if (validation?.fields) {
+    for (const [role, result] of Object.entries(validation.fields)) {
+      if (result?.drift && !result.drift.stable) {
+        console.warn(`Vaulty: ${role} field drift detected`, result.drift);
+      }
+    }
+  }
+  
   empty.hidden = true;
   details.hidden = false;
 
@@ -306,14 +378,15 @@ async function renderCurrentSiteMapping() {
   setText("mapping-updated", formatTimestamp(mapping.updatedAt));
 }
 
-async function validateCurrentMapping(tabId, mapping) {
-  if (!tabId || !mapping) {
+async function validateCurrentMapping(tabId, origin, mapping) {
+  if (!tabId || !origin || !mapping) {
     return null;
   }
 
   const response = await sendMessageToTab(tabId, {
     type: "VAULTY_VALIDATE_MAPPING",
     payload: {
+      origin,
       mapping,
     },
   });
@@ -346,20 +419,52 @@ function formatStoredField(field, validation = null) {
     return `${base} · ?`;
   }
 
-  if (validation.found && validation.fillable && validation.visible) {
-    return `${base} ✅`;
+  if (!validation.found) {
+    return `${base} ❌ missing`;
   }
 
-  if (validation.found && validation.fillable && !validation.visible) {
+  if (!validation.visible) {
     return `${base} ⚠️ hidden`;
   }
 
-  if (validation.found && !validation.fillable) {
+  if (!validation.enabled) {
+    return `${base} ⚠️ disabled`;
+  }
+
+  if (validation.readOnly) {
+    return `${base} ⚠️ readonly`;
+  }
+
+  if (validation.hiddenInput) {
+    return `${base} ⚠️ hidden input`;
+  }
+
+  if (!validation.fillable) {
     return `${base} ⚠️ not fillable`;
   }
 
-  return `${base} ❌ missing`;
+  if (!validation.roleSafe) {
+    return `${base} ⛔ unsafe target`;
+  }
+
+  if (validation.drift && !validation.drift.stable) {
+    return `${base} ⚠️ changed`;
+  }
+
+  if (
+    validation.resolvedBy &&
+    validation.resolvedBy !== "stored-selector"
+  ) {
+    return `${base} ✅ via ${validation.resolvedBy}`;
+  }
+
+  if (validation.interactable) {
+    return `${base} ✅ ready`;
+  }
+
+  return `${base} ⚠️ not ready`;
 }
+
 
 function formatTimestamp(value) {
   if (!value) {
@@ -475,4 +580,126 @@ function chromePromise(fn, thisArg, ...args) {
       resolve(result);
     });
   });
+}
+
+async function renderPageSecurityWarning() {
+  const warning = document.getElementById("page-security-warning");
+
+  if (!warning) {
+    return;
+  }
+
+  warning.hidden = true;
+  warning.textContent = "";
+
+  const tab = await getActiveTab();
+  const origin = safeOrigin(tab?.url);
+
+  if (!tab?.id || !origin || !isSelectablePage(tab.url)) {
+    return;
+  }
+
+  const scan = await sendMessageToTab(tab.id, {
+    type: "VAULTY_SCAN_PAGE_SECURITY",
+    payload: {
+      origin,
+    },
+  });
+
+  if (!scan?.ok) {
+    return;
+  }
+
+  const messages = [];
+
+  const crossOriginIframeCount = scan.summary?.crossOriginIframeCount || 0;
+  const visibleIframeCount = scan.summary?.visibleIframeCount || 0;
+  const oauthProviderCount = scan.summary?.oauthProviderCount || 0;
+
+  if (crossOriginIframeCount > 0) {
+    messages.push(
+      `${crossOriginIframeCount} cross-origin iframe(s) detected. OAuth/provider login may happen on another origin.`
+    );
+  } else if (visibleIframeCount > 0) {
+    messages.push(
+      `${visibleIframeCount} iframe(s) detected. Fields inside frames may need later iframe support.`
+    );
+  }
+
+  if (oauthProviderCount > 0) {
+    const providerLabels = scan.oauthProviders
+      .map((provider) => provider.label)
+      .join(", ");
+
+    messages.push(`OAuth/provider login detected: ${providerLabels}.`);
+  }
+
+  if (messages.length === 0) {
+    warning.hidden = true;
+    warning.textContent = "";
+    return;
+  }
+
+  warning.hidden = false;
+  warning.textContent = `⚠️ ${messages.join(" ")}`;
+}
+
+async function renderLoginScanResult() {
+  const resultElement = document.getElementById("login-scan-result");
+  const useButton = document.getElementById("use-detected-login-fields");
+
+  latestLoginScan = null;
+
+  if (useButton) {
+    useButton.hidden = true;
+  }
+
+  if (!resultElement) {
+    return;
+  }
+
+  resultElement.hidden = true;
+  resultElement.textContent = "";
+
+  const tab = await getActiveTab();
+  const origin = safeOrigin(tab?.url);
+
+  if (!tab?.id || !origin || !isSelectablePage(tab.url)) {
+    return;
+  }
+
+  const scan = await sendMessageToTab(tab.id, {
+    type: "VAULTY_SCAN_LOGIN_FIELDS",
+    payload: {
+      origin,
+    },
+  });
+
+  if (!scan?.ok || !scan.hasLikelyLoginForm) {
+    return;
+  }
+
+  latestLoginScan = scan;
+
+  const username = scan.best?.username;
+  const password = scan.best?.password;
+
+  const parts = [];
+
+  if (username) {
+    parts.push(`username: ${username.selector}`);
+  }
+
+  if (password) {
+    parts.push(`password: ${password.selector}`);
+  }
+
+  resultElement.hidden = false;
+  resultElement.textContent =
+    `Detected login fields (${Math.round(scan.confidence * 100)}%): ` +
+    parts.join(" · ");
+
+  if (useButton && password) {
+    useButton.hidden = false;
+  }
 }
