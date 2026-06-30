@@ -1,11 +1,13 @@
 let latestLoginScan = null;
 let latestGeneratedPasswordMeta = null;
 let pendingCredentialSaveConfirmation = null;
+const mockSavedCredentialKeys = new Set();
 
 const GENERATED_PASSWORD_META_MAX_AGE_MS = 10 * 60 * 1000;
 const CREDENTIAL_SAVE_CONFIRMATION_MAX_AGE_MS = 2 * 60 * 1000;
 const DEFAULT_PREPARE_CREDENTIAL_BUTTON_TEXT = "Prepare login for Vaulty";
 const CONFIRM_SAVE_CREDENTIAL_BUTTON_TEXT = "Confirm save to Vaulty";
+const CONFIRM_OVERWRITE_CREDENTIAL_BUTTON_TEXT = "Confirm overwrite in Vaulty";
 
 const STORAGE_KEYS = {
   lastSelected: "vaulty.lastSelectedElement",
@@ -333,6 +335,8 @@ function getActiveGeneratedPasswordMeta(origin) {
 
 function wireMockSaveCredentialButton() {
   const button = document.getElementById("mock-save-credential");
+  const cancelButton = document.getElementById("cancel-credential-confirmation");
+  const status = document.getElementById("mock-save-credential-status");
 
   if (!button) {
     console.warn("Vaulty popup: missing button #mock-save-credential");
@@ -340,6 +344,12 @@ function wireMockSaveCredentialButton() {
   }
 
   button.addEventListener("click", prepareCredentialForVaulty);
+
+  cancelButton?.addEventListener("click", () => {
+    clearCredentialSaveConfirmation(button);
+    setCredentialStatus(status, "Pending Vaulty save cancelled.", "neutral");
+    flashButton(cancelButton, "Cancelled");
+  });
 }
 
 async function prepareCredentialForVaulty() {
@@ -349,7 +359,7 @@ async function prepareCredentialForVaulty() {
 
   if (!tab?.id || !isSelectablePage(tab.url)) {
     clearCredentialSaveConfirmation(button);
-    setCredentialStatus(status, "Unavailable on this page.");
+    setCredentialStatus(status, "Unavailable on this page.", "error");
     flashButton(button, "Unavailable");
     return;
   }
@@ -358,7 +368,7 @@ async function prepareCredentialForVaulty() {
 
   if (!origin) {
     clearCredentialSaveConfirmation(button);
-    setCredentialStatus(status, "No valid site origin.");
+    setCredentialStatus(status, "No valid site origin.", "error");
     flashButton(button, "No site");
     return;
   }
@@ -372,7 +382,7 @@ async function prepareCredentialForVaulty() {
 
   if (!mapping) {
     clearCredentialSaveConfirmation(button);
-    setCredentialStatus(status, "Map credential fields first.");
+    setCredentialStatus(status, "Map credential fields first.", "warning");
     flashButton(button, "Map first");
     return;
   }
@@ -387,7 +397,7 @@ async function prepareCredentialForVaulty() {
 
   if (!readResponse?.ok) {
     clearCredentialSaveConfirmation(button);
-    setCredentialStatus(status, formatCredentialReadError(readResponse));
+    setCredentialStatus(status, formatCredentialReadError(readResponse), "error");
     flashButton(button, "Read failed");
     return;
   }
@@ -396,7 +406,7 @@ async function prepareCredentialForVaulty() {
 
   if (!validation.ok) {
     clearCredentialSaveConfirmation(button);
-    setCredentialStatus(status, validation.message);
+    setCredentialStatus(status, validation.message, "warning");
     flashButton(button, validation.buttonLabel);
     return;
   }
@@ -407,29 +417,42 @@ async function prepareCredentialForVaulty() {
   const confirmation = getActiveCredentialSaveConfirmation(origin);
 
   if (!confirmation || confirmation.fingerprint !== fingerprint) {
-    rememberCredentialSaveConfirmation(credential, summary, fingerprint);
+    rememberCredentialSaveConfirmation(credential, summary, fingerprint, "save");
 
     const sourceLabel = getCredentialSourceLabelForOrigin(credential.origin);
     const identityLabel = formatCredentialIdentityLabel(credential);
 
-    if (button) {
-      button.textContent = CONFIRM_SAVE_CREDENTIAL_BUTTON_TEXT;
-    }
-
+    setCredentialButtonMode("save");
     setCredentialStatus(
       status,
-      `Ready to save ${identityLabel} · password present · ${sourceLabel}. Click again to confirm.`
+      `Ready to save ${identityLabel} · password present · ${sourceLabel}. Click again to confirm, or cancel.`,
+      "pending"
     );
     flashButton(button, "Confirm");
     return;
   }
 
-  const relayRequest = buildMockVaultySaveRequest(credential, summary);
+  const allowOverwrite = confirmation.mode === "overwrite";
+  const relayRequest = buildMockVaultySaveRequest(credential, summary, {
+    allowOverwrite,
+  });
   const saveResponse = await mockVaultySaveCredential(relayRequest);
+
+  if (saveResponse?.reason === "duplicate-credential") {
+    rememberCredentialSaveConfirmation(credential, summary, fingerprint, "overwrite");
+    setCredentialButtonMode("overwrite");
+    setCredentialStatus(
+      status,
+      `A mock credential already exists for ${formatCredentialIdentityLabel(credential)} on this origin. Click again to confirm overwrite, or cancel.`,
+      "warning"
+    );
+    flashButton(button, "Duplicate");
+    return;
+  }
 
   if (!saveResponse?.ok) {
     clearCredentialSaveConfirmation(button);
-    setCredentialStatus(status, "Mock Vaulty save failed.");
+    setCredentialStatus(status, "Mock Vaulty save failed.", "error");
     flashButton(button, "Save failed");
     return;
   }
@@ -437,20 +460,23 @@ async function prepareCredentialForVaulty() {
   const sourceLabel = relayRequest.source.generatedRequestId
     ? "generated request attached"
     : "current page fields";
+  const actionLabel = saveResponse.action === "updated" ? "Mock updated" : "Mock saved";
 
   clearCredentialSaveConfirmation(button);
   setCredentialStatus(
     status,
-    `Mock saved for ${credential.email || credential.username} · password present · ${sourceLabel} · not stored in extension.`
+    `${actionLabel} for ${credential.email || credential.username} · password present · ${sourceLabel} · not stored in extension.`,
+    "success"
   );
-  flashButton(button, "Saved");
+  flashButton(button, saveResponse.action === "updated" ? "Updated" : "Saved");
 }
 
-function rememberCredentialSaveConfirmation(credential, summary, fingerprint) {
+function rememberCredentialSaveConfirmation(credential, summary, fingerprint, mode = "save") {
   pendingCredentialSaveConfirmation = {
     origin: credential.origin || "",
     identityLabel: formatCredentialIdentityLabel(credential),
     fingerprint,
+    mode,
     createdAt: Date.now(),
     hasPassword: true,
     passwordConfirmMapped: Boolean(summary?.passwordConfirmMapped),
@@ -479,9 +505,27 @@ function getActiveCredentialSaveConfirmation(origin) {
 
 function clearCredentialSaveConfirmation(button = null) {
   pendingCredentialSaveConfirmation = null;
+  setCredentialButtonMode("default", button);
+}
 
-  if (button) {
-    button.textContent = DEFAULT_PREPARE_CREDENTIAL_BUTTON_TEXT;
+function setCredentialButtonMode(mode = "default", button = null) {
+  const saveButton = button || document.getElementById("mock-save-credential");
+  const cancelButton = document.getElementById("cancel-credential-confirmation");
+
+  if (saveButton) {
+    saveButton.classList.toggle("pending-confirmation", mode !== "default");
+
+    if (mode === "overwrite") {
+      saveButton.textContent = CONFIRM_OVERWRITE_CREDENTIAL_BUTTON_TEXT;
+    } else if (mode === "save") {
+      saveButton.textContent = CONFIRM_SAVE_CREDENTIAL_BUTTON_TEXT;
+    } else {
+      saveButton.textContent = DEFAULT_PREPARE_CREDENTIAL_BUTTON_TEXT;
+    }
+  }
+
+  if (cancelButton) {
+    cancelButton.hidden = mode === "default";
   }
 }
 
@@ -563,13 +607,14 @@ function validateCredentialReadiness(readResponse) {
   };
 }
 
-function buildMockVaultySaveRequest(credential, summary) {
+function buildMockVaultySaveRequest(credential, summary, options = {}) {
   const generatedMeta = getActiveGeneratedPasswordMeta(credential.origin);
 
   return {
     type: "SAVE_CREDENTIAL",
     origin: credential.origin,
     url: credential.url,
+    allowOverwrite: Boolean(options.allowOverwrite),
 
     credential: {
       email: credential.email || "",
@@ -594,21 +639,42 @@ async function mockVaultySaveCredential(request) {
     return { ok: false, reason: "invalid-credential" };
   }
 
+  const credentialKey = buildMockCredentialKey(request);
+  const alreadyExists = mockSavedCredentialKeys.has(credentialKey);
+
+  if (alreadyExists && !request.allowOverwrite) {
+    return {
+      ok: false,
+      reason: "duplicate-credential",
+      credentialKey,
+    };
+  }
+
+  mockSavedCredentialKeys.add(credentialKey);
+
   return {
     ok: true,
     mode: "mock-save-credential",
+    action: alreadyExists ? "updated" : "created",
     savedAt: Date.now(),
     passwordSource: request.source?.passwordSource || "read-from-page",
     generatedRequestId: request.source?.generatedRequestId || "",
   };
 }
 
-function setCredentialStatus(element, text) {
+function buildMockCredentialKey(request) {
+  const identity = request.credential?.email || request.credential?.username || "unknown";
+  return `${request.origin || ""}|${identity.toLowerCase()}`;
+}
+
+function setCredentialStatus(element, text, tone = "neutral") {
   if (!element) {
     return;
   }
 
   element.textContent = text || "—";
+  element.classList.remove("neutral", "success", "warning", "error", "pending");
+  element.classList.add(tone || "neutral");
 }
 
 function formatCredentialReadError(response) {
@@ -1243,6 +1309,11 @@ async function fillFreshGeneratedPasswordFields() {
   if (fillResponse?.ok) {
     rememberGeneratedPasswordMeta(generation, origin);
     clearCredentialSaveConfirmation(document.getElementById("mock-save-credential"));
+    setCredentialStatus(
+      document.getElementById("mock-save-credential-status"),
+      "Generated password filled. Prepare login when the registration fields are final.",
+      "success"
+    );
     flashButton(button, "Filled");
   } else if (fillResponse) {
     latestGeneratedPasswordMeta = null;

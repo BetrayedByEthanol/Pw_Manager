@@ -17,6 +17,7 @@
       --accent-hover: #8d73ff;
       --danger: #ff5c7a;
       --success: #39d98a;
+      --warning: #ffcc66;
       --radius: 12px;
     }
 
@@ -142,6 +143,46 @@
       border: 1px solid var(--border);
       background: transparent;
       color: var(--muted);
+    }
+
+
+
+    .relay-status {
+      margin-top: 8px;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel-soft);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .relay-status.success {
+      border-color: rgba(57, 217, 138, 0.45);
+      color: var(--success);
+    }
+
+    .relay-status.warning,
+    .relay-status.pending {
+      border-color: rgba(255, 204, 102, 0.45);
+      color: var(--warning);
+    }
+
+    .relay-status.error {
+      border-color: rgba(255, 92, 122, 0.45);
+      color: var(--danger);
+    }
+
+    button.danger {
+      border: 1px solid rgba(255, 92, 122, 0.45);
+      background: transparent;
+      color: var(--danger);
+    }
+
+    button.pending-confirmation {
+      background: var(--warning);
+      color: #111318;
     }
 
     .field-list {
@@ -323,9 +364,13 @@
         <button id="mock-save-credential" class="primary full" type="button">
           Prepare login for Vaulty
         </button>
+
+        <button id="cancel-credential-confirmation" class="danger full" type="button" hidden>
+          Cancel pending save
+        </button>
       </div>
 
-      <div id="mock-save-credential-status" class="empty" style="margin-top: 8px;">
+      <div id="mock-save-credential-status" class="relay-status neutral">
         Reads mapped email/username/password fields, validates them, then requires a second click to confirm the redacted mock save request.
       </div>
     </section>
