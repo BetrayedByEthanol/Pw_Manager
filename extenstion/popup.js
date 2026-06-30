@@ -1,4 +1,11 @@
 let latestLoginScan = null;
+let latestGeneratedPasswordMeta = null;
+let pendingCredentialSaveConfirmation = null;
+
+const GENERATED_PASSWORD_META_MAX_AGE_MS = 10 * 60 * 1000;
+const CREDENTIAL_SAVE_CONFIRMATION_MAX_AGE_MS = 2 * 60 * 1000;
+const DEFAULT_PREPARE_CREDENTIAL_BUTTON_TEXT = "Prepare login for Vaulty";
+const CONFIRM_SAVE_CREDENTIAL_BUTTON_TEXT = "Confirm save to Vaulty";
 
 const STORAGE_KEYS = {
   lastSelected: "vaulty.lastSelectedElement",
@@ -9,18 +16,55 @@ const STORAGE_KEYS = {
 const SELECTOR_BUTTONS = [
   {
     id: "select",
+    scope: "generic",
     role: "generic",
     label: "page element",
   },
+
+  // Login mapping
   {
     id: "select-username",
+    scope: "login",
     role: "username",
-    label: "username field",
+    label: "login username field",
   },
   {
     id: "select-password",
+    scope: "login",
     role: "password",
-    label: "password field",
+    label: "login password field",
+  },
+
+  // Registration mapping
+  {
+    id: "select-registration-email",
+    scope: "registration",
+    role: "email",
+    label: "registration email field",
+  },
+  {
+    id: "select-registration-username",
+    scope: "registration",
+    role: "username",
+    label: "registration username field",
+  },
+  {
+    id: "select-registration-password",
+    scope: "registration",
+    role: "password",
+    label: "registration password field",
+  },
+  {
+    id: "select-registration-password-confirm",
+    scope: "registration",
+    role: "passwordConfirm",
+    label: "registration confirm password field",
+  },
+  {
+    id: "select-registration-submit",
+    scope: "registration",
+    role: "submit",
+    label: "registration submit button",
   },
 ];
 
@@ -31,6 +75,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   wireTestFillButton();
   wireClearMappingButton();
   wireUseDetectedLoginFieldsButton();
+  wirePasswordHelperButtons();
+  wireMockSaveCredentialButton();
 
   await renderPopupState();
 });
@@ -83,6 +129,31 @@ function ensureSiteMappingUi() {
         <span id="mapping-updated" class="field-value">—</span>
       </div>
 
+      <div class="field-row">
+        <span class="field-label">Reg email</span>
+        <span id="mapping-registration-email" class="field-value">—</span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label">Reg username</span>
+        <span id="mapping-registration-username" class="field-value">—</span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label">Reg password</span>
+        <span id="mapping-registration-password" class="field-value">—</span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label">Reg confirm</span>
+        <span id="mapping-registration-password-confirm" class="field-value">—</span>
+      </div>
+
+      <div class="field-row">
+        <span class="field-label">Reg submit</span>
+        <span id="mapping-registration-submit" class="field-value">—</span>
+      </div>
+
       <button id="clear-mapping" class="secondary full" type="button">
         Clear site mapping
       </button>
@@ -106,7 +177,7 @@ function wireSelectorButtons() {
     }
 
     button.addEventListener("click", async () => {
-      await startSelector(config.role, config.label, button);
+      await startSelector(config, button);
     });
   }
 }
@@ -141,7 +212,13 @@ function wireTestFillButton() {
 
     const mapping = mappingResponse?.mapping || null;
 
-    if (!mapping?.username?.selector && !mapping?.password?.selector) {
+    const hasLoginMapping =
+      Boolean(mapping?.login?.username?.selector) ||
+      Boolean(mapping?.login?.password?.selector) ||
+      Boolean(mapping?.username?.selector) ||
+      Boolean(mapping?.password?.selector);
+
+    if (!hasLoginMapping) {
       flashButton(button, "Map fields first");
       return;
     }
@@ -190,12 +267,364 @@ function wireClearMappingButton() {
     });
 
     if (response?.ok) {
+      clearCredentialSaveConfirmation(document.getElementById("mock-save-credential"));
       flashButton(button, "Cleared");
       await renderPopupState();
     } else {
       flashButton(button, "Failed");
     }
   });
+}
+function wirePasswordHelperButtons() {
+  const button = document.getElementById("fill-generated-password");
+
+  if (!button) {
+    console.warn("Vaulty popup: missing button #fill-generated-password");
+    return;
+  }
+
+  button.addEventListener("click", fillFreshGeneratedPasswordFields);
+}
+
+async function mockVaultyGeneratePassword(origin) {
+  // Temporary native-host stand-in. Later this becomes a real Vaulty request.
+  // The password is returned only to be filled immediately; do not store/log it.
+  return {
+    ok: true,
+    password: "Vaulty-Mock-Password-2026!",
+    generatedRequestId: `mock-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    generatedAt: Date.now(),
+    origin: origin || "",
+  };
+}
+
+function rememberGeneratedPasswordMeta(generation, origin) {
+  if (!generation?.generatedRequestId) {
+    latestGeneratedPasswordMeta = null;
+    return;
+  }
+
+  latestGeneratedPasswordMeta = {
+    generatedRequestId: generation.generatedRequestId,
+    generatedAt: generation.generatedAt || Date.now(),
+    origin: origin || generation.origin || "",
+    source: "vaulty-mock-generator",
+  };
+}
+
+function getActiveGeneratedPasswordMeta(origin) {
+  if (!latestGeneratedPasswordMeta) {
+    return null;
+  }
+
+  if (latestGeneratedPasswordMeta.origin && latestGeneratedPasswordMeta.origin !== origin) {
+    return null;
+  }
+
+  const ageMs = Date.now() - latestGeneratedPasswordMeta.generatedAt;
+
+  if (ageMs < 0 || ageMs > GENERATED_PASSWORD_META_MAX_AGE_MS) {
+    latestGeneratedPasswordMeta = null;
+    return null;
+  }
+
+  return latestGeneratedPasswordMeta;
+}
+
+function wireMockSaveCredentialButton() {
+  const button = document.getElementById("mock-save-credential");
+
+  if (!button) {
+    console.warn("Vaulty popup: missing button #mock-save-credential");
+    return;
+  }
+
+  button.addEventListener("click", prepareCredentialForVaulty);
+}
+
+async function prepareCredentialForVaulty() {
+  const button = document.getElementById("mock-save-credential");
+  const status = document.getElementById("mock-save-credential-status");
+  const tab = await getActiveTab();
+
+  if (!tab?.id || !isSelectablePage(tab.url)) {
+    clearCredentialSaveConfirmation(button);
+    setCredentialStatus(status, "Unavailable on this page.");
+    flashButton(button, "Unavailable");
+    return;
+  }
+
+  const origin = safeOrigin(tab.url);
+
+  if (!origin) {
+    clearCredentialSaveConfirmation(button);
+    setCredentialStatus(status, "No valid site origin.");
+    flashButton(button, "No site");
+    return;
+  }
+
+  const mappingResponse = await sendMessageToBackground({
+    type: "GET_SITE_MAPPING",
+    origin,
+  });
+
+  const mapping = mappingResponse?.mapping || null;
+
+  if (!mapping) {
+    clearCredentialSaveConfirmation(button);
+    setCredentialStatus(status, "Map credential fields first.");
+    flashButton(button, "Map first");
+    return;
+  }
+
+  const readResponse = await sendMessageToTab(tab.id, {
+    type: "VAULTY_READ_CREDENTIAL_FIELDS",
+    payload: {
+      origin,
+      mapping,
+    },
+  });
+
+  if (!readResponse?.ok) {
+    clearCredentialSaveConfirmation(button);
+    setCredentialStatus(status, formatCredentialReadError(readResponse));
+    flashButton(button, "Read failed");
+    return;
+  }
+
+  const validation = validateCredentialReadiness(readResponse);
+
+  if (!validation.ok) {
+    clearCredentialSaveConfirmation(button);
+    setCredentialStatus(status, validation.message);
+    flashButton(button, validation.buttonLabel);
+    return;
+  }
+
+  const credential = validation.credential;
+  const summary = readResponse.summary || {};
+  const fingerprint = buildCredentialConfirmationFingerprint(credential, summary);
+  const confirmation = getActiveCredentialSaveConfirmation(origin);
+
+  if (!confirmation || confirmation.fingerprint !== fingerprint) {
+    rememberCredentialSaveConfirmation(credential, summary, fingerprint);
+
+    const sourceLabel = getCredentialSourceLabelForOrigin(credential.origin);
+    const identityLabel = formatCredentialIdentityLabel(credential);
+
+    if (button) {
+      button.textContent = CONFIRM_SAVE_CREDENTIAL_BUTTON_TEXT;
+    }
+
+    setCredentialStatus(
+      status,
+      `Ready to save ${identityLabel} · password present · ${sourceLabel}. Click again to confirm.`
+    );
+    flashButton(button, "Confirm");
+    return;
+  }
+
+  const relayRequest = buildMockVaultySaveRequest(credential, summary);
+  const saveResponse = await mockVaultySaveCredential(relayRequest);
+
+  if (!saveResponse?.ok) {
+    clearCredentialSaveConfirmation(button);
+    setCredentialStatus(status, "Mock Vaulty save failed.");
+    flashButton(button, "Save failed");
+    return;
+  }
+
+  const sourceLabel = relayRequest.source.generatedRequestId
+    ? "generated request attached"
+    : "current page fields";
+
+  clearCredentialSaveConfirmation(button);
+  setCredentialStatus(
+    status,
+    `Mock saved for ${credential.email || credential.username} · password present · ${sourceLabel} · not stored in extension.`
+  );
+  flashButton(button, "Saved");
+}
+
+function rememberCredentialSaveConfirmation(credential, summary, fingerprint) {
+  pendingCredentialSaveConfirmation = {
+    origin: credential.origin || "",
+    identityLabel: formatCredentialIdentityLabel(credential),
+    fingerprint,
+    createdAt: Date.now(),
+    hasPassword: true,
+    passwordConfirmMapped: Boolean(summary?.passwordConfirmMapped),
+  };
+}
+
+function getActiveCredentialSaveConfirmation(origin) {
+  if (!pendingCredentialSaveConfirmation) {
+    return null;
+  }
+
+  if (pendingCredentialSaveConfirmation.origin !== origin) {
+    pendingCredentialSaveConfirmation = null;
+    return null;
+  }
+
+  const ageMs = Date.now() - pendingCredentialSaveConfirmation.createdAt;
+
+  if (ageMs < 0 || ageMs > CREDENTIAL_SAVE_CONFIRMATION_MAX_AGE_MS) {
+    pendingCredentialSaveConfirmation = null;
+    return null;
+  }
+
+  return pendingCredentialSaveConfirmation;
+}
+
+function clearCredentialSaveConfirmation(button = null) {
+  pendingCredentialSaveConfirmation = null;
+
+  if (button) {
+    button.textContent = DEFAULT_PREPARE_CREDENTIAL_BUTTON_TEXT;
+  }
+}
+
+function buildCredentialConfirmationFingerprint(credential, summary) {
+  return [
+    credential.origin || "",
+    credential.email || "",
+    credential.username || "",
+    summary?.passwordConfirmMapped ? "confirm-mapped" : "confirm-not-mapped",
+    summary?.passwordsMatch === false ? "confirm-mismatch" : "confirm-ok",
+  ].join("|");
+}
+
+function formatCredentialIdentityLabel(credential) {
+  return credential.email || credential.username || "this login";
+}
+
+function getCredentialSourceLabelForOrigin(origin) {
+  return getActiveGeneratedPasswordMeta(origin)
+    ? "generated request attached"
+    : "current page fields";
+}
+
+function validateCredentialReadiness(readResponse) {
+  const credential = readResponse?.credential || {};
+  const summary = readResponse?.summary || {};
+  const fields = readResponse?.fields || {};
+
+  const email = String(credential.email || "").trim();
+  const username = String(credential.username || "").trim();
+  const password = String(credential.password || "");
+
+  if (!email && !username) {
+    return {
+      ok: false,
+      message: "Missing email or username. Fill a mapped registration email/username field first.",
+      buttonLabel: "Missing ID",
+    };
+  }
+
+  if (!password) {
+    const passwordWasMapped = Boolean(
+      fields.registrationPassword?.source || fields.loginPassword?.source
+    );
+
+    return {
+      ok: false,
+      message: passwordWasMapped
+        ? "Mapped password field is empty or unreadable. Fill it before preparing the login."
+        : "Map and fill a password field before preparing the login.",
+      buttonLabel: "Missing PW",
+    };
+  }
+
+  if (summary.passwordConfirmMapped && !summary.hasPasswordConfirm) {
+    return {
+      ok: false,
+      message: "Confirm-password field is mapped but empty or unreadable.",
+      buttonLabel: "Confirm empty",
+    };
+  }
+
+  if (summary.passwordConfirmMapped && summary.passwordsMatch === false) {
+    return {
+      ok: false,
+      message: "Password and confirm-password fields do not match. Save blocked.",
+      buttonLabel: "Mismatch",
+    };
+  }
+
+  return {
+    ok: true,
+    credential: {
+      ...credential,
+      email,
+      username,
+      password,
+    },
+  };
+}
+
+function buildMockVaultySaveRequest(credential, summary) {
+  const generatedMeta = getActiveGeneratedPasswordMeta(credential.origin);
+
+  return {
+    type: "SAVE_CREDENTIAL",
+    origin: credential.origin,
+    url: credential.url,
+
+    credential: {
+      email: credential.email || "",
+      username: credential.username || "",
+      password: credential.password || "",
+    },
+
+    source: {
+      flow: "registration",
+      passwordSource: generatedMeta ? "generated-then-read-from-page" : "read-from-page",
+      generatedRequestId: generatedMeta?.generatedRequestId || "",
+      generatedAt: generatedMeta?.generatedAt || null,
+      collectedAt: Date.now(),
+      fieldSources: summary?.source || {},
+    },
+  };
+}
+
+async function mockVaultySaveCredential(request) {
+  // Temporary native-host stand-in. Do not log or store request.credential.password.
+  if (!request?.origin || !request?.credential?.password) {
+    return { ok: false, reason: "invalid-credential" };
+  }
+
+  return {
+    ok: true,
+    mode: "mock-save-credential",
+    savedAt: Date.now(),
+    passwordSource: request.source?.passwordSource || "read-from-page",
+    generatedRequestId: request.source?.generatedRequestId || "",
+  };
+}
+
+function setCredentialStatus(element, text) {
+  if (!element) {
+    return;
+  }
+
+  element.textContent = text || "—";
+}
+
+function formatCredentialReadError(response) {
+  if (!response) {
+    return "No content script response.";
+  }
+
+  if (response.reason === "origin-mismatch") {
+    return "Origin mismatch. Refresh the page and try again.";
+  }
+
+  if (response.reason === "missing-origin") {
+    return "Missing origin lock.";
+  }
+
+  return "Could not read mapped credential fields.";
 }
 
 function wireUseDetectedLoginFieldsButton() {
@@ -253,7 +682,7 @@ async function renderPopupState() {
   await renderCurrentSiteMapping();
 }
 
-async function startSelector(role, label, button) {
+async function startSelector(config, button) {
   const tab = await getActiveTab();
 
   if (!tab?.id || !isSelectablePage(tab.url)) {
@@ -261,7 +690,12 @@ async function startSelector(role, label, button) {
     return;
   }
 
+  const scope = config.scope || "login";
+  const role = config.role || "generic";
+  const label = config.label || "page element";
+
   const intent = {
+    scope,
     role,
     label,
     tabId: tab.id,
@@ -276,6 +710,7 @@ async function startSelector(role, label, button) {
 
   const response = await sendMessageToTab(tab.id, {
     type: "START_SELECTOR",
+    scope,
     role,
     label,
   });
@@ -346,7 +781,18 @@ async function renderCurrentSiteMapping() {
 
   const mapping = response?.mapping || null;
 
-  if (!mapping || (!mapping.username && !mapping.password)) {
+  const hasLoginMapping =
+    Boolean(mapping?.login?.username) ||
+    Boolean(mapping?.login?.password);
+
+  const hasRegistrationMapping =
+    Boolean(mapping?.registration?.email) ||
+    Boolean(mapping?.registration?.username) ||
+    Boolean(mapping?.registration?.password) ||
+    Boolean(mapping?.registration?.passwordConfirm) ||
+    Boolean(mapping?.registration?.submit);
+
+  if (!mapping || (!hasLoginMapping && !hasRegistrationMapping)) {
     empty.hidden = false;
     details.hidden = true;
     return;
@@ -367,15 +813,55 @@ async function renderCurrentSiteMapping() {
 
   setText(
     "mapping-username",
-    formatStoredField(mapping.username, validation?.fields?.username)
+    formatStoredField(mapping.login?.username, validation?.fields?.loginUsername)
   );
 
   setText(
     "mapping-password",
-    formatStoredField(mapping.password, validation?.fields?.password)
+    formatStoredField(mapping.login?.password, validation?.fields?.loginPassword)
   );
 
   setText("mapping-updated", formatTimestamp(mapping.updatedAt));
+
+  setText(
+  "mapping-registration-email",
+  formatStoredField(
+    mapping.registration?.email,
+    validation?.fields?.registrationEmail
+  )
+);
+
+setText(
+  "mapping-registration-username",
+  formatStoredField(
+    mapping.registration?.username,
+    validation?.fields?.registrationUsername
+  )
+);
+
+setText(
+  "mapping-registration-password",
+  formatStoredField(
+    mapping.registration?.password,
+    validation?.fields?.registrationPassword
+  )
+);
+
+setText(
+  "mapping-registration-password-confirm",
+  formatStoredField(
+    mapping.registration?.passwordConfirm,
+    validation?.fields?.registrationPasswordConfirm
+  )
+);
+
+setText(
+  "mapping-registration-submit",
+  formatStoredField(
+    mapping.registration?.submit,
+    validation?.fields?.registrationSubmit
+  )
+);
 }
 
 async function validateCurrentMapping(tabId, origin, mapping) {
@@ -388,6 +874,8 @@ async function validateCurrentMapping(tabId, origin, mapping) {
     payload: {
       origin,
       mapping,
+      username: "demo@example.com",
+      password: "demo-password",
     },
   });
 
@@ -701,5 +1189,69 @@ async function renderLoginScanResult() {
 
   if (useButton && password) {
     useButton.hidden = false;
+  }
+}
+async function fillFreshGeneratedPasswordFields() {
+  const button = document.getElementById("fill-generated-password");
+  const tab = await getActiveTab();
+
+  if (!tab?.id || !isSelectablePage(tab.url)) {
+    flashButton(button, "Unavailable");
+    return;
+  }
+
+  const origin = safeOrigin(tab.url);
+
+  if (!origin) {
+    flashButton(button, "No site");
+    return;
+  }
+
+  const mappingResponse = await sendMessageToBackground({
+    type: "GET_SITE_MAPPING",
+    origin,
+  });
+
+  const mapping = mappingResponse?.mapping || null;
+
+  const hasRegistrationPassword =
+    Boolean(mapping?.registration?.password?.selector) ||
+    Boolean(mapping?.registration?.passwordConfirm?.selector);
+
+  if (!hasRegistrationPassword) {
+    flashButton(button, "Map password first");
+    return;
+  }
+
+  const generation = await mockVaultyGeneratePassword(origin);
+
+  if (!generation?.ok || !generation.password) {
+    flashButton(button, "Generate failed");
+    return;
+  }
+
+  const fillResponse = await sendMessageToTab(tab.id, {
+    type: "VAULTY_FILL_REGISTRATION_PASSWORD",
+    payload: {
+      origin,
+      mapping,
+      password: generation.password,
+      generatedRequestId: generation.generatedRequestId,
+    },
+  });
+
+  if (fillResponse?.ok) {
+    rememberGeneratedPasswordMeta(generation, origin);
+    clearCredentialSaveConfirmation(document.getElementById("mock-save-credential"));
+    flashButton(button, "Filled");
+  } else if (fillResponse) {
+    latestGeneratedPasswordMeta = null;
+    flashButton(button, "Fill failed");
+    console.warn("Vaulty popup: generated password fill failed", {
+      reason: fillResponse.reason,
+      fields: fillResponse.fields,
+    });
+  } else {
+    flashButton(button, "No content script");
   }
 }

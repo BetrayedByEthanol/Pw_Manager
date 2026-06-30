@@ -276,6 +276,60 @@
       </div>
     </section>
 
+    <section class="card">
+      <div class="card-title">Registration mapping</div>
+
+      <div class="actions">
+        <button id="select-registration-email" type="button">
+          Email field
+        </button>
+
+        <button id="select-registration-username" type="button">
+          Username field
+        </button>
+
+        <button id="select-registration-password" type="button">
+          Password field
+        </button>
+
+        <button id="select-registration-password-confirm" type="button">
+          Confirm password
+        </button>
+
+        <button id="select-registration-submit" class="secondary full" type="button">
+          Submit button
+        </button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">Password helper</div>
+
+      <div class="actions">
+        <button id="fill-generated-password" class="primary full" type="button">
+          Generate and fill password
+        </button>
+      </div>
+
+      <div class="empty" style="margin-top: 8px;">
+        Mock Vaulty generates a password and fills only the mapped registration password fields.
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">Vaulty relay mock</div>
+
+      <div class="actions">
+        <button id="mock-save-credential" class="primary full" type="button">
+          Prepare login for Vaulty
+        </button>
+      </div>
+
+      <div id="mock-save-credential-status" class="empty" style="margin-top: 8px;">
+        Reads mapped email/username/password fields, validates them, then requires a second click to confirm the redacted mock save request.
+      </div>
+    </section>
+
     <footer class="footer">
       <span>Selector mode uses next click</span>
       <span><span class="kbd">Esc</span> cancel later</span>

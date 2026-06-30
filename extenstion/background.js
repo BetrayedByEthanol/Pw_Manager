@@ -23,6 +23,12 @@ const MAPPABLE_ROLES = new Set([
   "submit",
 ]);
 
+const ALLOWED_SCOPES = new Set([
+  "generic",
+  "login",
+  "registration",
+]);
+
 const MAX_SELECTOR_LENGTH = 1000;
 const MAX_STRING_LENGTH = 500;
 const MAX_TEXT_LENGTH = 120;
@@ -87,7 +93,7 @@ function handleElementSelected(message, sender, sendResponse) {
 
     let mappingUpdated = false;
 
-    if (origin && shouldStoreAsSiteField(selected.role)) {
+    if (origin && shouldStoreAsSiteField(selected.role, selected.scope)) {
       const storedField = sanitizeStoredField(toStoredField(selected));
 
       if (!storedField) {
@@ -98,12 +104,33 @@ function handleElementSelected(message, sender, sendResponse) {
         return;
       }
 
-      mappings[origin] = sanitizeSiteMapping({
-        ...(mappings[origin] || {}),
-        [selected.role]: storedField,
-        updatedAt: Date.now(),
-      });
+      const existing = sanitizeSiteMapping(mappings[origin]) || {
+        login: {},
+        registration: {},
+        preferences: {},
+      };
 
+      const scope = selected.scope === "registration" ? "registration" : "login";
+
+      if (scope === "registration") {
+        existing.registration[selected.role] = storedField;
+      } else {
+        existing.login[selected.role] = storedField;
+      }
+
+      existing.updatedAt = Date.now();
+
+      const cleanExisting = sanitizeSiteMapping(existing);
+
+      if (!cleanExisting) {
+        sendResponse({
+          ok: false,
+          error: "invalid-updated-mapping",
+        });
+        return;
+      }
+
+      mappings[origin] = cleanExisting;
       mappingUpdated = true;
     }
 
@@ -266,22 +293,24 @@ function handleSaveDetectedLoginMapping(message, sendResponse) {
     }
 
     const mappings = sanitizeAllMappings(result[STORAGE_KEYS.siteMappings] || {});
-    const existing = mappings[origin] || {};
 
-    const updated = {
-      ...existing,
-      updatedAt: Date.now(),
+    const existing = sanitizeSiteMapping(mappings[origin]) || {
+      login: {},
+      registration: {},
+      preferences: {},
     };
 
     if (usernameField) {
-      updated.username = usernameField;
+      existing.login.username = usernameField;
     }
 
     if (passwordField) {
-      updated.password = passwordField;
+      existing.login.password = passwordField;
     }
 
-    const cleanUpdated = sanitizeSiteMapping(updated);
+    existing.updatedAt = Date.now();
+
+    const cleanUpdated = sanitizeSiteMapping(existing);
 
     if (!cleanUpdated) {
       sendResponse({
@@ -317,12 +346,27 @@ function handleSaveDetectedLoginMapping(message, sendResponse) {
   });
 }
 
-function shouldStoreAsSiteField(role) {
-  return MAPPABLE_ROLES.has(role);
+function shouldStoreAsSiteField(role, scope = "login") {
+  if (scope === "login") {
+    return role === "username" || role === "password";
+  }
+
+  if (scope === "registration") {
+    return (
+      role === "email" ||
+      role === "username" ||
+      role === "password" ||
+      role === "passwordConfirm" ||
+      role === "submit"
+    );
+  }
+
+  return false;
 }
 
 function toStoredField(selected) {
   return {
+    scope: selected.scope || "login",
     role: selected.role || "",
     label: selected.label || "",
 
@@ -401,27 +445,45 @@ function sanitizeAllMappings(rawMappings) {
 }
 
 function sanitizeSiteMapping(rawMapping) {
+  rawMapping = migrateSiteMapping(rawMapping);
+
   if (!isPlainObject(rawMapping)) {
     return null;
   }
 
-  const clean = {};
+  const clean = {
+    login: {},
+    registration: {},
+    preferences: {},
+  };
 
-  for (const role of MAPPABLE_ROLES) {
-    const field = sanitizeStoredField(rawMapping[role]);
+  const loginUsername = sanitizeStoredField(rawMapping.login?.username);
+  const loginPassword = sanitizeStoredField(rawMapping.login?.password);
+
+  if (loginUsername) {
+    clean.login.username = loginUsername;
+  }
+
+  if (loginPassword) {
+    clean.login.password = loginPassword;
+  }
+
+  for (const role of ["email", "username", "password", "passwordConfirm", "submit"]) {
+    const field = sanitizeStoredField(rawMapping.registration?.[role]);
 
     if (field) {
-      clean[role] = field;
+      clean.registration[role] = field;
     }
   }
 
-  const hasFields = Object.keys(clean).length > 0;
+  clean.updatedAt = sanitizeTimestamp(rawMapping.updatedAt) || Date.now();
 
-  if (!hasFields) {
+  const hasLoginFields = Object.keys(clean.login).length > 0;
+  const hasRegistrationFields = Object.keys(clean.registration).length > 0;
+
+  if (!hasLoginFields && !hasRegistrationFields) {
     return null;
   }
-
-  clean.updatedAt = sanitizeTimestamp(rawMapping.updatedAt) || Date.now();
 
   return clean;
 }
@@ -436,16 +498,19 @@ function sanitizeSelectedElement(rawElement) {
   if (!role) {
     return null;
   }
+  const scope = sanitizeScope(rawElement.scope);
 
   const origin = sanitizeOrigin(rawElement.origin || safeOrigin(rawElement.url));
 
   if (!origin) {
     return null;
   }
-
+  
   return {
+    scope,
     role,
     label: sanitizeString(rawElement.label, MAX_STRING_LENGTH),
+
 
     tag: sanitizeString(rawElement.tag, 80).toLowerCase(),
     type: sanitizeString(rawElement.type, 80).toLowerCase(),
@@ -496,6 +561,7 @@ function sanitizeStoredField(rawField) {
   }
 
   return {
+    scope: sanitizeScope(rawField.scope),
     role,
     label: sanitizeString(rawField.label, MAX_STRING_LENGTH),
 
@@ -625,4 +691,36 @@ function isPlainObject(value) {
     typeof value === "object" &&
     !Array.isArray(value)
   );
+}
+
+function migrateSiteMapping(rawMapping) {
+  if (!isPlainObject(rawMapping)) {
+    return null;
+  }
+
+  // Already nested
+  if (isPlainObject(rawMapping.login) || isPlainObject(rawMapping.registration)) {
+    return rawMapping;
+  }
+
+  // Old flat login mapping
+  return {
+    login: {
+      username: rawMapping.username || undefined,
+      password: rawMapping.password || undefined,
+    },
+    registration: {},
+    preferences: {},
+    updatedAt: rawMapping.updatedAt || Date.now(),
+  };
+}
+
+function sanitizeScope(scope) {
+  const value = sanitizeString(scope, 80);
+
+  if (!ALLOWED_SCOPES.has(value)) {
+    return "login";
+  }
+
+  return value;
 }

@@ -1,6 +1,7 @@
 let selectorMode = false;
 let selectorRole = "generic";
 let selectorLabel = "page element";
+let selectorScope = "login";
 let previousCursor = "";
 let hoveredElement = null;
 
@@ -51,6 +52,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
 
+  if (message?.type === "VAULTY_FILL_REGISTRATION_PASSWORD") {
+    const result = fillRegistrationPassword(message.payload || {});
+    sendResponse(result);
+    return;
+  }
+
+  if (message?.type === "VAULTY_READ_CREDENTIAL_FIELDS") {
+    const result = readCredentialFields(message.payload || {});
+    sendResponse(result);
+    return;
+  }
+
+  sendResponse({
+    ok: false,
+    reason: "unknown-message-type",
+  });
 });
 
 function scanPageSecurity(payload) {
@@ -211,7 +228,9 @@ function startSelectorMode(message) {
   selectorMode = true;
   selectorRole = message.role || "generic";
   selectorLabel = message.label || "page element";
+  selectorScope = message.scope || "login";
   hoveredElement = null;
+
 
   previousCursor = document.body.style.cursor;
   document.body.style.cursor = "crosshair";
@@ -463,11 +482,12 @@ function describeElement(element) {
 
 function getElementInfo(element) {
   return {
+    scope: selectorScope,
     role: selectorRole,
     label: selectorLabel,
 
     tag: element.tagName?.toLowerCase() || "",
-    type: element.getAttribute("type") || "",
+    type: getNormalizedElementType(element),
     name: element.getAttribute("name") || "",
     id: element.id || "",
     className: typeof element.className === "string" ? element.className : "",
@@ -682,23 +702,45 @@ function validateMapping(payload) {
   const mapping = payload.mapping || {};
 
   const fieldsToCheck = {
-    username: mapping.username || mapping.login?.username || null,
-    password: mapping.password || mapping.login?.password || null,
+    loginUsername: {
+      role: "username",
+      field: mapping.login?.username || mapping.username || null,
+    },
+    loginPassword: {
+      role: "password",
+      field: mapping.login?.password || mapping.password || null,
+    },
 
-    // Future registration support
-    email: mapping.registration?.email || null,
-    passwordConfirm: mapping.registration?.passwordConfirm || null,
-    submit: mapping.registration?.submit || null,
+    registrationEmail: {
+      role: "email",
+      field: mapping.registration?.email || null,
+    },
+    registrationUsername: {
+      role: "username",
+      field: mapping.registration?.username || null,
+    },
+    registrationPassword: {
+      role: "password",
+      field: mapping.registration?.password || null,
+    },
+    registrationPasswordConfirm: {
+      role: "passwordConfirm",
+      field: mapping.registration?.passwordConfirm || null,
+    },
+    registrationSubmit: {
+      role: "submit",
+      field: mapping.registration?.submit || null,
+    },
   };
 
   const fields = {};
 
-  for (const [role, field] of Object.entries(fieldsToCheck)) {
-    if (!field) {
+  for (const [key, config] of Object.entries(fieldsToCheck)) {
+    if (!config.field) {
       continue;
     }
 
-    fields[role] = validateStoredField(role, field);
+    fields[key] = validateStoredField(config.role, config.field);
   }
 
   const values = Object.values(fields);
@@ -723,6 +765,7 @@ function validateMapping(payload) {
 
 function validateStoredField(role, field) {
   const selector = field?.selector || "";
+
 
   if (!selector) {
     return {
@@ -781,9 +824,14 @@ function validateStoredField(role, field) {
   const readOnly = isReadOnlyElement(element);
   const hiddenInput = isHiddenInput(element);
   const fillable = isFillableElement(element);
-  const interactable = isInteractableElement(element);
   const roleSafe = isSafeElementForRole(role, element);
   const drift = compareStoredFieldToLiveElement(field, element);
+
+  const interactable =
+    role === "submit"
+      ? isClickableElement(element)
+      : isInteractableElement(element);
+
 
   return {
     role,
@@ -1089,8 +1137,22 @@ function isSafeElementForRole(role, element) {
 
   const tag = element.tagName?.toLowerCase() || "";
   const type = (element.getAttribute("type") || "text").toLowerCase();
+  const htmlRole = element.getAttribute("role") || "";
+
+  if (role === "submit") {
+    return (
+      tag === "button" ||
+      tag === "a" ||
+      htmlRole === "button" ||
+      (tag === "input" && (type === "submit" || type === "button"))
+    );
+  }
 
   if (role === "password") {
+    return tag === "input" && type === "password";
+  }
+
+  if (role === "passwordConfirm") {
     return tag === "input" && type === "password";
   }
 
@@ -1100,10 +1162,6 @@ function isSafeElementForRole(role, element) {
       type !== "password" &&
       type !== "hidden"
     );
-  }
-
-  if (role === "passwordConfirm") {
-    return tag === "input" && type === "password";
   }
 
   return isFillableElement(element);
@@ -1607,3 +1665,255 @@ function getNormalizedElementType(element) {
   return (element.getAttribute("type") || "text").toLowerCase();
 }
 
+function readCredentialFields(payload) {
+  const originError = getOriginLockError(payload);
+
+  if (originError) {
+    return originError;
+  }
+
+  const mapping = payload.mapping || {};
+  const registration = mapping.registration || {};
+  const login = mapping.login || {};
+
+  const emailResult = readMappedFieldValue("email", registration.email || null);
+  const registrationUsernameResult = readMappedFieldValue(
+    "username",
+    registration.username || null
+  );
+  const loginUsernameResult = readMappedFieldValue("username", login.username || null);
+  const registrationPasswordResult = readMappedFieldValue(
+    "password",
+    registration.password || null
+  );
+  const registrationPasswordConfirmResult = readMappedFieldValue(
+    "passwordConfirm",
+    registration.passwordConfirm || null
+  );
+  const loginPasswordResult = readMappedFieldValue("password", login.password || null);
+
+  const email = emailResult.value || "";
+  const username =
+    registrationUsernameResult.value ||
+    loginUsernameResult.value ||
+    email ||
+    "";
+  const password =
+    registrationPasswordResult.value ||
+    loginPasswordResult.value ||
+    "";
+  const passwordConfirm = registrationPasswordConfirmResult.value || "";
+  const passwordConfirmMapped = Boolean(registration.passwordConfirm);
+  const passwordsMatch = !passwordConfirmMapped || (Boolean(password) && password === passwordConfirm);
+
+  return {
+    ok: true,
+    mode: "read-credential-fields",
+    origin: window.location.origin,
+    url: window.location.href,
+
+    credential: {
+      origin: window.location.origin,
+      url: window.location.href,
+      email,
+      username,
+      password,
+    },
+
+    summary: {
+      hasEmail: Boolean(email),
+      hasUsername: Boolean(username),
+      hasPassword: Boolean(password),
+      hasPasswordConfirm: Boolean(passwordConfirm),
+      passwordConfirmMapped,
+      passwordsMatch,
+      source: {
+        email: emailResult.source,
+        username: registrationUsernameResult.value
+          ? "registration.username"
+          : loginUsernameResult.value
+            ? "login.username"
+            : email
+              ? "registration.email"
+              : "",
+        password: registrationPasswordResult.value
+          ? "registration.password"
+          : loginPasswordResult.value
+            ? "login.password"
+            : "",
+        passwordConfirm: registrationPasswordConfirmResult.source,
+      },
+    },
+
+    // No field values are included here. The actual password appears only in credential.password
+    // so the later native-host relay can receive it without leaking it into debug metadata.
+    fields: {
+      email: redactReadResult(emailResult),
+      registrationUsername: redactReadResult(registrationUsernameResult),
+      loginUsername: redactReadResult(loginUsernameResult),
+      registrationPassword: redactReadResult(registrationPasswordResult),
+      registrationPasswordConfirm: redactReadResult(registrationPasswordConfirmResult),
+      loginPassword: redactReadResult(loginPasswordResult),
+    },
+  };
+}
+
+function readMappedFieldValue(role, field) {
+  if (!field) {
+    return {
+      ok: false,
+      found: false,
+      hasValue: false,
+      value: "",
+      source: "",
+      reason: "not-mapped",
+    };
+  }
+
+  const resolution = resolveStoredField(role, field);
+  const element = resolution.element;
+
+  if (!element) {
+    return {
+      ok: false,
+      found: false,
+      hasValue: false,
+      value: "",
+      source: field.scope ? `${field.scope}.${role}` : role,
+      resolvedBy: resolution.resolvedBy,
+      attemptedSelectors: resolution.attemptedSelectors,
+      reason: "missing",
+    };
+  }
+
+  const validation = validateElementForCredentialRead(role, field, element);
+
+  if (!validation.ok) {
+    return {
+      ...validation,
+      found: true,
+      hasValue: false,
+      value: "",
+      source: field.scope ? `${field.scope}.${role}` : role,
+      resolvedBy: resolution.resolvedBy,
+      resolvedSelector: resolution.resolvedSelector,
+      reason: validation.reason,
+    };
+  }
+
+  const value = getElementCredentialValue(element).trim();
+
+  return {
+    ok: true,
+    found: true,
+    hasValue: Boolean(value),
+    value,
+    source: field.scope ? `${field.scope}.${role}` : role,
+    resolvedBy: resolution.resolvedBy,
+    resolvedSelector: resolution.resolvedSelector,
+    reason: value ? "read" : "empty",
+  };
+}
+
+function validateElementForCredentialRead(role, field, element) {
+  const visible = isVisibleElement(element);
+  const enabled = isEnabledElement(element);
+  const hiddenInput = isHiddenInput(element);
+  const fillable = isFillableElement(element);
+  const roleSafe = isSafeElementForRole(role, element);
+
+  const ok = visible && enabled && !hiddenInput && fillable && roleSafe;
+
+  return {
+    ok,
+    role,
+    visible,
+    enabled,
+    hiddenInput,
+    fillable,
+    roleSafe,
+    reason: ok ? "ready" : "unsafe-read-target",
+    selector: field?.selector || "",
+  };
+}
+
+function getElementCredentialValue(element) {
+  if (!element) {
+    return "";
+  }
+
+  if (element.isContentEditable) {
+    return element.textContent || "";
+  }
+
+  if ("value" in element) {
+    return String(element.value || "");
+  }
+
+  return "";
+}
+
+function redactReadResult(result) {
+  return {
+    ok: Boolean(result?.ok),
+    found: Boolean(result?.found),
+    hasValue: Boolean(result?.hasValue),
+    source: result?.source || "",
+    resolvedBy: result?.resolvedBy || "",
+    reason: result?.reason || "",
+  };
+}
+
+function fillRegistrationPassword(payload) {
+  const originError = getOriginLockError(payload);
+
+  if (originError) {
+    console.warn("Vaulty: blocked registration password fill due to origin lock", originError);
+    return originError;
+  }
+
+  const mapping = payload.mapping || {};
+  const registration = mapping.registration || {};
+  const password = payload.password || "";
+
+  if (!password) {
+    return {
+      ok: false,
+      reason: "missing-password",
+    };
+  }
+
+  const passwordField = registration.password || null;
+  const confirmField = registration.passwordConfirm || null;
+
+  const passwordResult = passwordField
+    ? fillMappedField("password", passwordField, password)
+    : {
+        ok: false,
+        filled: false,
+        role: "password",
+        reason: "no-registration-password-mapping",
+      };
+
+  const confirmResult = confirmField
+    ? fillMappedField("passwordConfirm", confirmField, password)
+    : {
+        ok: false,
+        filled: false,
+        role: "passwordConfirm",
+        reason: "no-registration-confirm-password-mapping",
+      };
+
+  return {
+    ok: passwordResult.filled || confirmResult.filled,
+    mode: "registration-password-fill",
+
+    passwordFilled: passwordResult.filled,
+    passwordConfirmFilled: confirmResult.filled,
+
+    fields: {
+      password: passwordResult,
+      passwordConfirm: confirmResult,
+    },
+  };
+}

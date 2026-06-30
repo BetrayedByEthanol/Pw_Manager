@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vaulty Options</title>
+
+  <style>
+    :root {
+      --bg: #111318;
+      --panel: #181b22;
+      --panel-soft: #20242d;
+      --text: #f4f5f7;
+      --muted: #a7adba;
+      --border: #2b303b;
+      --accent: #7c5cff;
+      --accent-hover: #8d73ff;
+      --danger: #ff5c7a;
+      --danger-hover: #ff7690;
+      --warning: #ffcc66;
+      --success: #39d98a;
+      --radius: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 760px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .app {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), #35d0ff);
+      display: grid;
+      place-items: center;
+      font-weight: 850;
+      font-size: 20px;
+      color: white;
+    }
+
+    .title {
+      font-size: 22px;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .subtitle {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .schema-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+      font-size: 15px;
+      font-weight: 750;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    button,
+    .file-label {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      color: var(--text);
+      background: var(--panel-soft);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      text-decoration: none;
+    }
+
+    button:hover,
+    .file-label:hover {
+      filter: brightness(1.08);
+    }
+
+    button.primary {
+      background: var(--accent);
+    }
+
+    button.primary:hover {
+      background: var(--accent-hover);
+    }
+
+    button.danger {
+      background: var(--danger);
+    }
+
+    button.danger:hover {
+      background: var(--danger-hover);
+    }
+
+    button.secondary {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+    }
+
+    button.small {
+      padding: 7px 9px;
+      font-size: 12px;
+      border-radius: 8px;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .status {
+      min-height: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 10px;
+    }
+
+    .status.success {
+      color: var(--success);
+    }
+
+    .status.warning {
+      color: var(--warning);
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .mapping-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .mapping-empty {
+      color: var(--muted);
+      padding: 18px;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      text-align: center;
+      font-size: 13px;
+    }
+
+    .mapping-item {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel-soft);
+      overflow: hidden;
+    }
+
+    .mapping-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .origin {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mapping-meta {
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 4px;
+    }
+
+    .mapping-actions {
+      display: flex;
+      gap: 7px;
+      flex-shrink: 0;
+    }
+
+    .fields {
+      display: grid;
+      gap: 7px;
+      padding: 12px;
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 10px;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .field-label {
+      color: var(--muted);
+    }
+
+    .field-value {
+      font-family: var(--mono);
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .summary-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: 10px;
+      background: var(--panel-soft);
+      border: 1px solid var(--border);
+      font-size: 13px;
+    }
+
+    .summary-label {
+      color: var(--muted);
+    }
+
+    .summary-value {
+      font-family: var(--mono);
+      color: var(--text);
+    }
+
+    .danger-zone {
+      border-color: rgba(255, 92, 122, 0.35);
+    }
+
+    .code-box {
+      width: 100%;
+      min-height: 260px;
+      resize: vertical;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: #0c0e12;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+      outline: none;
+    }
+
+    .code-box:focus {
+      border-color: var(--accent);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="app">
+    <header class="header">
+      <div class="brand">
+        <div class="logo">V</div>
+        <div>
+          <div class="title">Vaulty Options</div>
+          <div class="subtitle">Debug mappings, storage, export/import, and extension-local development data.</div>
+        </div>
+      </div>
+
+      <div class="schema-pill">
+        Schema
+        <strong id="schema-version">—</strong>
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="card-title">
+        <span>Actions</span>
+      </div>
+
+      <div class="toolbar">
+        <button id="refresh" class="primary" type="button">Refresh</button>
+        <button id="export-json" type="button">Export JSON</button>
+
+        <label class="file-label" for="import-file">
+          Import JSON
+        </label>
+        <input id="import-file" type="file" accept="application/json,.json" />
+
+        <button id="copy-json" class="secondary" type="button">Copy JSON</button>
+      </div>
+
+      <div id="action-status" class="status"></div>
+    </section>
+
+    <div class="grid">
+      <section>
+        <section class="card">
+          <div class="card-title">
+            <span>Site mappings</span>
+            <span id="mapping-count" class="muted">0 mappings</span>
+          </div>
+
+          <div id="mapping-list" class="mapping-list">
+            <div class="mapping-empty">No mappings stored yet.</div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-title">
+            <span>Raw export preview</span>
+          </div>
+
+          <textarea id="raw-json" class="code-box" spellcheck="false" readonly></textarea>
+        </section>
+      </section>
+
+      <aside>
+        <section class="card">
+          <div class="card-title">
+            <span>Storage summary</span>
+          </div>
+
+          <div class="summary-list">
+            <div class="summary-row">
+              <span class="summary-label">Origins</span>
+              <span id="summary-origins" class="summary-value">0</span>
+            </div>
+
+            <div class="summary-row">
+              <span class="summary-label">Mapped fields</span>
+              <span id="summary-fields" class="summary-value">0</span>
+            </div>
+
+            <div class="summary-row">
+              <span class="summary-label">Last selected</span>
+              <span id="summary-last-selected" class="summary-value">—</span>
+            </div>
+
+            <div class="summary-row">
+              <span class="summary-label">Dev credentials</span>
+              <span id="summary-dev-credentials" class="summary-value">0</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="card danger-zone">
+          <div class="card-title">
+            <span>Danger zone</span>
+          </div>
+
+          <p class="muted">
+            Clears extension-local Vaulty debug data only. This does not touch any native vault because native host support is not enabled yet.
+          </p>
+
+          <div class="toolbar">
+            <button id="clear-mappings" class="danger" type="button">Clear mappings</button>
+            <button id="clear-all" class="danger" type="button">Clear all Vaulty data</button>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <script src="options.js"></script>
+</body>
+</html>
