@@ -1,7 +1,6 @@
 let latestLoginScan = null;
 let latestGeneratedPasswordMeta = null;
 let pendingCredentialSaveConfirmation = null;
-const mockSavedCredentialKeys = new Set();
 
 const GENERATED_PASSWORD_META_MAX_AGE_MS = 10 * 60 * 1000;
 const CREDENTIAL_SAVE_CONFIRMATION_MAX_AGE_MS = 2 * 60 * 1000;
@@ -225,15 +224,35 @@ function wireTestFillButton() {
       return;
     }
 
-  const fillResponse = await sendMessageToTab(tab.id, {
-    type: "VAULTY_FILL_BY_SELECTORS",
-    payload: {
-      origin,
-      mapping,
-      username: "demo@example.com",
-      password: "demo-password",
-    },
-  });
+    let retrieveResponse;
+
+    try {
+      retrieveResponse = await vaultyRetrieveCredential({
+        origin,
+        purpose: "login_fill",
+      });
+    } catch (error) {
+      console.warn("Vaulty popup: native credential retrieve failed", error);
+      flashButton(button, "Vaulty failed");
+      return;
+    }
+
+    const credential = retrieveResponse?.credential || {};
+
+    if (!credential.username && !credential.password) {
+      flashButton(button, "No credential");
+      return;
+    }
+
+    const fillResponse = await sendMessageToTab(tab.id, {
+      type: "VAULTY_FILL_BY_SELECTORS",
+      payload: {
+        origin,
+        mapping,
+        username: credential.username || "",
+        password: credential.password || "",
+      },
+    });
 
     if (fillResponse?.ok) {
       flashButton(button, "Filled");
@@ -288,17 +307,7 @@ function wirePasswordHelperButtons() {
   button.addEventListener("click", fillFreshGeneratedPasswordFields);
 }
 
-async function mockVaultyGeneratePassword(origin) {
-  // Temporary native-host stand-in. Later this becomes a real Vaulty request.
-  // The password is returned only to be filled immediately; do not store/log it.
-  return {
-    ok: true,
-    password: "Vaulty-Mock-Password-2026!",
-    generatedRequestId: `mock-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    generatedAt: Date.now(),
-    origin: origin || "",
-  };
-}
+
 
 function rememberGeneratedPasswordMeta(generation, origin) {
   if (!generation?.generatedRequestId) {
@@ -310,7 +319,7 @@ function rememberGeneratedPasswordMeta(generation, origin) {
     generatedRequestId: generation.generatedRequestId,
     generatedAt: generation.generatedAt || Date.now(),
     origin: origin || generation.origin || "",
-    source: "vaulty-mock-generator",
+    source: "vaulty-native-generator",
   };
 }
 
@@ -433,17 +442,27 @@ async function prepareCredentialForVaulty() {
   }
 
   const allowOverwrite = confirmation.mode === "overwrite";
-  const relayRequest = buildMockVaultySaveRequest(credential, summary, {
+  const relayRequest = buildVaultySaveRequest(credential, summary, {
     allowOverwrite,
   });
-  const saveResponse = await mockVaultySaveCredential(relayRequest);
+
+  let saveResponse;
+
+  try {
+    saveResponse = await vaultySaveCredential(relayRequest);
+  } catch (error) {
+    clearCredentialSaveConfirmation(button);
+    setCredentialStatus(status, `Vaulty native save failed: ${error.message}`, "error");
+    flashButton(button, "Save failed");
+    return;
+  }
 
   if (saveResponse?.reason === "duplicate-credential") {
     rememberCredentialSaveConfirmation(credential, summary, fingerprint, "overwrite");
     setCredentialButtonMode("overwrite");
     setCredentialStatus(
       status,
-      `A mock credential already exists for ${formatCredentialIdentityLabel(credential)} on this origin. Click again to confirm overwrite, or cancel.`,
+      `A credential already exists for ${formatCredentialIdentityLabel(credential)} on this origin. Click again to confirm overwrite, or cancel.`,
       "warning"
     );
     flashButton(button, "Duplicate");
@@ -452,7 +471,7 @@ async function prepareCredentialForVaulty() {
 
   if (!saveResponse?.ok) {
     clearCredentialSaveConfirmation(button);
-    setCredentialStatus(status, "Mock Vaulty save failed.", "error");
+    setCredentialStatus(status, "Vaulty save failed.", "error");
     flashButton(button, "Save failed");
     return;
   }
@@ -460,7 +479,7 @@ async function prepareCredentialForVaulty() {
   const sourceLabel = relayRequest.source.generatedRequestId
     ? "generated request attached"
     : "current page fields";
-  const actionLabel = saveResponse.action === "updated" ? "Mock updated" : "Mock saved";
+  const actionLabel = saveResponse.action === "updated" ? "Updated" : "Saved";
 
   clearCredentialSaveConfirmation(button);
   setCredentialStatus(
@@ -607,7 +626,7 @@ function validateCredentialReadiness(readResponse) {
   };
 }
 
-function buildMockVaultySaveRequest(credential, summary, options = {}) {
+function buildVaultySaveRequest(credential, summary, options = {}) {
   const generatedMeta = getActiveGeneratedPasswordMeta(credential.origin);
 
   return {
@@ -633,39 +652,7 @@ function buildMockVaultySaveRequest(credential, summary, options = {}) {
   };
 }
 
-async function mockVaultySaveCredential(request) {
-  // Temporary native-host stand-in. Do not log or store request.credential.password.
-  if (!request?.origin || !request?.credential?.password) {
-    return { ok: false, reason: "invalid-credential" };
-  }
 
-  const credentialKey = buildMockCredentialKey(request);
-  const alreadyExists = mockSavedCredentialKeys.has(credentialKey);
-
-  if (alreadyExists && !request.allowOverwrite) {
-    return {
-      ok: false,
-      reason: "duplicate-credential",
-      credentialKey,
-    };
-  }
-
-  mockSavedCredentialKeys.add(credentialKey);
-
-  return {
-    ok: true,
-    mode: "mock-save-credential",
-    action: alreadyExists ? "updated" : "created",
-    savedAt: Date.now(),
-    passwordSource: request.source?.passwordSource || "read-from-page",
-    generatedRequestId: request.source?.generatedRequestId || "",
-  };
-}
-
-function buildMockCredentialKey(request) {
-  const identity = request.credential?.email || request.credential?.username || "unknown";
-  return `${request.origin || ""}|${identity.toLowerCase()}`;
-}
 
 function setCredentialStatus(element, text, tone = "neutral") {
   if (!element) {
@@ -939,9 +926,7 @@ async function validateCurrentMapping(tabId, origin, mapping) {
     type: "VAULTY_VALIDATE_MAPPING",
     payload: {
       origin,
-      mapping,
-      username: "demo@example.com",
-      password: "demo-password",
+      mapping
     },
   });
 
@@ -1289,7 +1274,21 @@ async function fillFreshGeneratedPasswordFields() {
     return;
   }
 
-  const generation = await mockVaultyGeneratePassword(origin);
+  let generation;
+
+  try {
+    generation = await vaultyGeneratePassword({
+      length: 24,
+      uppercase: true,
+      lowercase: true,
+      numbers: true,
+      symbols: true,
+    });
+  } catch (error) {
+    console.warn("Vaulty popup: native password generation failed", error);
+    flashButton(button, "Vaulty failed");
+    return;
+  }
 
   if (!generation?.ok || !generation.password) {
     flashButton(button, "Generate failed");

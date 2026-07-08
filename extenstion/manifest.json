@@ -6,7 +6,8 @@
 
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "nativeMessaging"
   ],
 
   "host_permissions": [
@@ -26,9 +27,14 @@
   },
 
   "background": {
+    "scripts": ["background.js"],
     "service_worker": "background.js"
   },
-
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "vaulty@example.com"
+    }
+  },
   "content_scripts": [
     {
       "matches": [

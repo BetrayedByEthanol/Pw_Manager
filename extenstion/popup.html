@@ -277,7 +277,7 @@
         </button>
 
         <button id="test-fill" class="secondary full" type="button">
-          Test fill later
+          Fill login from Vaulty
         </button>
       </div>
     </section>
@@ -353,12 +353,12 @@
       </div>
 
       <div class="empty" style="margin-top: 8px;">
-        Mock Vaulty generates a password and fills only the mapped registration password fields.
+        Native-host mock generates a password and fills only the mapped registration password fields.
       </div>
     </section>
 
     <section class="card">
-      <div class="card-title">Vaulty relay mock</div>
+      <div class="card-title">Vaulty native relay test</div>
 
       <div class="actions">
         <button id="mock-save-credential" class="primary full" type="button">
@@ -371,7 +371,7 @@
       </div>
 
       <div id="mock-save-credential-status" class="relay-status neutral">
-        Reads mapped email/username/password fields, validates them, then requires a second click to confirm the redacted mock save request.
+        Reads mapped email/username/password fields, validates them, then requires a second click to confirm the redacted native save request.
       </div>
     </section>
 
@@ -381,6 +381,7 @@
     </footer>
   </main>
 
+  <script src="nativeBridge.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

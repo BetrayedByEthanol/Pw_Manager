@@ -619,8 +619,8 @@ function fillBySelectors(payload) {
     mapping.login?.password ||
     null;
 
-  const username = payload.username ?? "demo@example.com";
-  const password = payload.password ?? "demo-password";
+  const username = payload.username;
+  const password = payload.password;
 
   const usernameResult = usernameField
     ? fillMappedField("username", usernameField, username)
@@ -658,8 +658,8 @@ function fillBySelectors(payload) {
 }
 
 function testFill(payload) {
-  const username = payload.username || "demo@example.com";
-  const password = payload.password || "demo-password";
+  const username = payload.username
+  const password = payload.password;
 
   const usernameField =
     document.querySelector('input[type="email"]') ||

@@ -1,0 +1,9 @@
+{
+  "name": "com.vaulty.native_host",
+  "description": "Vaulty native host mock",
+  "path": "/home/nieke/.local/bin/vaulty-native-host",
+  "type": "stdio",
+  "allowed_extensions": [
+    "vaulty@example.com"
+  ]
+}
