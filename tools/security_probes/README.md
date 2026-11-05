@@ -114,3 +114,43 @@ review before Rust production implementation. Successful test-vector matching pr
 cross-implementation determinism, not the security of the composed protocol.
 
 Sources: RFC 5869 (HKDF), RFC 9106 (Argon2). No source code from those RFCs is copied.
+
+## v0.4 extension — INDEPENDENT and blast_radius
+
+`INDEPENDENT` recovery requires a **dedicated recovery-code factor** with
+`{"kind":"recovery_code","scope":"entry","entry_id":"<exact entry ID>"}`,
+and a **direct recovery slot on that entry's DEK**, requiring that code as a
+factor. Inherited recovery through VERS/provider ancestors or a vault/group
+code violates independent recovery even if a correct direct slot also exists.
+An entry-owned recovery code must never decrypt a different entry's DEK.
+
+`python route_graph.py fixtures/routes.json --blast-radius` computes a static
+configured fanout for each factor/root/DEK: dependent entries, entries exposed
+with *no additional factors*, and minimal additional factor sets after that
+single material is compromised. This reports potential impact, not likely
+compromise or actual unauthorized decryption. In particular `key:VERS`
+impacts several default entries but still requires the other PRF/factors. It
+must never be interpreted as evidence that a particular FIDO2 PRF salt leaks
+all values for that device. VMK is not a DEK dependency.
+
+The test suite now includes 14 shared JSON conformance cases, including
+invalid independent/shared/ancestor recovery configurations, and exact loaded
+blast-radius expectations. A standalone Rust reference port and its own Cargo
+crate run the **same** conformance JSON; see `rust/README.md`.
+
+## v0.4 extension — candidate commitment-key expansion
+
+The same HKDF-Extract PRK derives a **distinct** 32-byte commit key with:
+
+```text
+commit_info = P || "COMMIT-KEY" || 0x00 || frame(mode) || C
+commit_key  = HKDF-Expand-SHA256(PRK, commit_info, 32)
+commit_input = P || "COMMIT-TAG" || 0x00 || C
+             || frame(nonce_24) || frame(AAD) || frame(wrapped_ciphertext)
+commit_tag  = HMAC-SHA256(commit_key, commit_input)
+```
+
+The nine frozen KEK/commitment vectors are interoperability evidence only.
+The commit tag is **not claimed as a reviewed committing AEAD**: actual
+cryptographic requirements, key commitment, salt protocol, and error oracles
+still need independent scrutiny. See `CRYPTO_REVIEW_REQUEST.md`.

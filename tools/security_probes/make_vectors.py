@@ -38,7 +38,24 @@ V = [
          slot_id="slot-alpha-code", policy="RECOVERY_CODE_ONLY",
          recovery_code_hex=bytes(range(32,64)).hex()),
 ]
-for v in V:
+# All bytes below are public synthetic fixtures. They are *not* actual AEAD
+# outputs; this tests transcript binding, not AEAD interoperability.
+V.extend([
+    dict(id="commit-context-binding", mode="two_factor", **C, target_id="entry-delta",
+         slot_id="slot-delta-p", policy="ENTRY_DEFAULT_PHYSICAL",
+         first_component_hex=(b"\x23"*32).hex(), prf_component_hex=(b"\x42"*32).hex()),
+    dict(id="commit-empty-aad", mode="recovery_code_only", **C,
+         target_id="entry-epsilon", slot_id="slot-epsilon-code", policy="RECOVERY_CODE_ONLY",
+         recovery_code_hex=(b"\x78"*32).hex()),
+    dict(id="commit-long-aad", mode="two_factor", **C, target_id="entry-zeta",
+         slot_id="slot-zeta-v", policy="ENTRY_PASSWORD_VIRTUAL",
+         first_component_hex=(b"\x99"*32).hex(), prf_component_hex=(b"\x88"*32).hex()),
+])
+for i,v in enumerate(V):
+    v["nonce_hex"] = (bytes([(i+19)%256])*24).hex()
+    v["aad_hex"] = (bytes(range(i*7, i*7+32)) if i != 7 else b"").hex()
+    if i==8: v["aad_hex"]=(bytes(range(64))*16).hex()
+    v["ciphertext_hex"] = (bytes([i+3])*(33+i)).hex()
     v.update(derive(v))
 doc = {"version": "VAULTY-OPEN-01-CANDIDATE-v1", "status": "UNREVIEWED INTEROPERABILITY FIXTURE",
        "argon2id_test_parameters": ARG, "vectors": V}

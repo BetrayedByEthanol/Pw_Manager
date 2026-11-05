@@ -32,12 +32,14 @@ class Route:
     recovery_slots: frozenset[str] = frozenset()
     entry_recovery: bool = False
     outer_recovery: bool = False
+    used_compromise: bool = False
 
     def and_(self, other: "Route") -> "Route":
         return Route(self.factors | other.factors, self.keys | other.keys,
                      self.slots | other.slots, self.recovery_slots | other.recovery_slots,
                      self.entry_recovery or other.entry_recovery,
-                     self.outer_recovery or other.outer_recovery)
+                     self.outer_recovery or other.outer_recovery,
+                     self.used_compromise or other.used_compromise)
 
 
 def validate(data: dict) -> None:
@@ -103,10 +105,27 @@ def validate(data: dict) -> None:
                 raise PolicyError(f"Custom entry needs a typed entry_password_factor: {entry['id']}")
     if "VMK" not in keys:
         raise PolicyError("Cold-open access requires a VMK graph")
+    # Recovery codes must declare ownership to qualify as independent.
+    # Old policy fixtures without scope remain valid for SHARED and GROUP.
+    for fid, f in factors.items():
+        if f["kind"] == "recovery_code":
+            scope = f.get("scope", "vault")
+            if scope not in {"vault", "group", "entry"}:
+                raise PolicyError(f"Invalid recovery code scope for {fid}")
+            if scope == "entry" and (not isinstance(f.get("entry_id"), str) or
+                                     f["entry_id"] not in entry_ids):
+                raise PolicyError(f"Unresolved entry-scoped recovery code {fid}")
+            if scope == "group" and (not isinstance(f.get("group_id"), str) or
+                                     not f["group_id"]):
+                raise PolicyError(f"Unresolved group-scoped recovery code {fid}")
 
 
 def _routes_for_key(data: dict, kid: str, state: str, available_only: bool,
-                    cache: dict, stack: tuple[str, ...]) -> list[Route]:
+                    cache: dict, stack: tuple[str, ...], compromised: str | None = None) -> list[Route]:
+    if compromised == f"key:{kid}":
+        # Possession of a key skips its ancestor slot prerequisites, not the
+        # remaining requirements to unwrap any other key/DEK.
+        return [Route(keys=frozenset({kid}), used_compromise=True)]
     if kid in stack:
         raise PolicyError("Cycle in key prerequisites: " + " -> ".join((*stack, kid)))
     if kid in cache:
@@ -121,13 +140,15 @@ def _routes_for_key(data: dict, kid: str, state: str, available_only: bool,
             typ, name = ref.split(":", 1)
             if typ == "factor":
                 factor = data["factors"][name]
-                if (factor.get("status", "active") != "active" or
+                if compromised == ref:
+                    options = [Route(used_compromise=True)]
+                elif (factor.get("status", "active") != "active" or
                         (available_only and not factor.get("available", True))):
                     options = []
                 else:
                     options = [Route(factors=frozenset({name}))]
             else:
-                options = _routes_for_key(data, name, state, available_only, cache, (*stack, kid))
+                options = _routes_for_key(data, name, state, available_only, cache, (*stack, kid), compromised)
             if len(selections) * len(options) > MAX_ROUTES:
                 raise PolicyError("Route expansion exceeds limit; no partial assurance result allowed")
             selections = [a.and_(b) for a, b in itertools.product(selections, options)]
@@ -213,6 +234,42 @@ def analyze(data: dict, entry_id: str, state: str = "loaded") -> dict:
     strict_bypass = [r for r in dek if r.entry_recovery]
     if entry["recovery_policy"] == "STRICT_NONE" and strict_bypass:
         issues.append("STRICT_NONE_HAS_COMPLETE_RECOVERY_PATH")
+    # An entry-owned recovery code may never authorize a different entry.
+    if any(any(data["factors"][fid]["kind"] == "recovery_code"
+                   and data["factors"][fid].get("scope") == "entry"
+                   and data["factors"][fid].get("entry_id") != entry_id
+                   for fid in r.factors) for r in dek):
+        issues.append("ENTRY_CODE_SCOPE_MISMATCH")
+    if entry["recovery_policy"] == "INDEPENDENT":
+        # A compliant route must go directly through an entry-DEK recovery slot,
+        # whose independently provisioned code is scoped to this exact entry.
+        # Recovery from VERS/provider ancestors is NOT entry-isolated, even if
+        # a second independent recovery slot is also configured.
+        independent_paths = []
+        for r in strict_bypass:
+            owned_codes = {fid for fid in r.factors
+                           if data["factors"][fid]["kind"] == "recovery_code"
+                           and data["factors"][fid].get("scope") == "entry"
+                           and data["factors"][fid].get("entry_id") == entry_id}
+            direct_slots = {s["id"] for s in data["keys"][entry["dek"]]["slots"]
+                            if s["kind"] == "recovery" and s.get("status", "active") == "active"
+                            and state in s.get("states", ["loaded", "cold"])}
+            # A DEK recovery slot with inherited recovery/key dependencies is
+            # not independently recoverable through the entry-owned code alone.
+            direct_ok = any(s["id"] in r.recovery_slots
+                            and s["id"] in direct_slots
+                            and any(ref == f"factor:{fid}" for ref in s["requires"] for fid in owned_codes)
+                            and all(ref.startswith("factor:") for ref in s["requires"])
+                            for s in data["keys"][entry["dek"]]["slots"])
+            if not owned_codes or not direct_ok or any(
+                    data["factors"][fid]["kind"] == "recovery_code" and fid not in owned_codes
+                    for fid in r.factors) or any(
+                    slotid not in direct_slots for slotid in r.recovery_slots):
+                independent_paths.append(r)
+        if not strict_bypass:
+            issues.append("INDEPENDENT_MISSING_ENTRY_RECOVERY")
+        elif independent_paths:
+            issues.append("INDEPENDENT_RECOVERY_SCOPE_BYPASS")
     normal = [r for r in dek if not r.entry_recovery]
     if not normal:
         issues.append("NO_NORMAL_ENTRY_ROUTE")
@@ -242,21 +299,76 @@ def analyze(data: dict, entry_id: str, state: str = "loaded") -> dict:
             "issues": sorted(set(issues))}
 
 
+
+def blast_radius(data: dict, state: str = "loaded") -> dict:
+    """Configured material-dependency fanout and residual factor sets.
+
+    This is *not* a quantitative compromise probability. `dependent_entries`
+    names entries with an active complete route referencing the material.
+    `exposed_without_other_factors` means possession of this one material
+    leaves an entry-DEK route requiring zero further factors. Compromising a
+    VMK is different from compromising an entry DEK: VMK does not unwrap DEKs.
+    Results for physical factors describe compromise of that authenticator's
+    authorized outputs, NOT compromise of a single domain-scoped PRF output.
+    """
+    validate(data)
+    if state not in {"loaded", "cold"}:
+        raise PolicyError("state must be 'loaded' or 'cold'")
+    base = {}
+    for entry in data["entries"]:
+        base[entry["id"]] = _routes_for_key(data, entry["dek"], state, False, {}, ())
+    result = {}
+    for material in ([f"factor:{k}" for k in sorted(data["factors"])] +
+                     [f"key:{k}" for k in sorted(data["keys"])]):
+        typ, name = material.split(":", 1)
+        impacted, exposed, residual = [], [], {}
+        for entry in data["entries"]:
+            ident = entry["id"]
+            dependent = any(name in (r.factors if typ == "factor" else r.keys)
+                            for r in base[ident])
+            # Direct DEK possession is exposure even when all wrapping slots
+            # are unavailable, because no slot authorization remains necessary.
+            if typ == "key" and name == entry["dek"]:
+                dependent = True
+            if not dependent:
+                continue
+            impacted.append(ident)
+            possible = [r for r in _routes_for_key(data, entry["dek"], state, False, {}, (), material)
+                        if r.used_compromise]
+            minimum = sorted({tuple(sorted(r.factors)) for r in possible if
+                              not any(x.factors < r.factors for x in possible)})
+            residual[ident] = [list(factors) for factors in minimum]
+            if () in minimum:
+                exposed.append(ident)
+        if impacted:
+            result[material] = {"dependent_entries": sorted(impacted),
+                                "dependent_count": len(impacted),
+                                "exposed_without_other_factors": sorted(exposed),
+                                "exposed_count": len(exposed),
+                                "remaining_factor_sets": residual}
+    return {"state": state, "entry_count": len(data["entries"]),
+            "by_material": result}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("policy", type=Path, help="Authenticated policy snapshot JSON")
-    ap.add_argument("--entry", required=True)
+    ap.add_argument("--entry", help="Entry to check; omit with --blast-radius")
+    ap.add_argument("--blast-radius", action="store_true", help="Show configured material fanout")
     ap.add_argument("--state", choices=["loaded", "cold"], default="loaded")
     args = ap.parse_args()
     try:
         if args.policy.stat().st_size > 1_048_576:
             raise PolicyError("Policy JSON too large")
-        result = analyze(json.loads(args.policy.read_text(encoding="utf-8")), args.entry, args.state)
+        if not args.entry and not args.blast_radius:
+            raise PolicyError("--entry is required without --blast-radius")
+        policy = json.loads(args.policy.read_text(encoding="utf-8"))
+        result = blast_radius(policy, args.state) if args.blast_radius else analyze(policy, args.entry, args.state)
     except (OSError, json.JSONDecodeError, PolicyError) as exc:
         print(json.dumps({"error": str(exc)}))
         return 2
     print(json.dumps(result, indent=2, sort_keys=True))
-    return 1 if any(issue not in {"NO_CURRENTLY_USABLE_COMPLETE_ROUTE"} for issue in result["issues"]) else 0
+    return 1 if any(issue not in {"NO_CURRENTLY_USABLE_COMPLETE_ROUTE"} for issue in result.get("issues", [])) else 0
 
 
 if __name__ == "__main__":

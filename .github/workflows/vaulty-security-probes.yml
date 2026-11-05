@@ -1,0 +1,38 @@
+name: Vaulty security probes (reference)
+on:
+  pull_request:
+    paths:
+      - 'tools/security_probes/**'
+      - '.github/workflows/vaulty-security-probes.yml'
+  push:
+    branches:
+      - 'feat/open18-route-graph-open01-kek-vectors'
+    paths:
+      - 'tools/security_probes/**'
+      - '.github/workflows/vaulty-security-probes.yml'
+permissions:
+  contents: read
+jobs:
+  python-conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Reference tests
+        run: |
+          cd tools/security_probes
+          python -m unittest -v test_probes
+          python kek_vectors.py fixtures/kek_vectors.json
+          python route_graph.py fixtures/routes.json --entry independent
+          python route_graph.py fixtures/routes.json --blast-radius > /dev/null
+  rust-conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Compile and test Rust port
+        run: cargo test --manifest-path tools/security_probes/rust/Cargo.toml --all-targets
+      - name: Verify Rust KEK vectors
+        run: cargo run --manifest-path tools/security_probes/rust/Cargo.toml -- --kek-vectors tools/security_probes/fixtures/kek_vectors.json

@@ -144,9 +144,9 @@ class RouteGraphTests(unittest.TestCase):
 
 
 class KekVectorTests(unittest.TestCase):
-    def test_six_frozen_vectors(self):
+    def test_nine_frozen_vectors(self):
         kek_vectors.verify(VECTORS)
-        self.assertEqual(len(VECTORS["vectors"]), 6)
+        self.assertEqual(len(VECTORS["vectors"]), 9)
 
     def test_hkdf_rfc5869_case_1(self):
         ikm = bytes.fromhex("0b" * 22)
@@ -217,6 +217,151 @@ class KekVectorTests(unittest.TestCase):
                           salt=bytes.fromhex(v["salt_hex"]),
                           info=prefix + b"EXPAND\0" + kek_vectors._frame(v["mode"].encode()) + context).derive(ikm)
             self.assertEqual(result.hex(), v["kek_hex"])
+
+
+
+class AdditionalRouteTests(unittest.TestCase):
+    def policy(self):
+        return copy.deepcopy(POLICY)
+
+    def test_independent_direct_code_allowed(self):
+        from route_graph import analyze
+        a = analyze(self.policy(), "independent")
+        self.assertEqual(a["issues"], [])
+        self.assertEqual(a["weakest_configured"][0]["factors"], ["ind_code"])
+
+    def test_independent_shared_vault_code_denied(self):
+        a = self.policy()
+        a["keys"]["DEK-independent"]["slots"][1]["requires"] = ["factor:recovery_code"]
+        self.assertIn("INDEPENDENT_RECOVERY_SCOPE_BYPASS", analyze(a,"independent")["issues"])
+
+    def test_independent_recovery_via_vers_denied(self):
+        a = self.policy()
+        a["keys"]["DEK-independent"]["slots"].append(
+            {"id":"ind-ancestor","kind":"recovery","requires":["key:VERS"]})
+        self.assertIn("INDEPENDENT_RECOVERY_SCOPE_BYPASS", analyze(a,"independent")["issues"])
+
+    def test_independent_no_recovery_denied(self):
+        a = self.policy()
+        a["keys"]["DEK-independent"]["slots"] = a["keys"]["DEK-independent"]["slots"][:1]
+        self.assertIn("INDEPENDENT_MISSING_ENTRY_RECOVERY", analyze(a,"independent")["issues"])
+
+    def test_independent_code_must_have_own_scope(self):
+        a = self.policy()
+        del a["factors"]["ind_code"]["scope"]
+        self.assertIn("INDEPENDENT_RECOVERY_SCOPE_BYPASS", analyze(a,"independent")["issues"])
+
+    def test_independent_code_wrong_entry_rejected(self):
+        a = self.policy()
+        a["factors"]["ind_code"]["entry_id"] = "ordinary"
+        self.assertIn("INDEPENDENT_RECOVERY_SCOPE_BYPASS", analyze(a,"independent")["issues"])
+        self.assertIn("ENTRY_CODE_SCOPE_MISMATCH", analyze(a,"independent")["issues"])
+
+    def test_independent_code_cannot_recover_other_entry(self):
+        a = self.policy()
+        a["keys"]["DEK-ordinary"]["slots"].append(
+            {"id":"other-recovery","kind":"recovery","requires":["factor:ind_code"]})
+        self.assertIn("ENTRY_CODE_SCOPE_MISMATCH", analyze(a,"ordinary")["issues"])
+
+    def test_blast_radius_shared_vers_is_not_sufficient_alone(self):
+        from route_graph import blast_radius
+        b = blast_radius(self.policy())
+        vers = b["by_material"]["key:VERS"]
+        self.assertGreaterEqual(vers["dependent_count"],2)
+        self.assertEqual(vers["exposed_count"],0)
+        self.assertIn(["yubikey"], vers["remaining_factor_sets"]["sensitive"])
+        self.assertNotIn("strict", vers["dependent_entries"])
+
+    def test_blast_radius_entry_code_only_one_entry(self):
+        from route_graph import blast_radius
+        b=blast_radius(self.policy())
+        own=b["by_material"]["factor:ind_code"]
+        self.assertEqual(own["dependent_entries"],["independent"])
+        self.assertEqual(own["exposed_without_other_factors"],["independent"])
+        self.assertNotIn("key:VMK",b["by_material"])
+
+    def test_blast_radius_physical_requires_another_factor_for_strict(self):
+        from route_graph import blast_radius
+        b=blast_radius(self.policy())
+        y=b["by_material"]["factor:yubikey"]
+        self.assertIn(["entry_pw"],y["remaining_factor_sets"]["strict"])
+        self.assertNotIn("strict",y["exposed_without_other_factors"])
+
+    def test_blast_radius_ignores_alternative_unrelated_slot(self):
+        from route_graph import blast_radius
+        p=self.policy()
+        p["keys"]["VERS"]["slots"]=[s for s in p["keys"]["VERS"]["slots"] if s["id"] != "vers-code"]
+        b=blast_radius(p)
+        y=b["by_material"]["factor:yubikey"]
+        self.assertNotIn(["recovery_code"],y["remaining_factor_sets"]["sensitive"])
+
+    def test_blast_radius_dek_compromise_direct(self):
+        from route_graph import blast_radius
+        b=blast_radius(self.policy())
+        self.assertEqual(b["by_material"]["key:DEK-strict"]["exposed_without_other_factors"],["strict"])
+
+class CommitmentVectorTests(unittest.TestCase):
+    def test_commit_key_separated_from_kek(self):
+        for v in VECTORS["vectors"]:
+            self.assertNotEqual(v["commit_key_hex"], v["kek_hex"])
+            self.assertEqual(kek_vectors.derive(v)["commit_tag_hex"], v["commit_tag_hex"])
+
+    def test_commit_transcript_binds_nonce_aad_and_ciphertext(self):
+        base = VECTORS["vectors"][0]
+        for field in ("nonce_hex","aad_hex","ciphertext_hex","slot_id","target_id"):
+            mutated = copy.deepcopy(base)
+            if field.endswith("_hex"):
+                mutated[field] = "ff" + mutated[field][2:] if mutated[field] else "ff"
+            else:
+                mutated[field] += "-changed"
+            self.assertNotEqual(kek_vectors.derive(base)["commit_tag_hex"],
+                                kek_vectors.derive(mutated)["commit_tag_hex"], field)
+
+    def test_commit_key_cross_checked_with_crypto_hkdf(self):
+        try:
+            from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+            from cryptography.hazmat.primitives import hashes
+        except ImportError:
+            self.skipTest("cryptography optional")
+        for v in VECTORS["vectors"]:
+            ctx = kek_vectors._context(v)
+            prefix = kek_vectors.PREFIX
+            if v["mode"] == "two_factor":
+                ikm = (prefix + b"TWO-FACTOR\0" + kek_vectors._frame(bytes.fromhex(v["first_component_hex"]))
+                       + kek_vectors._frame(bytes.fromhex(v["prf_component_hex"])))
+            else:
+                ikm = prefix + b"CODE-ONLY\0" + kek_vectors._frame(bytes.fromhex(v["recovery_code_hex"]))
+            expected = HKDF(algorithm=hashes.SHA256(),length=32,
+                            salt=bytes.fromhex(v["salt_hex"]),
+                            info=bytes.fromhex(v["commit_info_hex"])).derive(ikm)
+            self.assertEqual(expected.hex(),v["commit_key_hex"])
+
+class SharedConformanceTests(unittest.TestCase):
+    def test_fixture_expected_reports(self):
+        from route_graph import analyze
+        cases = json.loads((HERE / "fixtures/conformance.json").read_text())
+        self.assertEqual(len(cases["cases"]), 14)
+        for case in cases["cases"]:
+            with self.subTest(case=case["id"]):
+                policy = json.loads((HERE / "fixtures" / case["file"]).read_text())
+                result = analyze(policy, case["entry"], case["state"])
+                self.assertEqual(result["issues"], case["issues"])
+                self.assertEqual(result["entry_hardware_mandatory_on_all_paths"],
+                                 case["entry_hardware_mandatory_on_all_paths"])
+                self.assertEqual(len(result["hardware_bypass_routes"]), case["hardware_bypass_count"])
+                self.assertEqual(sum(r["entry_recovery"] for r in result["configured_routes"]),
+                                 case["entry_recovery_count"])
+                self.assertEqual(sorted(r["factors"] for r in result["weakest_configured"]),
+                                 case["weakest_factor_sets"])
+
+    def test_fixture_expected_blast_radius(self):
+        from route_graph import blast_radius
+        c = json.loads((HERE / "fixtures/conformance.json").read_text())
+        b = blast_radius(POLICY)
+        self.assertEqual(set(b["by_material"]), set(c["loaded_blast_radius"]))
+        for material, value in c["loaded_blast_radius"].items():
+            for key in ("dependent_entries", "exposed_without_other_factors", "remaining_factor_sets"):
+                self.assertEqual(b["by_material"][material][key], value[key], (material,key))
 
 
 if __name__ == "__main__":

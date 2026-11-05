@@ -1,0 +1,515 @@
+{
+  "version": "vaulty-route-conformance-v1",
+  "cases": [
+    {
+      "file": "routes.json",
+      "id": "ordinary-loaded",
+      "entry": "ordinary",
+      "state": "loaded",
+      "issues": [],
+      "weakest_factor_sets": [
+        [
+          "session",
+          "virtual"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": false,
+      "entry_recovery_count": 4,
+      "hardware_bypass_count": 0
+    },
+    {
+      "file": "routes.json",
+      "id": "ordinary-cold",
+      "entry": "ordinary",
+      "state": "cold",
+      "issues": [],
+      "weakest_factor_sets": [
+        [
+          "master",
+          "virtual"
+        ],
+        [
+          "recovery_code"
+        ],
+        [
+          "recovery_code",
+          "virtual"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": false,
+      "entry_recovery_count": 12,
+      "hardware_bypass_count": 0
+    },
+    {
+      "file": "routes.json",
+      "id": "sensitive-loaded",
+      "entry": "sensitive",
+      "state": "loaded",
+      "issues": [],
+      "weakest_factor_sets": [
+        [
+          "recovery_code"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": false,
+      "entry_recovery_count": 2,
+      "hardware_bypass_count": 1
+    },
+    {
+      "file": "routes.json",
+      "id": "sensitive-cold",
+      "entry": "sensitive",
+      "state": "cold",
+      "issues": [],
+      "weakest_factor_sets": [
+        [
+          "recovery_code"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": false,
+      "entry_recovery_count": 6,
+      "hardware_bypass_count": 1
+    },
+    {
+      "file": "routes.json",
+      "id": "strict-loaded",
+      "entry": "strict",
+      "state": "loaded",
+      "issues": [],
+      "weakest_factor_sets": [
+        [
+          "entry_pw",
+          "yubikey"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": true,
+      "entry_recovery_count": 0,
+      "hardware_bypass_count": 0
+    },
+    {
+      "file": "routes.json",
+      "id": "strict-cold",
+      "entry": "strict",
+      "state": "cold",
+      "issues": [],
+      "weakest_factor_sets": [
+        [
+          "entry_pw",
+          "master",
+          "virtual",
+          "yubikey"
+        ],
+        [
+          "entry_pw",
+          "master",
+          "yubikey"
+        ],
+        [
+          "entry_pw",
+          "recovery_code",
+          "yubikey"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": true,
+      "entry_recovery_count": 0,
+      "hardware_bypass_count": 0
+    },
+    {
+      "file": "routes.json",
+      "id": "strict-bug-loaded",
+      "entry": "strict-bug",
+      "state": "loaded",
+      "issues": [
+        "STRICT_NONE_HAS_COMPLETE_RECOVERY_PATH"
+      ],
+      "weakest_factor_sets": [
+        [
+          "session",
+          "virtual"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": false,
+      "entry_recovery_count": 3,
+      "hardware_bypass_count": 0
+    },
+    {
+      "file": "routes.json",
+      "id": "strict-bug-cold",
+      "entry": "strict-bug",
+      "state": "cold",
+      "issues": [
+        "STRICT_NONE_HAS_COMPLETE_RECOVERY_PATH"
+      ],
+      "weakest_factor_sets": [
+        [
+          "master",
+          "virtual"
+        ],
+        [
+          "recovery_code",
+          "virtual"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": false,
+      "entry_recovery_count": 9,
+      "hardware_bypass_count": 0
+    },
+    {
+      "file": "routes.json",
+      "id": "independent-loaded",
+      "entry": "independent",
+      "state": "loaded",
+      "issues": [],
+      "weakest_factor_sets": [
+        [
+          "ind_code"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": false,
+      "entry_recovery_count": 1,
+      "hardware_bypass_count": 1
+    },
+    {
+      "file": "routes.json",
+      "id": "independent-cold",
+      "entry": "independent",
+      "state": "cold",
+      "issues": [],
+      "weakest_factor_sets": [
+        [
+          "ind_code",
+          "master",
+          "virtual"
+        ],
+        [
+          "ind_code",
+          "recovery_code"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": false,
+      "entry_recovery_count": 3,
+      "hardware_bypass_count": 1
+    },
+    {
+      "file": "routes_independent_shared_code.json",
+      "id": "independent-shared-code",
+      "entry": "independent",
+      "state": "loaded",
+      "issues": [
+        "INDEPENDENT_RECOVERY_SCOPE_BYPASS"
+      ],
+      "weakest_factor_sets": [
+        [
+          "recovery_code"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": false,
+      "entry_recovery_count": 1,
+      "hardware_bypass_count": 1
+    },
+    {
+      "file": "routes_independent_inherited_recovery.json",
+      "id": "independent-inherited-recovery",
+      "entry": "independent",
+      "state": "loaded",
+      "issues": [
+        "INDEPENDENT_RECOVERY_SCOPE_BYPASS"
+      ],
+      "weakest_factor_sets": [
+        [
+          "session"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": false,
+      "entry_recovery_count": 3,
+      "hardware_bypass_count": 3
+    },
+    {
+      "file": "routes_independent_missing_recovery.json",
+      "id": "independent-missing-recovery",
+      "entry": "independent",
+      "state": "loaded",
+      "issues": [
+        "INDEPENDENT_MISSING_ENTRY_RECOVERY"
+      ],
+      "weakest_factor_sets": [
+        [
+          "entry_pw",
+          "yubikey"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": true,
+      "entry_recovery_count": 0,
+      "hardware_bypass_count": 0
+    },
+    {
+      "file": "routes_strict_shared_ancestor.json",
+      "id": "strict-shared-ancestor",
+      "entry": "strict-bug",
+      "state": "loaded",
+      "issues": [
+        "STRICT_NONE_HAS_COMPLETE_RECOVERY_PATH"
+      ],
+      "weakest_factor_sets": [
+        [
+          "session",
+          "virtual"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": false,
+      "entry_recovery_count": 3,
+      "hardware_bypass_count": 0
+    }
+  ],
+  "loaded_blast_radius": {
+    "factor:entry_pw": {
+      "dependent_entries": [
+        "independent",
+        "strict"
+      ],
+      "exposed_without_other_factors": [],
+      "remaining_factor_sets": {
+        "strict": [
+          [
+            "yubikey"
+          ]
+        ],
+        "independent": [
+          [
+            "yubikey"
+          ]
+        ]
+      }
+    },
+    "factor:ind_code": {
+      "dependent_entries": [
+        "independent"
+      ],
+      "exposed_without_other_factors": [
+        "independent"
+      ],
+      "remaining_factor_sets": {
+        "independent": [
+          []
+        ]
+      }
+    },
+    "factor:recovery_code": {
+      "dependent_entries": [
+        "ordinary",
+        "sensitive",
+        "strict-bug"
+      ],
+      "exposed_without_other_factors": [
+        "ordinary",
+        "sensitive"
+      ],
+      "remaining_factor_sets": {
+        "ordinary": [
+          []
+        ],
+        "sensitive": [
+          []
+        ],
+        "strict-bug": [
+          [
+            "virtual"
+          ]
+        ]
+      }
+    },
+    "factor:session": {
+      "dependent_entries": [
+        "ordinary",
+        "sensitive",
+        "strict-bug"
+      ],
+      "exposed_without_other_factors": [],
+      "remaining_factor_sets": {
+        "ordinary": [
+          [
+            "virtual"
+          ]
+        ],
+        "sensitive": [
+          [
+            "yubikey"
+          ]
+        ],
+        "strict-bug": [
+          [
+            "virtual"
+          ]
+        ]
+      }
+    },
+    "factor:virtual": {
+      "dependent_entries": [
+        "ordinary",
+        "strict-bug"
+      ],
+      "exposed_without_other_factors": [],
+      "remaining_factor_sets": {
+        "ordinary": [
+          [
+            "recovery_code"
+          ],
+          [
+            "session"
+          ]
+        ],
+        "strict-bug": [
+          [
+            "recovery_code"
+          ],
+          [
+            "session"
+          ]
+        ]
+      }
+    },
+    "factor:yubikey": {
+      "dependent_entries": [
+        "independent",
+        "sensitive",
+        "strict"
+      ],
+      "exposed_without_other_factors": [],
+      "remaining_factor_sets": {
+        "sensitive": [
+          [
+            "recovery_code"
+          ],
+          [
+            "session"
+          ]
+        ],
+        "strict": [
+          [
+            "entry_pw"
+          ]
+        ],
+        "independent": [
+          [
+            "entry_pw"
+          ]
+        ]
+      }
+    },
+    "key:DEK-independent": {
+      "dependent_entries": [
+        "independent"
+      ],
+      "exposed_without_other_factors": [
+        "independent"
+      ],
+      "remaining_factor_sets": {
+        "independent": [
+          []
+        ]
+      }
+    },
+    "key:DEK-ordinary": {
+      "dependent_entries": [
+        "ordinary"
+      ],
+      "exposed_without_other_factors": [
+        "ordinary"
+      ],
+      "remaining_factor_sets": {
+        "ordinary": [
+          []
+        ]
+      }
+    },
+    "key:DEK-sensitive": {
+      "dependent_entries": [
+        "sensitive"
+      ],
+      "exposed_without_other_factors": [
+        "sensitive"
+      ],
+      "remaining_factor_sets": {
+        "sensitive": [
+          []
+        ]
+      }
+    },
+    "key:DEK-strict": {
+      "dependent_entries": [
+        "strict"
+      ],
+      "exposed_without_other_factors": [
+        "strict"
+      ],
+      "remaining_factor_sets": {
+        "strict": [
+          []
+        ]
+      }
+    },
+    "key:DEK-strict-bug": {
+      "dependent_entries": [
+        "strict-bug"
+      ],
+      "exposed_without_other_factors": [
+        "strict-bug"
+      ],
+      "remaining_factor_sets": {
+        "strict-bug": [
+          []
+        ]
+      }
+    },
+    "key:VERS": {
+      "dependent_entries": [
+        "ordinary",
+        "sensitive",
+        "strict-bug"
+      ],
+      "exposed_without_other_factors": [],
+      "remaining_factor_sets": {
+        "ordinary": [
+          [
+            "virtual"
+          ]
+        ],
+        "sensitive": [
+          [
+            "yubikey"
+          ]
+        ],
+        "strict-bug": [
+          [
+            "virtual"
+          ]
+        ]
+      }
+    },
+    "key:VIRTUAL_PROVIDER": {
+      "dependent_entries": [
+        "ordinary",
+        "strict-bug"
+      ],
+      "exposed_without_other_factors": [],
+      "remaining_factor_sets": {
+        "ordinary": [
+          [
+            "recovery_code"
+          ],
+          [
+            "session"
+          ]
+        ],
+        "strict-bug": [
+          [
+            "recovery_code"
+          ],
+          [
+            "session"
+          ]
+        ]
+      }
+    }
+  }
+}

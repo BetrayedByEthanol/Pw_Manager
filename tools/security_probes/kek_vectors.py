@@ -70,8 +70,22 @@ def derive(vector: dict) -> dict:
         ikm = PREFIX + b"CODE-ONLY\x00" + _frame(code)
     prk = _extract(salt, ikm)
     info = PREFIX + b"EXPAND\x00" + _frame(mode.encode("ascii")) + ctx
+    # COMMIT KEY PROPOSAL ONLY: distinct HKDF-Expand domain, not a proof that
+    # the surrounding AEAD/key-slot format is committing. The tag MUST cover
+    # canonical byte encodings of the AEAD nonce, AAD, and wrapped ciphertext.
+    nonce = bytes.fromhex(vector["nonce_hex"])
+    aad = bytes.fromhex(vector["aad_hex"])
+    ciphertext = bytes.fromhex(vector["ciphertext_hex"])
+    if len(nonce) != 24 or not (1 <= len(ciphertext) <= 4096) or len(aad) > 4096:
+        raise ValueError("Invalid commitment nonce/AAD/ciphertext lengths")
+    commit_info = PREFIX + b"COMMIT-KEY\x00" + _frame(mode.encode("ascii")) + ctx
+    commit_key = _expand(prk, commit_info, 32)
+    commit_input = PREFIX + b"COMMIT-TAG\x00" + ctx + _frame(nonce) + _frame(aad) + _frame(ciphertext)
     return {"salt_hex": salt.hex(), "prk_hex": prk.hex(),
-            "info_hex": info.hex(), "kek_hex": _expand(prk, info, 32).hex()}
+            "info_hex": info.hex(), "kek_hex": _expand(prk, info, 32).hex(),
+            "commit_info_hex": commit_info.hex(), "commit_key_hex": commit_key.hex(),
+            "commit_input_hex": commit_input.hex(),
+            "commit_tag_hex": hmac.digest(commit_key, commit_input, "sha256").hex()}
 
 
 def verify(doc: dict) -> None:
