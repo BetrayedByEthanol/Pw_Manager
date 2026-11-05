@@ -259,6 +259,154 @@
       "entry_hardware_mandatory_on_all_paths": false,
       "entry_recovery_count": 3,
       "hardware_bypass_count": 0
+    },
+    {
+      "file": "owner_isolated-independent-hardware-loaded.json",
+      "id": "isolated-independent-hardware-loaded",
+      "entry": "independent",
+      "state": "loaded",
+      "issues": [],
+      "weakest_factor_sets": [
+        [
+          "entry_pw",
+          "yubikey"
+        ],
+        [
+          "ind_code",
+          "yubikey"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": true,
+      "entry_recovery_count": 1,
+      "hardware_bypass_count": 0,
+      "isolation_tier": "ISOLATED",
+      "normal_provider": "physical_fido2",
+      "fresh_physical_operation_required_per_normal_read": true
+    },
+    {
+      "file": "owner_isolated-independent-hardware-cold.json",
+      "id": "isolated-independent-hardware-cold",
+      "entry": "independent",
+      "state": "cold",
+      "issues": [],
+      "weakest_factor_sets": [
+        [
+          "entry_pw",
+          "master",
+          "virtual",
+          "yubikey"
+        ],
+        [
+          "entry_pw",
+          "master",
+          "yubikey"
+        ],
+        [
+          "entry_pw",
+          "recovery_code",
+          "yubikey"
+        ],
+        [
+          "ind_code",
+          "master",
+          "virtual",
+          "yubikey"
+        ],
+        [
+          "ind_code",
+          "master",
+          "yubikey"
+        ],
+        [
+          "ind_code",
+          "recovery_code",
+          "yubikey"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": true,
+      "entry_recovery_count": 3,
+      "hardware_bypass_count": 0,
+      "isolation_tier": "ISOLATED",
+      "normal_provider": "physical_fido2",
+      "fresh_physical_operation_required_per_normal_read": true
+    },
+    {
+      "file": "owner_isolated-independent-code-only.json",
+      "id": "isolated-independent-code-only",
+      "entry": "independent",
+      "state": "loaded",
+      "issues": [
+        "ISOLATED_HAS_NON_HARDWARE_ACCESS_ROUTE"
+      ],
+      "weakest_factor_sets": [
+        [
+          "ind_code"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": false,
+      "entry_recovery_count": 1,
+      "hardware_bypass_count": 1,
+      "isolation_tier": "ISOLATED",
+      "normal_provider": "physical_fido2",
+      "fresh_physical_operation_required_per_normal_read": true
+    },
+    {
+      "file": "owner_isolated-shared-code-only.json",
+      "id": "isolated-shared-code-only",
+      "entry": "sensitive",
+      "state": "loaded",
+      "issues": [
+        "ISOLATED_HAS_NON_HARDWARE_ACCESS_ROUTE"
+      ],
+      "weakest_factor_sets": [
+        [
+          "recovery_code"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": false,
+      "entry_recovery_count": 2,
+      "hardware_bypass_count": 1,
+      "isolation_tier": "ISOLATED",
+      "normal_provider": "physical_fido2",
+      "fresh_physical_operation_required_per_normal_read": true
+    },
+    {
+      "file": "owner_isolated-shared-with-hardware.json",
+      "id": "isolated-shared-with-hardware",
+      "entry": "sensitive",
+      "state": "loaded",
+      "issues": [],
+      "weakest_factor_sets": [
+        [
+          "session",
+          "yubikey"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": true,
+      "entry_recovery_count": 2,
+      "hardware_bypass_count": 0,
+      "isolation_tier": "ISOLATED",
+      "normal_provider": "physical_fido2",
+      "fresh_physical_operation_required_per_normal_read": true
+    },
+    {
+      "file": "owner_isolated-strict-no-recovery.json",
+      "id": "isolated-strict-no-recovery",
+      "entry": "strict",
+      "state": "loaded",
+      "issues": [],
+      "weakest_factor_sets": [
+        [
+          "entry_pw",
+          "yubikey"
+        ]
+      ],
+      "entry_hardware_mandatory_on_all_paths": true,
+      "entry_recovery_count": 0,
+      "hardware_bypass_count": 0,
+      "isolation_tier": "ISOLATED",
+      "normal_provider": "physical_fido2",
+      "fresh_physical_operation_required_per_normal_read": true
     }
   ],
   "loaded_blast_radius": {
@@ -511,5 +659,11 @@
         ]
       }
     }
+  },
+  "owner_decisions": {
+    "S1": "normal entry reads select physical_fido2 with a fresh operation or resident virtual_prf; no virtual fallback on physical policy",
+    "S2": "ISOLATED entry requires hardware in every complete entry-DEK normal and recovery path; STRICT_NONE is permitted",
+    "S3": "INDEPENDENT schema and checker retained; setup UI deferred",
+    "S4": "authenticated ancestry plus local accidental rollback detection; NOT strong external anti-rollback"
   }
 }

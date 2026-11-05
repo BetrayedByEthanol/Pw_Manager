@@ -1,0 +1,241 @@
+{
+  "schema": "vaulty-route-v1",
+  "factors": {
+    "master": {
+      "kind": "master_password"
+    },
+    "session": {
+      "kind": "loaded_session"
+    },
+    "virtual": {
+      "kind": "virtual_prf"
+    },
+    "yubikey": {
+      "kind": "physical_fido2"
+    },
+    "entry_pw": {
+      "kind": "entry_password"
+    },
+    "recovery_code": {
+      "kind": "recovery_code"
+    },
+    "ind_code": {
+      "kind": "recovery_code",
+      "scope": "entry",
+      "entry_id": "independent"
+    }
+  },
+  "keys": {
+    "VMK": {
+      "slots": [
+        {
+          "id": "vmk-password-virtual",
+          "kind": "normal",
+          "requires": [
+            "factor:master",
+            "factor:virtual"
+          ]
+        },
+        {
+          "id": "vmk-password-physical",
+          "kind": "normal",
+          "requires": [
+            "factor:master",
+            "factor:yubikey"
+          ]
+        },
+        {
+          "id": "vmk-code",
+          "kind": "recovery",
+          "requires": [
+            "factor:recovery_code"
+          ]
+        }
+      ]
+    },
+    "VERS": {
+      "slots": [
+        {
+          "id": "vers-resident",
+          "kind": "resident",
+          "states": [
+            "loaded"
+          ],
+          "requires": [
+            "factor:session"
+          ]
+        },
+        {
+          "id": "vers-password",
+          "kind": "normal",
+          "states": [
+            "cold"
+          ],
+          "requires": [
+            "factor:master"
+          ]
+        },
+        {
+          "id": "vers-code",
+          "kind": "recovery",
+          "requires": [
+            "factor:recovery_code"
+          ]
+        }
+      ]
+    },
+    "VIRTUAL_PROVIDER": {
+      "slots": [
+        {
+          "id": "virtual-resident",
+          "kind": "resident",
+          "states": [
+            "loaded"
+          ],
+          "requires": [
+            "factor:virtual"
+          ]
+        },
+        {
+          "id": "virtual-bootstrap",
+          "kind": "normal",
+          "states": [
+            "cold"
+          ],
+          "requires": [
+            "factor:master",
+            "factor:virtual"
+          ]
+        },
+        {
+          "id": "virtual-code",
+          "kind": "recovery",
+          "requires": [
+            "factor:recovery_code",
+            "factor:virtual"
+          ]
+        }
+      ]
+    },
+    "DEK-ordinary": {
+      "slots": [
+        {
+          "id": "ordinary-normal",
+          "kind": "normal",
+          "requires": [
+            "key:VERS",
+            "key:VIRTUAL_PROVIDER"
+          ]
+        },
+        {
+          "id": "ordinary-code",
+          "kind": "recovery",
+          "requires": [
+            "factor:recovery_code"
+          ]
+        }
+      ]
+    },
+    "DEK-sensitive": {
+      "slots": [
+        {
+          "id": "sensitive-normal",
+          "kind": "normal",
+          "requires": [
+            "key:VERS",
+            "factor:yubikey"
+          ]
+        },
+        {
+          "id": "sensitive-code",
+          "kind": "recovery",
+          "requires": [
+            "factor:recovery_code"
+          ]
+        }
+      ]
+    },
+    "DEK-strict": {
+      "slots": [
+        {
+          "id": "strict-normal",
+          "kind": "normal",
+          "requires": [
+            "factor:entry_pw",
+            "factor:yubikey"
+          ]
+        }
+      ]
+    },
+    "DEK-strict-bug": {
+      "slots": [
+        {
+          "id": "strict-bug-normal",
+          "kind": "normal",
+          "requires": [
+            "key:VERS",
+            "key:VIRTUAL_PROVIDER"
+          ]
+        }
+      ]
+    },
+    "DEK-independent": {
+      "slots": [
+        {
+          "id": "ind-normal",
+          "kind": "normal",
+          "requires": [
+            "factor:entry_pw",
+            "factor:yubikey"
+          ]
+        },
+        {
+          "id": "ind-recovery",
+          "kind": "recovery",
+          "requires": [
+            "factor:ind_code",
+            "factor:yubikey"
+          ]
+        }
+      ]
+    }
+  },
+  "entries": [
+    {
+      "id": "ordinary",
+      "dek": "DEK-ordinary",
+      "first_key": "VERS",
+      "policy": "ENTRY_DEFAULT_VIRTUAL",
+      "recovery_policy": "SHARED"
+    },
+    {
+      "id": "sensitive",
+      "dek": "DEK-sensitive",
+      "first_key": "VERS",
+      "policy": "ENTRY_DEFAULT_PHYSICAL",
+      "recovery_policy": "SHARED"
+    },
+    {
+      "id": "strict",
+      "dek": "DEK-strict",
+      "entry_password_factor": "entry_pw",
+      "policy": "ENTRY_PASSWORD_PHYSICAL",
+      "recovery_policy": "STRICT_NONE"
+    },
+    {
+      "id": "strict-bug",
+      "dek": "DEK-strict-bug",
+      "first_key": "VERS",
+      "policy": "ENTRY_DEFAULT_VIRTUAL",
+      "recovery_policy": "STRICT_NONE"
+    },
+    {
+      "id": "independent",
+      "dek": "DEK-independent",
+      "entry_password_factor": "entry_pw",
+      "policy": "ENTRY_PASSWORD_PHYSICAL",
+      "recovery_policy": "INDEPENDENT",
+      "isolation_tier": "ISOLATED"
+    }
+  ]
+}
