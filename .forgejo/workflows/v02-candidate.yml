@@ -10,7 +10,11 @@ jobs:
     container:
       image: rust:1-bookworm
     steps:
+      # Pin reviewed bytes to the contributor head instead of a synthetic
+      # merge checkout; when not a PR, use the pushed commit.
       - uses: https://data.forgejo.org/actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Candidate format compilation and negative tests
         run: |
           cargo check --manifest-path tools/v02_verifier/Cargo.toml --all-targets
