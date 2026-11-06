@@ -2,12 +2,12 @@
 """Reproducible independent-library reference for UNAPPROVED V02-B candidate.
 
 SHA-256/HKDF/HMAC implemented with Python stdlib; XChaCha20-Poly1305 via
-libsodium using ctypes; optional Argon2id via argon2-cffi. This is a
+libsodium using ctypes; Argon2id via libargon2 (ctypes). This is a
 cross-library reference, NOT an independent cryptographic security audit,
 a formal key-commitment proof, or an actual physical authenticator test.
 
 Run: python3 tools/v02_verifier/reference_v02c.py --verify
-Needs libsodium shared library, and argon2-cffi for Argon2id comparison.
+Needs libsodium and libargon2 system shared libraries (required in CI).
 Do not use the deterministic test nonces or inputs for real credentials.
 """
 import argparse
@@ -125,17 +125,31 @@ def main():
         if actual != expected:
             raise SystemExit("V02-C reference vectors do not match committed fixture")
         print(f"V02-C: {len(actual)} Python/libsodium reference vectors match")
-        try:
-            from argon2.low_level import Type, hash_secret_raw
-        except ImportError:
-            print("Argon2id reference skipped: install argon2-cffi for independent-library check")
-        else:
-            x = hash_secret_raw(b"synthetic password", SALT, 2, 8192, 1, 32,
-                                Type.ID, version=19).hex()
-            expected_argon = "cb6636e19e33f61e6317f98d09e11a5f3ca42487b2db1c39f6e63a730cada520"
-            if x != expected_argon:
-                raise SystemExit("Argon2id reference mismatch")
-            print("V02-C: Argon2id reference component matches")
+        # Independent Argon2 implementation from libargon2. REQUIRED,
+        # not silently skipped; no dependency on Rust or argon2-cffi.
+        libpath = ctypes.util.find_library("argon2")
+        if not libpath:
+            raise SystemExit("V02-C requires libargon2 for Argon2id cross-library verification")
+        argon = ctypes.CDLL(libpath)
+        raw = argon.argon2id_hash_raw
+        raw.argtypes = [
+            ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32,
+            ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p,
+            ctypes.c_size_t, ctypes.c_void_p, ctypes.c_size_t,
+        ]
+        raw.restype = ctypes.c_int
+        password = b"synthetic password"
+        input_buffer = ctypes.create_string_buffer(password, len(password))
+        salt_buffer = ctypes.create_string_buffer(SALT, len(SALT))
+        output_buffer = ctypes.create_string_buffer(32)
+        if raw(2, 8192, 1, input_buffer, len(password),
+               salt_buffer, len(SALT), output_buffer, 32) != 0:
+            raise SystemExit("libargon2 Argon2id reference failed")
+        x = output_buffer.raw.hex()
+        expected_argon = "cb6636e19e33f61e6317f98d09e11a5f3ca42487b2db1c39f6e63a730cada520"
+        if x != expected_argon:
+            raise SystemExit("Argon2id reference mismatch")
+        print("V02-C: libargon2 Argon2id reference component matches")
     else:
         print("\n".join(actual))
 
