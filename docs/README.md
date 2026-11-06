@@ -1,7 +1,7 @@
 # Vaulty Documentation Index
 
 **Canonical design target:** **v0.4.5**, 6 November 2026.  
-**Implementation reference:** GitHub `main` `961cde0` ([V02-C PR #11 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/11), synthetic conformance only), after V02/V02-A/V02-B. V02-D review-preparation is underway; independent crypto/device approval is not obtained.  
+**Implementation reference:** GitHub `main` `961cde0` ([V02-C PR #11 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/11), synthetic conformance only); [V02-D PR #12](https://github.com/BetrayedByEthanol/Pw_Manager/pull/12) is in review. Independent crypto/device approval is not obtained.  
 **Safety status:** Prototype foundation builds and tests; **not safe for real credentials and not security-certified**.
 
 Start here rather than relying on previous chats or the historical README feature checklist.
