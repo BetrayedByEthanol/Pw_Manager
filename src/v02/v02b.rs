@@ -385,6 +385,10 @@ pub(crate) fn open_candidate(
 mod conformance;
 
 #[cfg(test)]
+#[path = "v02d_tests.rs"]
+mod review_gaps;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     fn params() -> PasswordParameters {
