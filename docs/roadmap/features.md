@@ -59,6 +59,20 @@
 
 N-01, N-02 and N-03 should share vetted import/transaction primitives but require different operation-level authorization and user review.
 
+## V01-A safety verification (PR #7, **not a finished feature**)
+
+The pending [V01-A safety PR](https://github.com/BetrayedByEthanol/Pw_Manager/pull/7) hardens the **disabled** legacy implementation. It does not complete the planned feature requirements. Its initial CI verified root smoke and negative unit tests; the added native-host child-process tests still require current-head CI and review.
+
+| FR | Changed supporting safety evidence | Not delivered |
+| --- | --- | --- |
+| FR-LIFE-01 | Nonzero inert executable process test without file/secret side effects | Production create/open/close/session engine |
+| FR-IPC-01 / FR-IPC-04 | Bounded native messaging, UNAVAILABLE for all requests, no mock durable receipt | Paired E2E daemon transport, actual durable save |
+| FR-SEC-01 | No compiled gocrypt master-key dump, no direct default secret Display | Reviewed key memory lifetime, R5/R6 |
+| FR-STO-01 | Fault-injected backup/temp/rename/fsync/stale-lock checks | Race-free dirfd writer, authenticated ancestry, rollback guarantees |
+| FR-CRY-01 / FR-AUTH-02 | Bounded legacy header/payload and verifier-failure tests | Canonical V02 codec, OPEN-01/15 approvals, real FIDO2 UV/PRF integration |
+
+No FR status is upgraded to DONE by this PR.
+
 ## Source-feature preservation
 
 The immutable historical baseline contains **exactly 67** O-ID occurrences across ten groups: Product (14), Start (4), CLI (14), Vault (12), Crypto (10), Fido (2), Socket (6), Hotkey (1), IO–File (1), Recovery (3). Duplicate occurrences are intentional. Every original O-ID points to one of the 34 preexisting FR-IDs; the 4 new FRs do not alter that history.

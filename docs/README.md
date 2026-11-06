@@ -18,6 +18,7 @@ Start here rather than relying on previous chats or the historical README featur
 | [Decision & open-review register](decisions/register.md) | Approved S1–S4/Option A decisions, deferred scope, OPEN-01/OPEN-15 and approval boundaries | **Decision register** |
 | [V01 prototype safety foundation](roadmap/V01-prototype-safety.md) | Historical implementation scope and explicit limitations | **Merged baseline + acceptance pending** |
 | [Forgejo CI migration](ci/forgejo-actions.md) | GitHub/Forgejo workflow parity and runner requirements | **Infrastructure runbook** |
+| [V01-A failure and stale-lock recovery](security/V01A-failure-recovery.md) | Operator steps for interrupted legacy writes, lock handling and native-host unavailable behavior | **V01-A PR #7 in review; not a security certificate** |
 | [v0.3 historical design](specification/history/v0.3-design-reference.md) | Full earlier 67-item O-ID traceability and pre-v0.4 rationale | **Superseded archival source** |
 | [Crypto review request](../tools/security_probes/CRYPTO_REVIEW_REQUEST.md) | Candidate OPEN-01/15 evaluation requested of independent reviewer | **Not approved crypto** |
 
@@ -45,4 +46,4 @@ Each PR affecting keys, policy, recovery, storage, migration or client behavior 
 
 ## Recommended immediate milestone
 
-**V01-A — Security Closure & Verification Hardening**, then V02 canonical format. OPEN-01 and OPEN-15 must be independently reviewed before corresponding cryptographic and physical-PRF release gates.
+**V01-A — Security Closure & Verification Hardening** ([PR #7 in review](https://github.com/BetrayedByEthanol/Pw_Manager/pull/7)), then V02 canonical format. A green build does not close G0 until negative-path/security acceptance is reviewed. OPEN-01 and OPEN-15 must be independently reviewed before corresponding cryptographic and physical-PRF release gates.
