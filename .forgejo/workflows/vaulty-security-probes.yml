@@ -1,0 +1,55 @@
+name: Vaulty security probes (reference)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/security_probes/**'
+      - '.github/workflows/vaulty-security-probes.yml'
+      - '.forgejo/workflows/vaulty-security-probes.yml'
+  push:
+    branches:
+      - main
+      - 'feat/open18-route-graph-open01-kek-vectors'
+    paths:
+      - 'tools/security_probes/**'
+      - '.github/workflows/vaulty-security-probes.yml'
+      - '.forgejo/workflows/vaulty-security-probes.yml'
+jobs:
+  python-conformance:
+    runs-on: docker
+    container:
+      image: node:22-bookworm
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+      - name: Install Python
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3
+      - name: Reference tests
+        run: |
+          cd tools/security_probes
+          python3 -m unittest -v test_probes
+          python3 kek_vectors.py fixtures/kek_vectors.json
+          python3 route_graph.py fixtures/routes.json --entry independent
+          python3 route_graph.py fixtures/routes.json --blast-radius > /dev/null
+  rust-conformance:
+    runs-on: docker
+    container:
+      image: node:22-bookworm
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+      - name: Install Rust
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates curl build-essential
+          curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh
+          sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain stable
+      - name: Compile and test Rust port
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          cargo test --manifest-path tools/security_probes/rust/Cargo.toml --all-targets
+      - name: Verify Rust KEK vectors
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          cargo run --manifest-path tools/security_probes/rust/Cargo.toml -- --kek-vectors tools/security_probes/fixtures/kek_vectors.json

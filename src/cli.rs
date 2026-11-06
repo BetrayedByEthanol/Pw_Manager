@@ -118,7 +118,7 @@ fn prompt_charset() -> Result<CharSet, Box<dyn Error>> {
         return Ok(CharSet::ALL);
     }
 
-    let mut charset = CharSet(0);
+    let mut charset = CharSet::EMPTY;
     for index in selected {
         charset = match index {
             0 => charset | CharSet::UPPERCASE,

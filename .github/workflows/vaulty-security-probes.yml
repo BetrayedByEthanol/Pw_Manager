@@ -1,15 +1,19 @@
 name: Vaulty security probes (reference)
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - 'tools/security_probes/**'
       - '.github/workflows/vaulty-security-probes.yml'
+      - '.forgejo/workflows/vaulty-security-probes.yml'
   push:
     branches:
+      - main
       - 'feat/open18-route-graph-open01-kek-vectors'
     paths:
       - 'tools/security_probes/**'
       - '.github/workflows/vaulty-security-probes.yml'
+      - '.forgejo/workflows/vaulty-security-probes.yml'
 permissions:
   contents: read
 jobs:
