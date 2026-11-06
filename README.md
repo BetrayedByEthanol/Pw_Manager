@@ -1,3 +1,11 @@
+# Vaulty — development prototype (not suitable for real credentials)
+
+**V01 status:** The original CLI and vault format are security prototypes. The default binary deliberately exits unsuccessfully. Do not use it to store real credentials.
+
+The review baseline and limitations are recorded in [V01 Prototype Safety & Build Foundation](docs/roadmap/V01-prototype-safety.md). This repository's architecture and security reference is Vaulty v0.4.5; the legacy binary is not compliant with it. The Python/Rust policy probes in `tools/security_probes` are *reference checkers*, not production authorization or approved cryptography.
+
+## Historical development checklist
+
 create vault
 open vault
 add entry

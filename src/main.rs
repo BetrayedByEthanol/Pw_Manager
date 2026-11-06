@@ -10,6 +10,7 @@ mod fido2;
 mod obfuscate;
 
 // V01 safety gate: do not auto-open legacy vaults or display test credentials.
-fn main() {
+fn main() -> std::process::ExitCode {
     eprintln!("Vaulty is an unsafe development prototype. The interactive legacy vault is disabled pending the v0.4.5 runtime and recovery implementation. Do not store real credentials.");
+    std::process::ExitCode::FAILURE
 }

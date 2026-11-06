@@ -46,6 +46,11 @@ pub fn atomic_write_at(path: &Path, new_bytes: &[u8]) -> Result<(), Box<dyn Erro
         tmp.write_all(new_bytes)?;
         tmp.sync_all()?;
 
+        if let Ok(meta) = fs::symlink_metadata(path) {
+            if !meta.file_type().is_file() || meta.file_type().is_symlink() {
+                return Err("refusing to replace a non-regular or symlinked vault".into());
+            }
+        }
         if path.exists() {
             // Keep the old encrypted bytes recoverable even if replacement fails.
             let backup_tmp = path.with_extension(format!("previous-tmp-{}", Uuid::new_v4()));
