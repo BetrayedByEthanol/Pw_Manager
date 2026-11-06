@@ -6,6 +6,8 @@ on:
       - 'src/v02/**'
       - 'src/lib.rs'
       - 'tools/v02_verifier/**'
+      - 'docs/security/V02D-independent-review-handoff.md'
+      - 'tools/security_probes/CRYPTO_REVIEW_REQUEST.md'
       - '.github/workflows/v02-candidate.yml'
   push:
     branches: [main, feat/v02-canonical-format-foundation-v0]
@@ -13,6 +15,8 @@ on:
       - 'src/v02/**'
       - 'src/lib.rs'
       - 'tools/v02_verifier/**'
+      - 'docs/security/V02D-independent-review-handoff.md'
+      - 'tools/security_probes/CRYPTO_REVIEW_REQUEST.md'
       - '.github/workflows/v02-candidate.yml'
 permissions:
   contents: read
@@ -31,6 +35,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libsodium23 libargon2-1
           python3 tools/v02_verifier/reference_v02c.py --verify
+      - name: V02-D reviewer source inventory and tamper tests
+        run: |
+          python3 -m unittest discover -s tools/v02_verifier -p 'test_review_bundle.py' -v
+          python3 tools/v02_verifier/review_bundle.py --write /tmp/v02d-review-manifest.json
+          python3 tools/v02_verifier/review_bundle.py --check /tmp/v02d-review-manifest.json
+          sha256sum /tmp/v02d-review-manifest.json
+      - name: Publish review inventory (NOT independent approval)
+        uses: actions/upload-artifact@v4
+        with:
+          name: v02d-review-source-manifest
+          path: /tmp/v02d-review-manifest.json
+          if-no-files-found: error
+          retention-days: 30
       - name: No real-credential executable enabled
         run: |
           grep -F 'ExitCode::FAILURE' src/main.rs
