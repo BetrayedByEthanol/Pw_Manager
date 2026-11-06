@@ -64,7 +64,7 @@ A prospective explicit `protocol_version` and `route_kind` MUST distinguish at l
 | Provider seed pre-load, password-only | master-password bootstrap and separate code-only recovery bootstrap | Same random seed, separately sealed; available before VMK outer decrypt |
 | Provider seed in hardware-backed mixed vault | only from reviewed valid policy routes; may be unwrapped after VMK if not needed for VMK authorization | Do not introduce software-only VMK bootstrap route or claim hardware-backed assurance from a virtual provider |
 | VERS / DEK normal | default VERS or custom entry password + **entry-selected** provider | VERS reconstructed transiently; physical read always fresh |
-| VERS / DEK recovery | separately provisioned, policy-valid code + required password/hardware, or explicit approved shared ancestor | Never implied by VMK recovery; for Isolated, physical hardware on every complete route |
+| VERS / DEK recovery | separately provisioned, policy-valid recovery slots or approved shared ancestors; password-only code-only routes only where that entry's policy permits, hardware-vault routes code+password or code+registered hardware | Never implied by VMK recovery; Isolated always requires physical hardware on every complete recovery route or has STRICT_NONE |
 
 **Candidate envelope fields to review before implementation:** explicit format/algorithm version; `vault_id`, `slot_id`, `target_kind` and `target_id` (nil only where defined); operation purpose/route kind; exact factor recipe and assurance tier; random AEAD nonce; canonical KDF identifier, work parameters and random salt where applicable; provider type, credential identifier or authenticated reference, RP ID, PRF salt derivation/scope and pinned UP/UV; root/ancestor/fanout reference where shared; wrapped-key length and AEAD ciphertext; **reviewed** key-binding/commitment material. Public-header visibility of all these fields is a separate privacy decision. Do not duplicate secret provider material in the header.
 
@@ -126,5 +126,7 @@ Record verified device support (PRF extension/hmac-secret behavior; credential a
 2. **V03/V06:** trusted session/physical and virtual adapters, owner registry, independent per-read hardware evidence and scoped secret lifetime.
 3. **V04:** Option A recovery provisioning and repair/rotation; independently verify VMK/seed/VERS/DEK access graph, backups and migration.
 4. **V05/V07/V09:** complete source-native entry policy, authorization, external crypto and restore evidence before any production use.
+
+**Owner / blocker classification:** OPEN-01 and OPEN-15 need *independent reviewer findings*, not a new product-policy choice to start. V02-B implementation needs approved protocol bytes, KATs and versioning; V03/V04/V06 need implementation and hardware evidence. **D-30 shared-root batching is still provisional**: after capability/fanout evidence, the owner may need to decide whether the usability trade-off is acceptable. No approved R1, S1/S2, Option A or hardware-recovery rule is reopened by this review.
 
 **Gate status after V02-A:** G1 BLOCKED (OPEN-01), G2 BLOCKED (OPEN-15), G3 BLOCKED (recovery/authorization); V02 remains merged *candidate foundation*. No user decision to weaken R1/S2 or to suppress future reviews is implied.
