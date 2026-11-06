@@ -136,6 +136,8 @@ fn isolated_and_hardware_policy_restrictions_are_structural() {
     ));
     assert!(seal_file(&header, &body, &vmk).is_err()); // STRICT_NONE
     header.mode = VaultMode::PasswordPhysical;
+    // The synthetic conversion must not retain code-only virtual bootstrap.
+    header.bootstrap_slots.clear();
     header.vmk_slots = vec![
         Slot::pending(SlotTarget::Vmk, Uuid::nil(), FactorPolicy::VaultPasswordPhysical),
         Slot::pending(SlotTarget::Vmk, Uuid::nil(), FactorPolicy::CodePassword),

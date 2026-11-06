@@ -153,11 +153,12 @@ pub(super) struct ParsedHeader<'a> {
 }
 /// Parse only a bounded public header, before any expensive cryptography.
 pub(super) fn parse_header(file: &[u8]) -> Result<ParsedHeader<'_>, V02Error> {
+    // Identify unsupported historic source formats before applying v2 framing.
+    if file.starts_with(b"VLT1") || file.starts_with(b"{") {
+        return Err(V02Error::MigrationRequired);
+    }
     if file.len() < 16 { return Err(V02Error::Invalid("truncated framing")); }
     if file.get(0..4) != Some(&MAGIC[..]) {
-        if file.starts_with(b"VLT1") || file.starts_with(b"{") {
-            return Err(V02Error::MigrationRequired);
-        }
         return Err(V02Error::Invalid("unknown format magic"));
     }
     if u16::from_le_bytes([file[4],file[5]]) != VERSION {
