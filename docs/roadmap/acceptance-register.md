@@ -15,7 +15,7 @@
 | EV-006 | [Security probes on merged main](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42217284398) | GitHub Rust/Python reference probe jobs succeeded on merge commit `7c3ba719` | Synthetic policy/crypto vectors do not prove runtime encryption or authorization |
 | EV-007 | [Independent cryptography review request](../../tools/security_probes/CRYPTO_REVIEW_REQUEST.md) | Review requirements and candidate construction documented; current disposition explicitly NOT APPROVED | OPEN-01 and OPEN-15 remain blockers |
 | EV-008 | [PR #6](https://github.com/BetrayedByEthanol/Pw_Manager/pull/6) | Canonical v0.4.5 documentation/reconciliation merged into main `d192e6b` | Not evidence of cryptographic or runtime policy implementation |
-| EV-009 | [V01-A PR #7](https://github.com/BetrayedByEthanol/Pw_Manager/pull/7) and [first product CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42236810534) | **Unmerged branch only:** initial run passed root 20 unit + 1 executable integration and native host 6 unit tests; new child-process host tests are pending subsequent CI | Do not mark V01-A MERGED, G0 security accepted, or actual daemon/recovery implemented |
+| EV-009 | [V01-A PR #7](https://github.com/BetrayedByEthanol/Pw_Manager/pull/7); [first CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42236810534); [expanded CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42237908044) | **Unmerged branch only:** expanded run passed 20 root unit, 1 executable integration, 6 native-host unit and **3 native stdio process tests**, plus extension syntax/config. | Do not mark V01-A MERGED, G0 independently security-accepted, or actual daemon/recovery implemented |
 
 Evidence links are immutable run/PR references where possible. New status claims require their own evidence and must not overwrite an older evidence record's scope.
 
@@ -34,7 +34,7 @@ Evidence links are immutable run/PR references where possible. New status claims
 | A01-09 | Atomic replacement + previous encrypted version + fsync | MERGED V01; V01-A PR IN REVIEW | Deterministic checkpoints before/after temp/backup/commit sync, symlink rejection and simulated abrupt exit | Limited test-path assurance; V02 still needs fd-based race safety and authenticated ancestry |
 | A01-10 | Single writer lock fails closed when lock exists | MERGED | `src/fsutil.rs` basic lock test | **PASS narrow lock test**, crash/stale-lock recovery procedures not certified |
 | A01-11 | Native host must not falsely claim credential success by default | V01-A PR IN REVIEW | Default `RELAY_ERROR/UNAVAILABLE` for all recognized requests; synthetic secret not echoed | Native host is NOT yet an E2E encrypted relay; pending merged CI/security review |
-| A01-12 | Native host request/IPC behavioral tests | V01-A PR IN REVIEW | Six Rust host unit tests passed on initial PR #7 CI; native stdio child-process tests added for next run | Review and merged-main test evidence pending |
+| A01-12 | Native host request/IPC behavioral tests | V01-A PR IN REVIEW | Six native-host Rust unit tests and three child-process stdio tests passed in expanded PR #7 CI; merged-main evidence pending | Review and merged-main test evidence pending |
 | A01-13 | Canonical header/payload parser safely reject malformed input | NOT V01 SCOPE | Legacy header/payload still index unchecked ranges | **V02 P1:** bounded parser/format replacement and fuzz |
 | A01-14 | Exact v0.4.5 VMK/VERS/DEK, modes and recovery | NOT V01 SCOPE | No canonical runtime | **V02–V05**, independent reviews |
 | A01-15 | Documentation/version/status consistent with merged evidence | MERGED design baseline | PR #6, EV-008; V01-A branch adds provisional evidence | Update status after PR #7 merge and verify new CI; no release claim |
@@ -65,7 +65,7 @@ The updated PR #6 restores nine binding requirements from the owner-approved v0.
 | --- | --- | --- | --- |
 | VA-01 | Remove master-key dump/destructive experiment | Delete `src/util/gocrypt.rs`, remove module include | PR #7 IN REVIEW |
 | VA-02 | No false native-host success | Valid requests always `RELAY_ERROR/UNAVAILABLE` | Initial CI PASS; merge/review pending |
-| VA-03 | Native-host framing and origin negative tests | Unit tests plus child-process stdio integration | Unit CI PASS; new process tests pending |
+| VA-03 | Native-host framing and origin negative tests | Unit tests plus child-process stdio integration | Unit and process CI PASS on PR #7; merge/review pending |
 | VA-04 | Default executable inert | Synthetic env-secret and sentinel-vault child-process smoke | Initial CI PASS; merge/review pending |
 | VA-05 | Interruption safety checks | Deterministic fault stages, symlinks, simulated abrupt exit and stale lock | Initial CI PASS; not proof of power-loss durability |
 | VA-06 | Legacy malformed header/payload rejection | Header length/record preflight, strict password payload decode, truncation tests | Initial CI PASS; V02 full format still required |
