@@ -317,3 +317,105 @@ fn hardware_vault_requires_both_recovery_envelope_descriptors() {
     // no provisioned/verified hardware recovery is claimed.
     assert!(seal_file(&header, &body, &vmk).is_ok());
 }
+
+#[test]
+fn final_commit_revalidates_transitions_even_for_directly_sealed_candidates() {
+    // prepare_successor prevents invalid transitions, but seal_file is an
+    // independent public primitive: the disk writer must check again.
+    let (header, body, vmk, _, _) = specimen();
+    let original = seal_file(&header, &body, &vmk).unwrap();
+
+    let raw_candidate = |previous: &[u8], edit: fn(&mut VaultBody)| {
+        let opened = open_file(previous, &vmk).unwrap();
+        let mut h = opened.header;
+        let mut b = opened.body;
+        h.generation += 1;
+        h.predecessor_hash = *blake3::hash(previous).as_bytes();
+        h.commit_id = Uuid::new_v4();
+        b.generation = h.generation;
+        b.predecessor_hash = h.predecessor_hash;
+        b.commit_id = h.commit_id;
+        edit(&mut b);
+        seal_file(&h, &b, &vmk).unwrap()
+    };
+    fn remove_without_tombstone(b: &mut VaultBody) { b.entries.clear(); }
+    fn mutate_without_revision(b: &mut VaultBody) {
+        b.entries[0].title.push_str("-modified");
+    }
+    fn new_entry_with_wrong_initial_revision(b: &mut VaultBody) {
+        let mut added = b.entries[0].clone();
+        added.id = Uuid::new_v4();
+        added.revision = 2;
+        added.dek_slots = vec![Slot::pending(
+            SlotTarget::EntryDek, added.id, FactorPolicy::DefaultVirtual
+        )];
+        b.entries.push(added);
+    }
+    for invalid in [
+        remove_without_tombstone as fn(&mut VaultBody),
+        mutate_without_revision,
+        new_entry_with_wrong_initial_revision,
+    ] {
+        let next = raw_candidate(&original, invalid);
+        let (dir, path) = temp_file("invalid-transition");
+        fs::write(&path, &original).unwrap();
+        assert!(storage::commit_candidate(&path, &original, &next, &vmk).is_err());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert!(!path.with_extension("lock").exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    // Tombstone revival needs a real tombstone predecessor.
+    let deleted = prepare_successor(&original, &vmk, |b| {
+        let entry = &mut b.entries[0];
+        entry.revision += 1;
+        entry.tombstone = true;
+        entry.ciphertext.clear();
+        entry.nonce = [0; 24];
+        entry.dek_slots.clear();
+        Ok(())
+    }).unwrap();
+    let (dir, path) = temp_file("revived");
+    fs::write(&path, &deleted).unwrap();
+    let original_entry = body.entries[0].clone();
+    let revived = {
+        let opened = open_file(&deleted, &vmk).unwrap();
+        let mut h = opened.header;
+        let mut b = opened.body;
+        h.generation += 1;
+        h.predecessor_hash = *blake3::hash(&deleted).as_bytes();
+        h.commit_id = Uuid::new_v4();
+        b.generation = h.generation;
+        b.predecessor_hash = h.predecessor_hash;
+        b.commit_id = h.commit_id;
+        b.entries[0] = original_entry;
+        b.entries[0].revision = 3;
+        seal_file(&h, &b, &vmk).unwrap()
+    };
+    assert!(storage::commit_candidate(&path, &deleted, &revived, &vmk).is_err());
+    assert_eq!(fs::read(&path).unwrap(), deleted);
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn aggregate_body_size_rejected_before_oversized_serialization() {
+    // 17 individually valid 1 MiB ciphertexts exceed the 16 MiB aggregate
+    // body limit. The encoder must preflight their sizes before copying.
+    let (header, _, vmk, _, _) = specimen();
+    let mut body = VaultBody::for_header(&header);
+    for _ in 0..17 {
+        let id = Uuid::new_v4();
+        body.entries.push(EntryRecord {
+            id, revision: 1, mode: EntryMode::DefaultVirtual,
+            tier: EntryTier::Standard, recovery: RecoveryPolicy::Shared,
+            tombstone: false, title: String::new(), username: String::new(),
+            origin: String::new(), nonce: [17u8; 24],
+            ciphertext: vec![9u8; super::model::MAX_ENTRY_BYTES],
+            dek_slots: vec![Slot::pending(
+                SlotTarget::EntryDek, id, FactorPolicy::DefaultVirtual
+            )],
+        });
+    }
+    assert_eq!(codec::encode_body(&body, &header).err(), Some(V02Error::TooLarge));
+    assert_eq!(seal_file(&header, &body, &vmk).err(), Some(V02Error::TooLarge));
+}

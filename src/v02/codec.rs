@@ -235,9 +235,52 @@ fn decode_entry(r: &mut Reader<'_>) -> Result<EntryRecord, V02Error> {
         title, username, origin, nonce, ciphertext, dek_slots,
     })
 }
+/// Compute the full encoded size **before** allocating or copying ciphertexts.
+/// Individual records may each be valid while their aggregate exceeds MAX_BODY.
+/// Every addition is checked, and the running total is bounded immediately.
+fn checked_budget(total: &mut usize, additional: usize) -> Result<(), V02Error> {
+    *total = total.checked_add(additional).ok_or(V02Error::TooLarge)?;
+    if *total > MAX_BODY { return Err(V02Error::TooLarge); }
+    Ok(())
+}
+fn budget_slots(total: &mut usize, slots: &[Slot]) -> Result<(), V02Error> {
+    // Count u16 + each slot: UUID(16), target(1), target UUID(16),
+    // factors(1), state(1), nonce(24), ciphertext length u16(2).
+    checked_budget(total, 2)?;
+    for slot in slots {
+        checked_budget(total, 61)?;
+        checked_budget(total, slot.ciphertext.len())?;
+    }
+    Ok(())
+}
+fn predicted_body_size(body: &VaultBody) -> Result<usize, V02Error> {
+    // Vault UUID + commit UUID + generation + predecessor hash;
+    // two slot vectors, entry count u16, client count u16.
+    let mut total = 16 + 16 + 8 + 32 + 2 + 2;
+    budget_slots(&mut total, &body.vers_slots)?;
+    budget_slots(&mut total, &body.provider_seed_slots)?;
+    for entry in &body.entries {
+        // Entry fixed: id(16), revision(8), four enum/flags bytes,
+        // three UTF-8 length u16, nonce(24), ciphertext length u32,
+        // DEK-slot count u16.
+        checked_budget(&mut total, 64)?;
+        checked_budget(&mut total, entry.title.len())?;
+        checked_budget(&mut total, entry.username.len())?;
+        checked_budget(&mut total, entry.origin.len())?;
+        checked_budget(&mut total, entry.ciphertext.len())?;
+        budget_slots(&mut total, &entry.dek_slots)?;
+    }
+    for _ in &body.clients {
+        checked_budget(&mut total, 16 + 32 + 1)?;
+    }
+    Ok(total)
+}
+
 pub(super) fn encode_body(body: &VaultBody, header: &PublicHeader) -> Result<Vec<u8>, V02Error> {
     header.validate()?;
     body.validate(header)?;
+    // Reject an oversized aggregate before allocating the encoder buffer.
+    let predicted = predicted_body_size(body)?;
     let mut w = Writer::new();
     w.uuid(body.vault_id);
     w.uuid(body.commit_id);
@@ -258,7 +301,10 @@ pub(super) fn encode_body(body: &VaultBody, header: &PublicHeader) -> Result<Vec
         w.u8(u8::from(client.revoked));
     }
     let result = w.finish();
-    if result.len() > MAX_BODY { return Err(V02Error::TooLarge); }
+    // Keep the preflight in sync with the canonical encoder's actual layout.
+    if result.len() != predicted {
+        return Err(V02Error::Invalid("body size estimate mismatch"));
+    }
     Ok(result)
 }
 pub(super) fn decode_body(bytes: &[u8], header: &PublicHeader) -> Result<VaultBody, V02Error> {

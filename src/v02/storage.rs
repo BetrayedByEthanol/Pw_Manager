@@ -94,6 +94,9 @@ where F: FnMut(Phase) -> Result<(), V02Error> {
     }
     let old = open_file(previous, vmk)?;
     let next = open_file(candidate, vmk)?;
+    // A valid AEAD tag does not authorize an invalid generation transition:
+    // seal_file is public and can construct snapshots bypassing prepare_successor.
+    super::validate_entry_transition(&old.body, &next.body)?;
     if next.header.vault_id != old.header.vault_id
         || next.header.generation != old.header.generation.checked_add(1)
             .ok_or(V02Error::TooLarge)?

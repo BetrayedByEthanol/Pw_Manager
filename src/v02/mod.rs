@@ -128,23 +128,33 @@ where F: FnOnce(&mut VaultBody) -> Result<(), V02Error> {
     body.predecessor_hash = header.predecessor_hash;
     edit(&mut body)?;
     body.validate(&header)?;
+    validate_entry_transition(&old, &body)?;
+    seal_file(&header, &body, vmk)
+}
+
+/// Shared cross-generation entry transition rules. Both candidate creation
+/// and the final disk commit MUST enforce these rules: `seal_file` is a
+/// low-level AEAD primitive, not an authorization to bypass revision history.
+pub(super) fn validate_entry_transition(
+    old: &VaultBody, next: &VaultBody,
+) -> Result<(), V02Error> {
     for existing in &old.entries {
-        let Some(next) = body.entries.iter().find(|e| e.id == existing.id) else {
+        let Some(next_entry) = next.entries.iter().find(|e| e.id == existing.id) else {
             return Err(V02Error::Invalid("missing tombstone for removed entry"));
         };
-        if existing.tombstone && !next.tombstone {
+        if existing.tombstone && !next_entry.tombstone {
             return Err(V02Error::Invalid("tombstone revived"));
         }
-        if next != existing && next.revision <= existing.revision {
+        if next_entry != existing && next_entry.revision <= existing.revision {
             return Err(V02Error::Invalid("modified entry without revision bump"));
         }
     }
-    for item in &body.entries {
+    for item in &next.entries {
         if old.entries.iter().all(|e| e.id != item.id) && item.revision != 1 {
             return Err(V02Error::Invalid("new entry must start at revision one"));
         }
     }
-    seal_file(&header, &body, vmk)
+    Ok(())
 }
 /// Classify unsupported input without implicitly invoking legacy decrypt.
 pub fn classify_file(bytes: &[u8]) -> Result<(), V02Error> {
