@@ -1,0 +1,32 @@
+name: Vaulty V02 candidate format
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/v02/**'
+      - 'src/lib.rs'
+      - 'tools/v02_verifier/**'
+      - '.github/workflows/v02-candidate.yml'
+  push:
+    branches: [main, feat/v02-canonical-format-foundation-v0]
+    paths:
+      - 'src/v02/**'
+      - 'src/lib.rs'
+      - 'tools/v02_verifier/**'
+      - '.github/workflows/v02-candidate.yml'
+permissions:
+  contents: read
+jobs:
+  v02-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Candidate format compilation and negative tests
+        run: |
+          cargo check --manifest-path tools/v02_verifier/Cargo.toml --all-targets
+          cargo test --manifest-path tools/v02_verifier/Cargo.toml --all-targets
+      - name: No real-credential executable enabled
+        run: |
+          grep -F 'ExitCode::FAILURE' src/main.rs
+          ! grep -R -F 'dumpmasterkey' src/ --include='*.rs'

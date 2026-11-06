@@ -1,0 +1,21 @@
+name: Vaulty V02 candidate format
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main, feat/v02-canonical-format-foundation-v0]
+jobs:
+  v02-only:
+    runs-on: docker
+    container:
+      image: rust:1-bookworm
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+      - name: Candidate format compilation and negative tests
+        run: |
+          cargo check --manifest-path tools/v02_verifier/Cargo.toml --all-targets
+          cargo test --manifest-path tools/v02_verifier/Cargo.toml --all-targets
+      - name: Inert legacy executable remains fail-closed
+        run: |
+          grep -F 'ExitCode::FAILURE' src/main.rs
+          ! grep -R -F 'dumpmasterkey' src/ --include='*.rs'
