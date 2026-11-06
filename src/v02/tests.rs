@@ -466,6 +466,9 @@ fn full_basename_sidecars_do_not_overwrite_another_active_vault() {
     fs::write(&illegal, &original).unwrap();
     assert!(storage::commit_candidate(&illegal, &original, &next, &vmk).is_err());
     assert_eq!(fs::read(&illegal).unwrap(), original);
+    // Remove the deliberately rejected synthetic path before enumerating
+    // actual immutable UUID-suffixed snapshots.
+    fs::remove_file(&illegal).unwrap();
 
     // A second commit preserves the earlier immutable backup; it does not
     // rename a fixed previous slot over another file.
