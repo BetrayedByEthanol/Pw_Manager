@@ -36,7 +36,7 @@
 | **V04** | Recovery / rewrap provisioning | Distinct VMK/VERS/DEK slots; code-only optional non-isolated routes; Option A explicit code prompts; new-token and password-change repairs; READY/PENDING/MISSING/DEGRADED/UNVERIFIED/STRICT_NONE; recovery test matrix | V02–V03 |
 | **V04M-2** | Vault-to-vault transfer (N-02) | Explicit copy/move; source+destination authorization, fresh destination keys, duplicate/policy checks, destination commit validation before source delete | V04 + V05 |
 | **V04M-3** | Manual distinct-vault merge (N-03) | Conflict planning, explicit entry/policy selection, lineage tracking, partial failure atomicity, no silent trust transplant; preserve both inputs until verified | V04M-2 + V05 |
-| **V05** | Entry access policies and lifecycle | Four normal entry modes; independent DEK CRUD, per-operation authorization; ISOLATED hardware paths or STRICT_NONE; inherited recovery assurance; no VMK read dependency | V03–V04 |
+| **V05** | Entry access policies and lifecycle | Four normal entry modes; independent DEK CRUD and per-operation authorization; ISOLATED normal access always hardware-mandatory, with recovery hardware-mandatory or disabled via STRICT_NONE; inherited recovery assurance; no VMK read dependency | V03–V04 |
 | **V06** | Trusted authenticator lifecycle | Enroll/authorize/scope/backup/suspend/revoke/rotate physical devices; repair affected wrapping slots, detect orphaned keys, interactive loss cases | V03–V05 |
 | **V07** | Trusted daemon, client pairing and E2E IPC | Authenticated socket, owner approval and pinned identity, reviewed encrypted extension→daemon channel via opaque native host, least privilege, replay/failure tests | V03–V06; E2E protocol review |
 | **V07A** | CLI/service controls and metadata UX | Secure prompts, lock/close, bounded retry UX, list/search/redacted preview, daemon lifecycle, recovery status and warnings | V03–V07 |
@@ -86,7 +86,7 @@ Only move an item to DONE when merged implementation plus applicable acceptance 
 | OPEN-15 PRF scope/batching/UV | **Independent reviewer approval**; may require capability trade-off choice | Review before V03/V06 hardware policy |
 | Canonical codec and authenticated ancestry | No for approved principles; cryptographic details require review | Implement V02 with adversarial tests |
 | Option A code-dependent recovery envelopes | **Approved**, no repeat decision | Implement V04 |
-| Isolated recovery hardware/STRICT_NONE | **Approved**, no repeat decision | Implement and test V04/V05 |
+| ISOLATED hardware normal access; hardware-only recovery or STRICT_NONE | **Approved**, no repeat decision | Test that STRICT_NONE never permits a virtual normal route; implement and test V04/V05 |
 | INDEPENDENT UI setup | **Deferred**, not blocked by schema | Later product milestone |
 | N-01/02/03 transfer and merge | **Accepted feature scope**, detailed conflict UI design later | V04M |
 | N-04 automatic sync-conflict merge | **Deferred** | Do not begin in MVP |
