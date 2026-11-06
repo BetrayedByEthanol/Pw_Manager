@@ -4,6 +4,16 @@
 
 The review baseline and limitations are recorded in [V01 Prototype Safety & Build Foundation](docs/roadmap/V01-prototype-safety.md). This repository's architecture and security reference is Vaulty v0.4.5; the legacy binary is not compliant with it. The Python/Rust policy probes in `tools/security_probes` are *reference checkers*, not production authorization or approved cryptography.
 
+
+## Canonical project documentation (v0.4.5 target)
+
+- [Documentation index](docs/README.md) — start here for the current design and source-of-truth rules.
+- [v0.4.5 specification](docs/specification/v0.4.5.md) and [architecture](docs/architecture/v0.4.5.md).
+- [Implementation roadmap](docs/roadmap/implementation.md), [feature roadmap (38 FRs)](docs/roadmap/features.md), [acceptance register](docs/roadmap/acceptance-register.md) and [decision register](docs/decisions/register.md).
+- [Historical 67-item source-feature mapping](docs/specification/history/v0.3-design-reference.md#21-original-feature-list-traceability-source-baseline).
+
+**Repository status:** The V01 prototype foundation builds on GitHub, but the product is intentionally disabled and **must not store real secrets**. v0.4.5 is an approved *target design*, not implemented or security-reviewed runtime code. Next: **V01-A security closure**. Forgejo workflows are present but have not run on a configured Forgejo runner.
+
 ## Historical development checklist
 
 create vault
