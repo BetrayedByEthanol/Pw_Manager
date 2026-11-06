@@ -1,7 +1,7 @@
 # Vaulty Documentation Index
 
 **Canonical design target:** **v0.4.5**, 6 November 2026.  
-**Implementation reference:** GitHub `main` baseline `7c3ba719` (PR #5 merged).  
+**Implementation reference:** GitHub `main` `ae6d387` (PR #7 merged); [V02 v0 PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8) is an unmerged candidate.  
 **Safety status:** Prototype foundation builds and tests; **not safe for real credentials and not security-certified**.
 
 Start here rather than relying on previous chats or the historical README feature checklist.
@@ -11,6 +11,7 @@ Start here rather than relying on previous chats or the historical README featur
 | Document | Purpose | Authority |
 | --- | --- | --- |
 | [Product & security specification v0.4.5](specification/v0.4.5.md) | Normative behavior, keys, states, entry policies, recovery, client trust and migration | **Canonical design** |
+| [V02 candidate vault format v0](architecture/v02-format-candidate.md) | Experimental binary schema, independent keys, AEAD, strict parsing and explicit OPEN-01/15 limitations | **Candidate only; not approved runtime or frozen wire format** |
 | [Architecture v0.4.5](architecture/v0.4.5.md) | System components, single-file structure, trust boundaries, key flows and operation sequences | **Target design** |
 | [Implementation roadmap](roadmap/implementation.md) | V01-A through V09, V04M workstream, dependencies and release gates | **Work plan** |
 | [Feature roadmap](roadmap/features.md) | All 38 normalized requirements, four N-features and links to the 67 historical source items | **Feature ledger** |
@@ -18,7 +19,7 @@ Start here rather than relying on previous chats or the historical README featur
 | [Decision & open-review register](decisions/register.md) | Approved S1–S4/Option A decisions, deferred scope, OPEN-01/OPEN-15 and approval boundaries | **Decision register** |
 | [V01 prototype safety foundation](roadmap/V01-prototype-safety.md) | Historical implementation scope and explicit limitations | **Merged baseline + acceptance pending** |
 | [Forgejo CI migration](ci/forgejo-actions.md) | GitHub/Forgejo workflow parity and runner requirements | **Infrastructure runbook** |
-| [V01-A failure and stale-lock recovery](security/V01A-failure-recovery.md) | Operator steps for interrupted legacy writes, lock handling and native-host unavailable behavior | **V01-A PR #7 in review; not a security certificate** |
+| [V01-A failure and stale-lock recovery](security/V01A-failure-recovery.md) | Operator steps for interrupted legacy writes, lock handling and native-host unavailable behavior | **V01-A merged; not a security certificate** |
 | [v0.3 historical design](specification/history/v0.3-design-reference.md) | Full earlier 67-item O-ID traceability and pre-v0.4 rationale | **Superseded archival source** |
 | [Crypto review request](../tools/security_probes/CRYPTO_REVIEW_REQUEST.md) | Candidate OPEN-01/15 evaluation requested of independent reviewer | **Not approved crypto** |
 
@@ -30,7 +31,7 @@ Start here rather than relying on previous chats or the historical README featur
 4. Roadmap, feature and evidence ledgers track work but cannot authorize behavior or rewrite cryptography.
 5. Historic archived documents and pre-v0.4 source README are source history only.
 
-The version number v0.4.5 describes the **design**, not the shipping application. The current binary intentionally exits nonzero, the native host and daemon are mock implementations and policy probes are reference checkers. No release gate is certified merely by green CI.
+The version number v0.4.5 describes the **design**, not the shipping application. The current binary intentionally exits nonzero, the native host fails closed and the daemon is not a trusted authorization service and policy probes are reference checkers. No release gate is certified merely by green CI.
 
 ## Change protocol
 
@@ -46,4 +47,4 @@ Each PR affecting keys, policy, recovery, storage, migration or client behavior 
 
 ## Recommended immediate milestone
 
-**V01-A — Security Closure & Verification Hardening** ([PR #7 in review](https://github.com/BetrayedByEthanol/Pw_Manager/pull/7)), then V02 canonical format. A green build does not close G0 until negative-path/security acceptance is reviewed. OPEN-01 and OPEN-15 must be independently reviewed before corresponding cryptographic and physical-PRF release gates.
+**V02 — Candidate Vault Format v0** ([PR #8 in review](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8)), following merged V01-A PR #7. OPEN-01/15 independent reviews and runtime policy integration are required before G1 acceptance. OPEN-01 and OPEN-15 must be independently reviewed before corresponding cryptographic and physical-PRF release gates.

@@ -1,6 +1,6 @@
 # Vaulty — Implementation Roadmap
 
-**As of:** 2026-11-06 | **Current merged baseline:** PRs #1, #3, #4, #5 and #6; `main` at `d192e6b`. **Current work:** V01-A PR #7 open, pending completion/review.  
+**As of:** 2026-11-06 | **Merged baseline:** through PR #7, `main` at `ae6d387`. **Current implementation PR:** [V02 v0 candidate #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8) (in review, not merged).  
 **Target:** [v0.4.5 specification](../specification/v0.4.5.md) | [architecture](../architecture/v0.4.5.md) | [feature ledger](features.md) | [acceptance register](acceptance-register.md)
 
 > **Status rules:** MERGED means source merged; CI-PASSED means its specified automated checks passed; VERIFIED means explicit acceptance tests and independent review evidence; DESIGN-APPROVED means intent only. Do not use “DONE” for unverified cryptographic behavior. A green workflow is not authorization to store real credentials.
@@ -10,8 +10,8 @@
 | Track | Current disposition | Evidence / outstanding |
 | --- | --- | --- |
 | V01 — Prototype Safety & Build Foundation | **Merged + CI-PASSED; security acceptance incomplete** | PR #4/#5; 11 root tests and browser/config checks; main GitHub CI green |
-| V01-A — Security Closure & Verification Hardening | **PR #7 OPEN — expanded CI PASS; not merged/security-accepted** | Default native-host UNAVAILABLE, removed key-dump experiment, executable/host tests, legacy parsing and crash-fault evidence; see [acceptance register](acceptance-register.md#2b-v01-a-implementation-review-checklist--no-automatic-security-acceptance) |
-| V02 — Canonical Format & Independent Keys | Not implemented | Requires OPEN-01 cryptographic review before production key graph |
+| V01-A — Security Closure & Verification Hardening | **MERGED + PR CI PASSED; production security not certified** | PR #7 (`ae6d387`), fail-closed host, removed key dump, executable/IPC/fault tests; see [evidence register](acceptance-register.md) |
+| V02 — Canonical Format & Independent Keys | **PR #8 OPEN — candidate library, NOT final wire/production** | Typed VMK/VERS/DEKs, authenticated outer header/body, independent entry AEAD, pending scoped slot encoding, bounded parser, ancestry and synthetic conflict tests. **OPEN-01/15 approval and trusted runtime pending**; see [candidate format](../architecture/v02-format-candidate.md) |
 | V04M — Safe Migration Foundation | Not implemented | Separate format detection, non-destructive import and verify-before-commit |
 | V03 — Operations, States & Authenticators | Not implemented | Requires V02; masked LOADED VERS and virtual/physical adapter enforcement |
 | V04 — Recovery & Slot Provisioning | Not implemented | Option A semantics; code-only conditions; all dependent envelopes |
@@ -29,7 +29,7 @@
 | ID | Package | Minimum deliverables / completion conditions | Depends on |
 | --- | --- | --- | --- |
 | **V01** | Build and prototype safety | Compiling CLI/root/host; fail-closed default executable; fresh outer nonces; strict body checks; atomic backup/lock; CI on main | — |
-| **V01-A** | Security closure (next) | Remove reachable key-dump/debug helpers; make default native host fail closed rather than report fake success; test host IPC and executable; inject filesystem faults; classify remaining V01 security review items; update evidence | V01 |
+| **V01-A** | Security closure (merged; acceptance limited) | Remove reachable key-dump/debug helpers; make default native host fail closed rather than report fake success; test host IPC and executable; inject filesystem faults; classify remaining V01 security review items; update evidence | V01 |
 | **V02** | Authenticated canonical format and separated roots | Bounded single-file codec, independent VMK/VERS/DEKs, policy-bound slots, full authenticity and version gates, generation index, tombstones, nonced AEAD, crash writer, negative/fuzz tests | V01-A + OPEN-01 approval before activating crypto |
 | **V04M-1** | Migration foundation | Version detector, read-only legacy parser, backup manifest, separate destination output, reopen/verify and rollback instructions. Do not auto-import unknown files | V02 codec |
 | **V03** | Session states and authenticator adapters | CLOSED/OPEN/LOADED/LOCKED, READ/WRITE; masked two-share VERS and virtual adapter while LOADED; no master-password prompt on reads; fresh physical FIDO2 on physical entry read; trusted prompt | V02 + OPEN-15 |
@@ -59,9 +59,9 @@ The V04M identifiers name a **migration/transfer workstream**; they may be sched
 | **G4 — Pilot/release assurance** | CRUD with four modes, real browser flows, backups/restore, threat-model review and independent release evidence | **Blocked** |
 | **G5 — Optional postponed** | Passkeys/typing/automatic sync-specific separate gates | **Deferred** |
 
-## D. Current PR #7: V01-A — Security Closure & Verification Hardening
+## D. Merged V01-A #7 and current V02 v0 #8
 
-**Scope (implementation-only; no new product decision). PR #7 includes the following changes; completion requires merged source and CI/review evidence:**
+**V01-A source was merged in PR #7; remaining cryptographic/release acceptance is tracked separately. V02 candidate PR #8 adds a standalone codec library and does NOT change the disabled main executable.**
 1. Strip or isolate `src/util/gocrypt.rs` master-key-dump and destructive experiment helpers from the compiled runtime, plus any uncontrolled credential logging. Keep tests synthetic.
 2. Default native host must report UNAVAILABLE/NOT_IMPLEMENTED for secret and persistence operations unless an explicitly test-only mock is enabled; no default successful fake “saved” receipt or unlocked status. Add host protocol behavior tests.
 3. Test executable fails nonzero, does not create/modify a vault and does not print real secrets.
@@ -70,6 +70,19 @@ The V04M identifiers name a **migration/transfer workstream**; they may be sched
 6. Update V01 status and checklists with concrete merged main commit and CI evidence; no false claim of production readiness.
 
 **Out-of-scope for V01-A:** enabling legacy CLI or mock native host; implementing the canonical format; marking OPEN-01/15 approved; marketing Vaulty as safe for real credentials.
+
+### V02 v0 — staged acceptance (PR #8, not merged)
+
+| Candidate deliverable | Implementation | Remaining approval |
+| --- | --- | --- |
+| Versioned public header and authenticated body | `src/v02/codec.rs`; bounded parsing, duplicate checks, UTF-8 and version rejection | Final byte schema, padding/leakage budget and key commitment **OPEN-01** |
+| Independent random VMK/VERS/entry DEKs | `src/v02/model.rs` / `mod.rs` with drop-zeroizing key wrappers | Factor wrapping/derivation and independent cryptographic review **OPEN-01/15** |
+| Entry ciphertext/AAD | DEK-separated XChaCha20-Poly1305 binding vault ID, entry ID, revision, tier, mode, recovery | Slot key commitments, inheritance/group path assurance **V04/V05** |
+| Generation, tombstones and stale-write checks | Authenticated commit UUID, parent full-encrypted-file hash, revisioned tombstones; encrypted conflict copy | Local last-seen-head and race-free dirfd writer; approved S4 acceptance **V02 follow-up** |
+| Negative evidence | Synthetic tamper/wrong-key/version/limit/fuzz-like tests + injected conflict/rename failures | Broad fuzz/property/cross-language conformance and reviewed hardware factors |
+| Runtime and recovery | **Not enabled**; main CLI inert, native host UNAVAILABLE | R1/R5/R6, password/hardware bootstrap, secure daemon, migration/restore |
+
+No G1 certification or full FR closure follows automatically from the candidate codec.
 
 ## E. Tracking and PR acceptance protocol
 

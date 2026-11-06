@@ -1,0 +1,203 @@
+//! Candidate storage adapter for V02. No production entry point yet.
+//! Fail-closed base comparison and durable encrypted conflict copies.
+//! Descriptor-relative, race-free openat/O_NOFOLLOW and power-loss review
+//! remain V02 security-acceptance blockers; do NOT enable for real credentials.
+use super::{V02Error, Vmk, open_file};
+use super::model::MAX_FILE;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+use uuid::Uuid;
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Phase { AfterTempSync, AfterBackupSync, BeforeReplace, AfterReplace, AfterParentSync }
+#[derive(Debug, PartialEq, Eq)]
+pub enum CommitOutcome { Committed, ConflictPreserved(PathBuf) }
+
+struct LockGuard(PathBuf);
+impl Drop for LockGuard {
+    fn drop(&mut self) { let _ = fs::remove_file(&self.0); }
+}
+fn io_error(_: std::io::Error) -> V02Error { V02Error::Invalid("candidate file IO failed") }
+
+/// A vault is never accepted at a path reserved for the sidecars of another
+/// vault. Distinct full basenames avoid `vault.v2` vs `vault.previous`
+/// collisions caused by Path::with_extension.
+fn active_basename(path: &Path) -> Result<&str, V02Error> {
+    let name = path.file_name().and_then(|n| n.to_str())
+        .ok_or(V02Error::Invalid("invalid vault filename"))?;
+    if name.is_empty() || name == "." || name == ".."
+        || name.ends_with(".lock")
+        || name.contains(".tmp-")
+        || name.contains(".previous-")
+        || name.contains(".conflict-") {
+        return Err(V02Error::Invalid("vault path uses reserved sidecar name"));
+    }
+    Ok(name)
+}
+fn sidecar_path(path: &Path, extension: &str) -> Result<PathBuf, V02Error> {
+    let name = active_basename(path)?;
+    Ok(path.with_file_name(format!("{name}.{extension}")))
+}
+
+fn check_regular(path: &Path) -> Result<bool, V02Error> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+                return Err(V02Error::Invalid("symlink or nonregular vault file"));
+            }
+            if metadata.len() as usize > MAX_FILE { return Err(V02Error::TooLarge); }
+            Ok(true)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(io_error(e)),
+    }
+}
+/// A bare relative filename has an empty parent component, which denotes the
+/// current directory. Normalize it before filesystem operations or comparisons.
+fn normalized_parent(path: &Path) -> Result<&Path, V02Error> {
+    let parent = path.parent().ok_or(V02Error::Invalid("vault directory absent"))?;
+    if parent.as_os_str().is_empty() { Ok(Path::new(".")) } else { Ok(parent) }
+}
+fn check_directory(dir: &Path) -> Result<(), V02Error> {
+    let m = fs::symlink_metadata(dir).map_err(io_error)?;
+    if !m.file_type().is_dir() || m.file_type().is_symlink() {
+        return Err(V02Error::Invalid("invalid vault parent directory"));
+    }
+    Ok(())
+}
+fn read_bounded(path: &Path) -> Result<Vec<u8>, V02Error> {
+    if !check_regular(path)? { return Err(V02Error::Conflict); }
+    let f = File::open(path).map_err(io_error)?;
+    let mut bytes = Vec::new();
+    f.take(MAX_FILE as u64 + 1).read_to_end(&mut bytes).map_err(io_error)?;
+    if bytes.len() > MAX_FILE { return Err(V02Error::TooLarge); }
+    Ok(bytes)
+}
+#[cfg(unix)]
+fn make_private_file(path: &Path, bytes: &[u8]) -> Result<(), V02Error> {
+    // create_new must succeed BEFORE cleanup owns this path. A failed open
+    // must never delete a preexisting unrelated file or previous snapshot.
+    let mut file = OpenOptions::new().write(true).create_new(true)
+        .mode(0o600).open(path).map_err(io_error)?;
+    let write_result = file.write_all(bytes).and_then(|_| file.sync_all());
+    if let Err(e) = write_result {
+        let _ = fs::remove_file(path);
+        return Err(io_error(e));
+    }
+    Ok(())
+}
+#[cfg(not(unix))]
+fn make_private_file(_path: &Path, _bytes: &[u8]) -> Result<(), V02Error> {
+    Err(V02Error::Invalid("V02 candidate storage not supported on this platform"))
+}
+fn sync_dir(dir: &Path) -> Result<(), V02Error> {
+    File::open(dir).map_err(io_error)?.sync_all().map_err(io_error)
+}
+fn write_private_with_cleanup(path: &Path, bytes: &[u8]) -> Result<(), V02Error> {
+    make_private_file(path, bytes)
+}
+fn conflict_copy(dir: &Path, path: &Path, bytes: &[u8]) -> Result<PathBuf, V02Error> {
+    let new = sidecar_path(path, &format!("conflict-{}", Uuid::new_v4()))?;
+    if normalized_parent(&new)? != dir { return Err(V02Error::Invalid("invalid conflict parent")); }
+    write_private_with_cleanup(&new, bytes)?;
+    sync_dir(dir)?;
+    Ok(new)
+}
+/// Commits a presealed/AEAD-verified successor ONLY if its authenticated
+/// predecessor is still the active file. On conflict, NEVER overwrite the
+/// active file: durably preserve the independently encrypted candidate.
+/// A returned error after rename may mean commit occurred; verify both files.
+pub fn commit_candidate(
+    path: &Path, expected_previous: &[u8], candidate: &[u8], vmk: &Vmk,
+) -> Result<CommitOutcome, V02Error> {
+    commit_with_checkpoint(path, expected_previous, candidate, vmk, |_| Ok(()))
+}
+pub(super) fn commit_with_checkpoint<F>(
+    path: &Path, previous: &[u8], candidate: &[u8], vmk: &Vmk, mut check: F
+) -> Result<CommitOutcome, V02Error>
+where F: FnMut(Phase) -> Result<(), V02Error> {
+    if previous.len() > MAX_FILE || candidate.len() > MAX_FILE {
+        return Err(V02Error::TooLarge);
+    }
+    let old = open_file(previous, vmk)?;
+    let next = open_file(candidate, vmk)?;
+    // A valid AEAD tag does not authorize an invalid generation transition:
+    // seal_file is public and can construct snapshots bypassing prepare_successor.
+    super::validate_entry_transition(&old.body, &next.body)?;
+    if next.header.vault_id != old.header.vault_id
+        || next.header.generation != old.header.generation.checked_add(1)
+            .ok_or(V02Error::TooLarge)?
+        || next.header.predecessor_hash != *blake3::hash(previous).as_bytes()
+        || next.header.commit_id == old.header.commit_id {
+        return Err(V02Error::Invalid("invalid candidate lineage"));
+    }
+    let _ = active_basename(path)?; // reject sidecar names before opening files
+    let dir = normalized_parent(path)?;
+    check_directory(dir)?;
+    #[cfg(not(unix))]
+    { return Err(V02Error::Invalid("V02 writer requires reviewed platform support")); }
+    #[cfg(unix)]
+    let _guard = {
+        let lock = sidecar_path(path, "lock")?;
+        let _lock_file = OpenOptions::new().write(true).create_new(true)
+            .mode(0o600).open(&lock).map_err(io_error)?;
+        LockGuard(lock)
+    };
+    if !check_regular(path)? { return Err(V02Error::Conflict); }
+    let current = read_bounded(path)?;
+    if blake3::hash(&current) != blake3::hash(previous) || current != previous {
+        let copy = conflict_copy(dir, path, candidate)?;
+        return Ok(CommitOutcome::ConflictPreserved(copy));
+    }
+    let tmp = sidecar_path(path, &format!("tmp-{}", Uuid::new_v4()))?;
+    // Each predecessor snapshot has a unique immutable filename. Neither
+    // concurrent accepted active files nor existing snapshots are overwritten.
+    let previous_path = sidecar_path(path, &format!("previous-{}", Uuid::new_v4()))?;
+    let result = (|| -> Result<CommitOutcome, V02Error> {
+        write_private_with_cleanup(&tmp, candidate)?;
+        check(Phase::AfterTempSync)?;
+        write_private_with_cleanup(&previous_path, previous)?;
+        sync_dir(dir)?;
+        check(Phase::AfterBackupSync)?;
+        // Not race-free: V02 cannot be enabled for real credentials until
+        // descriptor-relative directory and file identity checks are reviewed.
+        if !check_regular(path)? || read_bounded(path)? != previous {
+            let _ = conflict_copy(dir, path, candidate)?;
+            return Err(V02Error::Conflict);
+        }
+        check(Phase::BeforeReplace)?;
+        fs::rename(&tmp, path).map_err(io_error)?;
+        check(Phase::AfterReplace)?;
+        sync_dir(dir)?;
+        check(Phase::AfterParentSync)?;
+        let published = read_bounded(path)?;
+        if published != candidate || open_file(&published, vmk).is_err() {
+            return Err(V02Error::AuthenticationFailed);
+        }
+        Ok(CommitOutcome::Committed)
+    })();
+    if result.is_err() {
+        // Never delete a durable predecessor snapshot on a failure: an error
+        // after rename may mean the new active generation was committed.
+        let _ = fs::remove_file(&tmp);
+    }
+    result
+}
+
+#[cfg(test)]
+mod sidecar_ownership_tests {
+    use super::*;
+    #[test]
+    fn failed_create_new_does_not_delete_an_existing_sidecar() {
+        let dir = std::env::temp_dir().join(format!("vaulty-v02-existing-{}", Uuid::new_v4()));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("vault.v2.previous-existing");
+        fs::write(&path, b"EXISTING_ENCRYPTED_SNAPSHOT").unwrap();
+        assert!(write_private_with_cleanup(&path, b"NOT_ALLOWED").is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"EXISTING_ENCRYPTED_SNAPSHOT");
+        fs::remove_dir_all(dir).unwrap();
+    }
+}
