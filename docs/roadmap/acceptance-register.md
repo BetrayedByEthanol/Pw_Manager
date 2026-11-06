@@ -1,6 +1,6 @@
 # Vaulty — Acceptance, Evidence and Security Gap Register
 
-**Snapshot date:** 2026-11-06 | **Repository evidence baseline:** `main` merge commit `84f92be9849fab2afce57223d4bf3c113bcf5e46` (PR #8 merged, V02 candidate only). V02-A is a design-review branch, not independent approval.  
+**Snapshot date:** 2026-11-06 | **Repository evidence baseline:** `main` merge commit `6bc733bfa486b75aa6153656742b2a9667b7abae` (V02-A PR #9 merged, documentation-only), following V02 candidate PR #8. V02-B PR #10 is a draft implementation candidate, **not security-approved**.  
 **Purpose:** provide a reviewable distinction between **design approved**, **source merged**, **CI passed**, **security behavior verified** and **release certified**. None is interchangeable. See [implementation roadmap](implementation.md).
 
 ## 1. Recorded merged evidence
@@ -19,7 +19,9 @@
 
 | EV-010 | [Merged V02 PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8); [final-head focused CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42296105084); [final-head product CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42296105131) | **Merged candidate** at `84f92be` from head `9264da3`: both final-head workflows passed; four Codex P2 findings resolved (transition validation, aggregate encoding bounds, sidecar collisions, relative vault filenames), with fresh final-head Codex review reporting no major issues. | No independent OPEN-01/15 approval; no real factor unwrapping, ready recovery, reviewed dirfd writer or production runtime |
 
-| EV-011 | [V02-A candidate protocol review](../architecture/v02a-crypto-keyslot-review.md) | Documents current slot-schema gaps, proposed transcripts, Option A/OPEN-02 provisioning, threat matrix and OPEN-01/15 external reviewer exit criteria. **Document review only; PR not merged at this checkpoint.** | Not independent cryptographic approval, runtime negative-test evidence, key commitment proof or V02-B implementation |
+| EV-011 | [V02-A candidate protocol review](../architecture/v02a-crypto-keyslot-review.md) | Documents current slot-schema gaps, proposed transcripts, Option A/OPEN-02 provisioning, threat matrix and OPEN-01/15 external reviewer exit criteria. **Merged design-review packet in PR #9; not an external cryptography review.** | Not independent cryptographic approval, runtime negative-test evidence, key commitment proof or V02-B implementation |
+
+| EV-012 | [V02-B draft PR #10](https://github.com/BetrayedByEthanol/Pw_Manager/pull/10); [candidate transcript and threat scope](../architecture/v02b-keyslot-candidate.md) | **Unmerged, review-only prototype:** private Argon2id/HKDF/XChaCha20-Poly1305 slot candidate, candidate HMAC binding, policy descriptor validation and synthetic negative tests. | Not OPEN-01/15 approval, proven key commitment, trusted factor source, stable wire format, READY/VERIFIED slot or production unlock. CI findings must be recorded before merge. |
 
 Evidence links are immutable run/PR references where possible. New status claims require their own evidence and must not overwrite an older evidence record's scope.
 
@@ -107,6 +109,18 @@ This branch removes mock success; it **does not** implement native daemon authen
 
 No A02A row certifies a security property. Code, test and runtime status are unchanged by this documentation PR; G1/G2/G3 stay **BLOCKED**.
 
+## 2e. V02-B candidate — unmerged code, no runtime activation
+
+| ID | Targeted property | Candidate evidence | Unmet gate |
+| --- | --- | --- | --- |
+| A02B-01 | Derive scoped KEKs and distinct commitment keys from candidate single/two-factor inputs | `src/v02/v02b.rs` code and synthetic unit round trips | Independent OPEN-01 analysis and multi-key/third-party KATs |
+| A02B-02 | Reject target, slot, provider, KDF, factor, ciphertext or tag substitution | Validated descriptor, bound transcript and negative mutation tests | Exact canonical serializer/decoder, security-timing review and proven commitment |
+| A02B-03 | Preserve R1/S2, Option A and pre-load virtual seed semantics | Structurally reject code-only hardware VMK, Isolated software routes and STRICT_NONE recovery; separate seed single-password vs code-only routes | Real hardware proof, recovery-code prompts, dependent-slot coverage and trusted activation |
+| A02B-04 | Bounded Argon2id test parameters and zeroizing keys | Internal candidate password pre-KDF + Zeroizing keys | Production KDF calibration, offline guess security analysis and complete secret-lifetime testing |
+| A02B-05 | Preserve VLY2 compatibility gate | V02-B prototype not linked to existing `Slot` codec or external API | Post-review versioned wire format and explicit authorized migration |
+
+**All A02B rows are implementation candidates and review targets, NOT proof of secure protocol finalization. G1/G2/G3 remain BLOCKED.**
+
 ## 3. Security findings register
 
 | Finding | Severity if enabled | Finding evidence | Fix workstream | Status |
@@ -115,7 +129,7 @@ No A02A row certifies a security property. Code, test and runtime status are unc
 | SEC-02 | P1 | Native host previously returned realistic credential/save/unlocked success | V01-A | PR #7 fail-closed host + tests; pending merge |
 | SEC-03 | P1 | Unbounded/indexing legacy header/payload parsing can panic on untrusted bytes | V02 | Open; default main disabled |
 | SEC-04 | P1 | Legacy unkeyed header hash does not authenticate against malicious editing | V02 | Open; full canonical AEAD required |
-| SEC-05 | P1 | Authoritative key hierarchy/slot commitments are not production-approved | OPEN-01 + V02-A/V02-B | Blocked; V02-A design gaps documented, external review needed |
+| SEC-05 | P1 | Authoritative key hierarchy/slot commitments are not production-approved | OPEN-01 + V02-A/V02-B | Blocked; internal V02-B HMAC/slot prototype is not an independently proven committing-AEAD |
 | SEC-06 | P1 | Hardware PRF salt/UV/freshness/fanout not approved or enforced at runtime | OPEN-15 + V02-A/V03/V06 | Blocked; V02-A review questions documented, real device evidence needed |
 | SEC-07 | P2 | Native-host Rust behavior tests absent on old main | V01-A | First PR #7 CI: six host unit tests; child-process tests pending |
 | SEC-08 | P2 | Filesystem crash/fault and malicious path risks | V01-A/V02 | PR #7 deterministic negative tests; TOCTOU/openat guarantee remains V02 |
