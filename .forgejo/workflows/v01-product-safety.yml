@@ -1,0 +1,59 @@
+name: Vaulty V01 product safety
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+      - fix/v01-prototype-safety-build-foundation
+jobs:
+  product-rust:
+    runs-on: docker
+    container:
+      image: node:22-bookworm
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+      - name: Install Linux native build dependencies and Rust
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates \
+            curl \
+            build-essential \
+            pkgconf \
+            libpcsclite-dev \
+            libudev-dev \
+            libusb-1.0-0-dev \
+            libxkbcommon-dev \
+            libssl-dev \
+            libclang-dev
+          curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh
+          sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain stable
+      - name: Root binary and tests
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          cargo check --locked --all-targets
+          cargo test --locked --all-targets
+      - name: Native host
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          cargo check --manifest-path extenstion/host/Cargo.toml --locked --all-targets
+          cargo test --manifest-path extenstion/host/Cargo.toml --locked --all-targets
+  extension-configuration:
+    runs-on: docker
+    container:
+      image: node:22-bookworm
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+      - name: Install Python
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3
+      - name: Validate browser manifest JSON
+        run: |
+          python3 -m json.tool extenstion/manifest.json >/dev/null
+          python3 -m json.tool extenstion/host/manifests/chromium/com.vaulty.native_host.json >/dev/null
+          python3 -m json.tool extenstion/host/manifests/firefox/com.vaulty.native_host.json >/dev/null
+      - name: JavaScript syntax checks
+        run: |
+          for f in extenstion/*.js; do node --check "$f"; done
