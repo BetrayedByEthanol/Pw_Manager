@@ -79,6 +79,10 @@ The reviewer should return reproducible attack examples where possible, independ
 
 The [V02-C conformance report](../../docs/security/V02C-cryptographic-conformance.md) now packages six **synthetic** Python/libsodium versus Rust frozen descriptor/HKDF/HMAC/XChaCha20-Poly1305 vectors and an Argon2id cross-library KAT. The `src/v02/v02c_tests.rs` suite rejects bytewise ciphertext/nonce/tag mutations and altered vault/slot/target/entry, KDF, credential/RP, scope, UP/UV and virtual-provider fields. These are **interoperability and negative-test observations**, NOT an independent cryptographic review or proof of key commitment. The external OPEN-01 reviewer must explicitly analyze multi-key/key-substitution attacks and approve or reject a fixed, final transcript. The [OPEN-15 test matrix](../../docs/security/V02C-cryptographic-conformance.md#4-open-15-real-device-verification-packet-not-executed) is **not executed**; no real token PRF capability/UV/freshness claim is made.
 
+## V02-D pinned external reviewer handoff and residual risks
+
+The [V02-D independent review handoff](../../docs/security/V02D-independent-review-handoff.md) assigns **VD-01..VD-12** to external reviewer, trusted-runtime implementation or later explicit owner choice; it provides an unfilled reviewer verdict template and unexecuted FIDO2 P01–P09 device matrix. The tool `tools/v02_verifier/review_bundle.py` builds/verifies a **source + dependency lock + fixture SHA256 inventory pinned to the exact full Git commit**, with all OPEN-01/15 and G1–G3 fields marked BLOCKED. The inventory is **not a reviewer signature or supply-chain attestation**. The V02-D Rust synthetic tests additionally demonstrate that arbitrary caller bytes can masquerade as a physical PRF in the current private prototype; this must be resolved by trusted real-device integration and independent OPEN-15 findings, **not** by claiming that descriptors authenticate hardware.
+
 ## Review gates to resolve before shipping
 
 1. Formal/independent analysis of the combiner and committing construction, including password-derived input, arbitrary PRF output correlations and domain separation.
