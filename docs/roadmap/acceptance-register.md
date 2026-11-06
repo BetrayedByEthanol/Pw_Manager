@@ -1,6 +1,6 @@
 # Vaulty — Acceptance, Evidence and Security Gap Register
 
-**Snapshot date:** 2026-11-06 | **Repository evidence baseline:** `main` merge commit `6bc733bfa486b75aa6153656742b2a9667b7abae` (V02-A PR #9 merged, documentation-only), following V02 candidate PR #8. V02-B PR #10 is a draft implementation candidate, **not security-approved**.  
+**Snapshot date:** 2026-11-06 | **Repository evidence baseline:** `main` merge commit `0249bb6af76a71bf79dab7a12f709963b94f3851` (V02-B PR #10 merged, *review-only cryptographic candidate*). V02-C is a test/review workstream, **not independent security approval**.  
 **Purpose:** provide a reviewable distinction between **design approved**, **source merged**, **CI passed**, **security behavior verified** and **release certified**. None is interchangeable. See [implementation roadmap](implementation.md).
 
 ## 1. Recorded merged evidence
@@ -21,7 +21,9 @@
 
 | EV-011 | [V02-A candidate protocol review](../architecture/v02a-crypto-keyslot-review.md) | Documents current slot-schema gaps, proposed transcripts, Option A/OPEN-02 provisioning, threat matrix and OPEN-01/15 external reviewer exit criteria. **Merged design-review packet in PR #9; not an external cryptography review.** | Not independent cryptographic approval, runtime negative-test evidence, key commitment proof or V02-B implementation |
 
-| EV-012 | [V02-B PR #10](https://github.com/BetrayedByEthanol/Pw_Manager/pull/10); [focused V02 CI run](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42301853427); [full product safety run](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42301853406); [candidate transcript](../architecture/v02b-keyslot-candidate.md) | **Unmerged, review-only prototype:** 26/26 focused V02 tests PASS including nine new V02-B tests; full product safety CI PASS. Codex review on code-equivalent `a47b233` reported no major issues. Internal Argon2id/HKDF/XChaCha20-Poly1305/HMAC slot candidate and negative policy tests are not connected to VLY2 runtime. | Not OPEN-01/15 independent approval, proven key commitment, trusted factor source, stable wire format, READY/VERIFIED slot or production unlock; documentation edits after tested code head require final PR-head review. |
+| EV-012 | [Merged V02-B PR #10](https://github.com/BetrayedByEthanol/Pw_Manager/pull/10); [final V02 CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42302525461); [final product CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42302525543); [security probes](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42302525447); [candidate transcript](../architecture/v02b-keyslot-candidate.md) | **MERGED candidate** (`0249bb6`) with all three final-head GitHub workflows successful; Codex final-head review at `5265e2e` found no major issues. Previously inspected V02 test run passed 26/26 including 9 candidate tests. | Not OPEN-01/15 independent approval, proven key commitment, real hardware, trusted factor sources, stable wire format, VERIFIED/READY slots or production unlock. |
+
+| EV-013 | [V02-C PR #11](https://github.com/BetrayedByEthanol/Pw_Manager/pull/11); [focused V02-C CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42309538813); [conformance packet](../security/V02C-cryptographic-conformance.md); [synthetic fixtures](../../tools/v02_verifier/fixtures/v02c_kats.txt); [reference generator](../../tools/v02_verifier/reference_v02c.py) | **Unmerged candidate:** at source commit `f4825a7`, 31/31 focused Rust tests passed, six Python/libsodium KATs matched, and mandatory libargon2 KAT passed. Codex P2 on inner-AEAD rejection fixed and review thread resolved. Full product/final-head checks still pending. | Cross-library match is **not** independent cryptographic review, formal commitment proof, real device verification or release authorization. |
 
 Evidence links are immutable run/PR references where possible. New status claims require their own evidence and must not overwrite an older evidence record's scope.
 
@@ -109,7 +111,7 @@ This branch removes mock success; it **does not** implement native daemon authen
 
 No A02A row certifies a security property. Code, test and runtime status are unchanged by this documentation PR; G1/G2/G3 stay **BLOCKED**.
 
-## 2e. V02-B candidate — unmerged code, no runtime activation
+## 2e. V02-B candidate — merged internal code, no runtime activation
 
 | ID | Targeted property | Candidate evidence | Unmet gate |
 | --- | --- | --- | --- |
@@ -120,6 +122,18 @@ No A02A row certifies a security property. Code, test and runtime status are unc
 | A02B-05 | Preserve VLY2 compatibility gate | V02-B prototype not linked to existing `Slot` codec or external API | Post-review versioned wire format and explicit authorized migration |
 
 **All A02B rows are implementation candidates and review targets, NOT proof of secure protocol finalization. G1/G2/G3 remain BLOCKED.**
+
+## 2f. V02-C conformance and adversarial verification (review candidate)
+
+| ID | Acceptance test | Source/evidence | Still required |
+| --- | --- | --- | --- |
+| A02C-01 | Six route-specific deterministic descriptor/HKDF/AEAD/HMAC interoperability KATs | `src/v02/v02c_tests.rs`, frozen fixture and Python/libsodium reference | Independent **external** vector authorship/review; final protocol version |
+| A02C-02 | Argon2id KAT and hostile KDF limits | system `libargon2` reference component, Rust test of parameter rejection | Production KDF calibration/DoS tests |
+| A02C-03 | Bytewise ciphertext/nonce/tag tampering and descriptor/provider/KDF/policy substitution | Rust negative suite: original outer HMAC rejection **plus** recomputed synthetic HMAC to force inner Poly1305 failure; [V02-C matrix](../security/V02C-cryptographic-conformance.md) | Formal multi-key/key-substitution and timing/error-oracle review |
+| A02C-04 | Hardware PRF enrollment, UV/UP, RP binding, freshness, batches and shared-root fanout | **Only an unexecuted test plan** in [V02-C packet](../security/V02C-cryptographic-conformance.md) | Independent OPEN-15 real-device trials + verdict |
+| A02C-05 | Stay inactive and avoid silent wire migration | V02-B private module; no active VLY2 writer changes, existing CI fail-closed check | Real V03/V04/V06 authorization, canonical wire migration and full release gates |
+
+**No A02C test alone can mark OPEN-01, OPEN-15, G1 or G2 complete.**
 
 ## 3. Security findings register
 
