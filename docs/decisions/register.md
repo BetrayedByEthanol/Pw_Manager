@@ -17,7 +17,7 @@ Historical v0.3 decision IDs D-01…D-18 are retained in [the full archive](../s
 | DEC-KEY-04 | Virtual adapter lifetime | **APPROVED v0.4** | Minimal software PRF available while LOADED; helper/protocol parity, not independent 2FA; avoid default master-password re-prompt on reads |
 | DEC-KEY-05 | Read/write distinction | **APPROVED** | Reads use entry factors without VMK; writes require fresh VMK plus relevant entry authorization |
 | DEC-PROV-S1 | Entry-selected provider | **APPROVED** | Physical entries require fresh physical PRF on *each* read, no virtual fallback; virtual entries use software even if hardware is enrolled |
-| DEC-REC-S2 | ISOLATED route requirements | **APPROVED** | Every complete isolated entry-DEK route requires actual hardware; otherwise STRICT_NONE. No code-only isolated recovery |
+| DEC-REC-S2 | ISOLATED normal access and recovery | **APPROVED** | Every ISOLATED normal read requires fresh physical FIDO2 and every complete DEK route must be hardware-mandatory. Recovery may be hardware-mandatory or disabled with `STRICT_NONE`; `STRICT_NONE` never permits virtual/software-only normal access. No code-only ISOLATED entry recovery |
 | DEC-REC-S3 | INDEPENDENT schema | **APPROVED / UI DEFERRED** | Retain/check INDEPENDENT policy and dedicated entry code in model/tests, defer user-facing enrollment |
 | DEC-HIST-S4 | Authenticated ancestry | **APPROVED** | Bind generations/hashes/tombstones; local last-seen accidental rollback warning, not malicious rollback proof |
 | DEC-REC-A | Option A slot provisioning | **APPROVED** | Require recovery code **when creating/replacing code-dependent slot**; new token also needs new token PRF; inactive until coverage verified; read/edit through existing route needs no code |
@@ -42,8 +42,8 @@ Historical v0.3 decision IDs D-01…D-18 are retained in [the full archive](../s
 | Normal entry edit, using existing recovery coverage | **No additional recovery code** | VMK for write and entry factors as appropriate |
 | Create new code-dependent VMK/VERS/DEK slot | **Yes** | All other slot factors available |
 | Enroll new hardware authenticator with recovery coverage | **Yes** | New device must produce verified PRF; update all affected slots |
-| Add ISOLATED recoverable entry | **Yes** | Authorized physical hardware; every path remains hardware-mandatory |
-| Add STRICT_NONE entry | **No code-dependent recovery slot** | Warn about intentional unrecoverability |
+| Add ISOLATED recoverable entry | **Yes** | A physical normal entry policy; fresh physical proof on each read; all recovery/alternate DEK routes also require hardware |
+| Add STRICT_NONE entry | **No code-dependent recovery slot** | Warn about intentional unrecoverability. If ISOLATED, normal access **still requires fresh physical hardware** |
 | Add INDEPENDENT recovery route | **Yes**, dedicated entry code | Schema supported in design; user-facing setup deferred |
 | Change master password and code+password slot | **Yes** | Current authenticating factors and new password |
 | Rotate VMK or recovery code | **Yes** | Relevant old code + all factors needed to reconstruct dependent slots |
