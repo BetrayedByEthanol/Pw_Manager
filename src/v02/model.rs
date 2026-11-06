@@ -4,8 +4,6 @@
 //! No password/hardware/recovery factor is accepted by this module.
 #![allow(dead_code)]
 use argon2::password_hash::rand_core::{OsRng, RngCore};
-use chacha20poly1305::aead::{Aead, KeyInit, Payload};
-use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use std::collections::HashSet;
 use std::fmt;
 use uuid::Uuid;
@@ -244,7 +242,7 @@ impl PublicHeader {
             } else { Vec::new() },
         }
     }
-    fn validate(&self) -> Result<(), V02Error> {
+    pub(super) fn validate(&self) -> Result<(), V02Error> {
         if self.vault_id.is_nil() || self.commit_id.is_nil() || self.generation == 0 {
             return Err(V02Error::Invalid("missing vault/commit id or generation"));
         }

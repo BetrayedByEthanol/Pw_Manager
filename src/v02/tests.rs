@@ -2,7 +2,6 @@ use super::*;
 use super::codec;
 use super::storage::{self, CommitOutcome, Phase};
 use std::fs;
-use std::path::Path;
 
 fn specimen() -> (PublicHeader, VaultBody, Vmk, Vers, Dek) {
     let vmk_slots = vec![

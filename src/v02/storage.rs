@@ -49,14 +49,6 @@ fn read_bounded(path: &Path) -> Result<Vec<u8>, V02Error> {
     if bytes.len() > MAX_FILE { return Err(V02Error::TooLarge); }
     Ok(bytes)
 }
-fn make_file(path: &Path, bytes: &[u8]) -> Result<(), V02Error> {
-    let mut file = OpenOptions::new().write(true).create_new(true)
-        .open(path).map_err(io_error)?;
-    // Unix permission setting must happen as part of open; never chmod later.
-    file.write_all(bytes).map_err(io_error)?;
-    file.sync_all().map_err(io_error)?;
-    Ok(())
-}
 #[cfg(unix)]
 fn make_private_file(path: &Path, bytes: &[u8]) -> Result<(), V02Error> {
     let mut file = OpenOptions::new().write(true).create_new(true)
@@ -116,7 +108,7 @@ where F: FnMut(Phase) -> Result<(), V02Error> {
     #[cfg(unix)]
     let _guard = {
         let lock = path.with_extension("lock");
-        let file = OpenOptions::new().write(true).create_new(true)
+        let _lock_file = OpenOptions::new().write(true).create_new(true)
             .mode(0o600).open(&lock).map_err(io_error)?;
         LockGuard(lock)
     };
