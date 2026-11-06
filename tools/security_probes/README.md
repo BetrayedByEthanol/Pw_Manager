@@ -133,7 +133,7 @@ impacts several default entries but still requires the other PRF/factors. It
 must never be interpreted as evidence that a particular FIDO2 PRF salt leaks
 all values for that device. VMK is not a DEK dependency.
 
-The test suite now includes 14 shared JSON conformance cases, including
+The test suite now includes 20 shared JSON conformance cases, including
 invalid independent/shared/ancestor recovery configurations, and exact loaded
 blast-radius expectations. A standalone Rust reference port and its own Cargo
 crate run the **same** conformance JSON; see `rust/README.md`.
@@ -154,3 +154,39 @@ The nine frozen KEK/commitment vectors are interoperability evidence only.
 The commit tag is **not claimed as a reviewed committing AEAD**: actual
 cryptographic requirements, key commitment, salt protocol, and error oracles
 still need independent scrutiny. See `CRYPTO_REVIEW_REQUEST.md`.
+
+
+## Owner-approved S1–S4 conformance addition (v0.4.1)
+
+S1: Every entry's own `ENTRY_*_VIRTUAL` / `ENTRY_*_PHYSICAL` setting selects
+its normal cryptographic provider; `normal_provider` and
+`fresh_physical_operation_required_per_normal_read` reflect that setting.
+A physical entry requires a **fresh** PRF operation for every read regardless
+of Standard/Isolated tier; this reference checker models the required factor
+but **does not prove** live device interaction or memory zeroization.
+No silent hardware→virtual fallback is allowed. A mixed-policy loaded vault
+may service virtual entries using its resident provider.
+
+S2: The optional entry attribute `isolation_tier` is `STANDARD` by default,
+or `ISOLATED` for a physical entry. Every complete entry-DEK route for an
+Isolated entry, including `INDEPENDENT`, inherited/SHARED and other recovery,
+**must contain an authorized cryptographic physical FIDO2 factor**.
+Missing hardware on any route emits `ISOLATED_HAS_NON_HARDWARE_ACCESS_ROUTE`.
+Trying to configure a virtual entry as Isolated is a schema error. A code-only
+VMK route cannot substitute for the entry-DEK physical requirement.
+
+S3: INDEPENDENT schema, direct entry-owned recovery-slot checks, and conformance
+remain active; its setup/creation UI is deferred. Existing INDEPENDENT records
+must not be silently converted.
+
+S4: Ancestry and local accidental-rollback detection are *storage requirements*,
+not functionality of this read-only route checker. Later production acceptance
+must test vault UUID, authenticated commit parent-hash chain, stable entry
+revisions, tombstones, stale-save and conflict handling, restored old files,
+and limits of a separately stored non-authoritative local last-seen-head marker.
+No hostile-rollback resistance is claimed.
+
+The additional six shared conformance cases in `fixtures/conformance.json`
+cover Isolated + code-only bypass, valid hardware-bound INDEPENDENT recovery,
+SHARED hardware-bound recovery, STRICT_NONE and cold-vs-loaded behavior.
+Both Python and Rust consume exactly these JSON records.

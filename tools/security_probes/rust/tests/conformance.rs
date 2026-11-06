@@ -20,6 +20,11 @@ fn same_json_policy_cases_as_python_reference(){
         let p=policy(case["file"].as_str().unwrap());
         let result=analyze(&p,case["entry"].as_str().unwrap(),case["state"].as_str().unwrap()).unwrap();
         assert_eq!(result["issues"],case["issues"],"issues: {}",case["id"]);
+        for field in ["isolation_tier", "normal_provider", "fresh_physical_operation_required_per_normal_read"] {
+            if case.get(field).is_some() {
+                assert_eq!(result[field],case[field],"{field}: {}",case["id"]);
+            }
+        }
         assert_eq!(result["entry_hardware_mandatory_on_all_paths"],case["entry_hardware_mandatory_on_all_paths"],"hardware: {}",case["id"]);
         assert_eq!(result["hardware_bypass_routes"].as_array().unwrap().len(),case["hardware_bypass_count"].as_u64().unwrap() as usize,"bypass {}",case["id"]);
         let cnt=result["configured_routes"].as_array().unwrap().iter().filter(|r|r["entry_recovery"]==true).count();
@@ -90,4 +95,33 @@ fn key_commitment_binds_nonce_aad_and_ciphertext(){
         other[field]=json!(format!("ff{}",&original[2..]));
         assert_ne!(expected,kek::derive(&other).unwrap()["commit_tag_hex"],"{field}");
     }
+}
+
+#[test]
+fn s1_entry_selector_requires_physical_or_resident_virtual_as_configured(){
+    let p=policy("routes.json");
+    let virtual_report=analyze(&p,"ordinary","loaded").unwrap();
+    assert_eq!(virtual_report["normal_provider"],"virtual_prf");
+    assert_eq!(virtual_report["fresh_physical_operation_required_per_normal_read"],false);
+    let physical_report=analyze(&p,"strict","loaded").unwrap();
+    assert_eq!(physical_report["normal_provider"],"physical_fido2");
+    assert_eq!(physical_report["fresh_physical_operation_required_per_normal_read"],true);
+    let mut absent=p.clone();
+    absent.factors.get_mut("yubikey").unwrap().available=false;
+    let unavailable=analyze(&absent,"strict","loaded").unwrap();
+    assert!(unavailable["usable_routes"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn s2_isolated_requires_physical_even_on_independent_recovery(){
+    let valid=policy("owner_isolated-independent-hardware-loaded.json");
+    let a=analyze(&valid,"independent","loaded").unwrap();
+    assert_eq!(a["issues"],json!([]));
+    let bypass=policy("owner_isolated-independent-code-only.json");
+    let a=analyze(&bypass,"independent","loaded").unwrap();
+    assert!(a["issues"].as_array().unwrap().contains(&json!("ISOLATED_HAS_NON_HARDWARE_ACCESS_ROUTE")));
+    let mut invalid=fixture("routes.json");
+    invalid["entries"][0]["isolation_tier"]=json!("ISOLATED");
+    let invalid:Policy=serde_json::from_value(invalid).unwrap();
+    assert!(analyze(&invalid,"ordinary","loaded").unwrap_err().contains("Isolated entry"));
 }

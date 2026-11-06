@@ -68,3 +68,19 @@ The graph reads only authenticated policy snapshots, distinguishes VMK outer acc
 5. Trust binding (authenticated owner registry, no revoked/disabled slot acceptance, old-snapshot rollback disclosure) and safe migration/version negotiation.
 
 **Current disposition:** OPEN-01 remains **BLOCKED — independent cryptographic review pending**. OPEN-15 salt/capability protocol remains **BLOCKED**; fanout design may be provisionally selected after review. OPEN-18 Rust integration remains a design/reference validation until CI and security review are complete.
+
+
+### Approved S1/S2 constraints added after initial review request
+
+The owner approved **S1 entry-policy-selected provider**: each normal read of
+an `ENTRY_*_PHYSICAL` entry must invoke a fresh registered physical FIDO2 PRF
+and never use a cached hardware result or virtual fallback. `ENTRY_*_VIRTUAL`
+reads use the live software provider even within mixed-policy vaults.
+
+**S2 ISOLATED** entries must require actual cryptographic physical hardware on
+*every* complete entry-DEK route, including `INDEPENDENT` code+hardware
+recovery, or have `STRICT_NONE`. Isolated code-only DEK recovery is invalid;
+outer VMK code-only recovery is not a DEK bypass. Please assess PRF UV mode,
+per-entry salt separation, scope/identity binding and whether a device output
+can be reused across normal reads without violating S1. This remains a design
+requirement, **not independent cryptographic approval**.

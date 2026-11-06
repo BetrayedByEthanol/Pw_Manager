@@ -17,6 +17,7 @@ KINDS = {"master_password", "entry_password", "physical_fido2", "virtual_prf",
 POLICIES = {"ENTRY_DEFAULT_VIRTUAL", "ENTRY_PASSWORD_VIRTUAL",
             "ENTRY_DEFAULT_PHYSICAL", "ENTRY_PASSWORD_PHYSICAL"}
 RECOVERY = {"SHARED", "GROUP", "INDEPENDENT", "STRICT_NONE"}
+ISOLATION_TIERS = {"STANDARD", "ISOLATED"}
 INDEPENDENT = {"master_password", "entry_password", "physical_fido2", "recovery_code"}
 
 
@@ -97,6 +98,11 @@ def validate(data: dict) -> None:
         entry_ids.add(entry["id"])
         if entry.get("dek") not in keys or entry.get("policy") not in POLICIES or entry.get("recovery_policy") not in RECOVERY:
             raise PolicyError(f"Invalid entry configuration: {entry['id']}")
+        tier = entry.get("isolation_tier", "STANDARD")
+        if tier not in ISOLATION_TIERS:
+            raise PolicyError(f"Invalid isolation tier: {entry['id']}")
+        if tier == "ISOLATED" and not entry["policy"].endswith("_PHYSICAL"):
+            raise PolicyError(f"Isolated entry must have a physical normal policy: {entry['id']}")
         if entry["policy"].startswith("ENTRY_DEFAULT_") and entry.get("first_key") not in keys:
             raise PolicyError(f"Default entry needs an explicit first_key: {entry['id']}")
         if entry["policy"].startswith("ENTRY_PASSWORD_"):
@@ -288,8 +294,16 @@ def analyze(data: dict, entry_id: str, state: str = "loaded") -> dict:
     # Physical is mandatory only if *every* DEK route requires it; outer VMK
     # hardware is irrelevant to an already LOADED entry's protection.
     physical_mandatory = bool(dek) and all(_serialize(data, r)["requires_physical"] for r in dek)
+    # S2: ALL complete DEK paths, including INDEPENDENT/SHARED recovery,
+    # must require cryptographic physical hardware for an ISOLATED entry.
+    # Do not use the VMK (outer-body) path to satisfy this condition.
+    if entry.get("isolation_tier", "STANDARD") == "ISOLATED" and not physical_mandatory:
+        issues.append("ISOLATED_HAS_NON_HARDWARE_ACCESS_ROUTE")
     bypass = [r for r in dek if req_hardware and not _serialize(data, r)["requires_physical"]]
-    return {"entry": entry_id, "state": state, "configured_routes": [_serialize(data, r) for r in full],
+    return {"entry": entry_id, "state": state,
+            "normal_provider": "physical_fido2" if req_hardware else "virtual_prf",
+            "fresh_physical_operation_required_per_normal_read": req_hardware,
+            "isolation_tier": entry.get("isolation_tier", "STANDARD"), "configured_routes": [_serialize(data, r) for r in full],
             "usable_routes": [_serialize(data, r) for r in usable],
             "minimal_configured": _minimal(data, full), "minimal_usable": _minimal(data, usable),
             "weakest_configured": _weakest(data, full), "weakest_usable": _weakest(data, usable),

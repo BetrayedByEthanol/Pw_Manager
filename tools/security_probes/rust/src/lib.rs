@@ -51,6 +51,8 @@ pub struct Entry {
     pub policy: String,
     pub recovery_policy: String,
     #[serde(default)]
+    pub isolation_tier: Option<String>,
+    #[serde(default)]
     pub first_key: Option<String>,
     #[serde(default)]
     pub entry_password_factor: Option<String>,
@@ -123,6 +125,12 @@ pub fn validate(p: &Policy) -> Result<(), String> {
         if e.id.is_empty() || !entry_ids.insert(e.id.clone()) || !p.keys.contains_key(&e.dek) ||
             !is_policy(&e.policy) || !is_recovery_policy(&e.recovery_policy) {
             return Err(format!("Invalid entry {}",e.id));
+        }
+        if !matches!(e.isolation_tier.as_deref().unwrap_or("STANDARD"), "STANDARD"|"ISOLATED") {
+            return Err(format!("Invalid isolation tier for {}",e.id));
+        }
+        if e.isolation_tier.as_deref()==Some("ISOLATED") && !e.policy.ends_with("_PHYSICAL") {
+            return Err(format!("Isolated entry must have a physical normal policy: {}",e.id));
         }
         if e.policy.starts_with("ENTRY_DEFAULT_") && !e.first_key.as_ref().is_some_and(|k|p.keys.contains_key(k)) {
             return Err(format!("Missing first root for {}",e.id));
@@ -294,9 +302,15 @@ pub fn analyze(p:&Policy,entry_id:&str,state:&str)->Result<Value,String>{
         }
     }
     let hardware_mandatory=!dek.is_empty() && dek.iter().all(|r|has_hardware(p,r));
+    if e.isolation_tier.as_deref()==Some("ISOLATED") && !hardware_mandatory {
+        issues.insert("ISOLATED_HAS_NON_HARDWARE_ACCESS_ROUTE");
+    }
     let bypass:Vec<_>=dek.iter().filter(|r|req_hw && !has_hardware(p,r)).cloned().collect();
     let strict=if e.recovery_policy=="STRICT_NONE"{serialized(p,&strict_bypass)}else{vec![]};
     Ok(json!({"entry":entry_id,"state":state,
+        "isolation_tier":e.isolation_tier.as_deref().unwrap_or("STANDARD"),
+        "normal_provider":if req_hw {"physical_fido2"}else{"virtual_prf"},
+        "fresh_physical_operation_required_per_normal_read":req_hw,
         "configured_routes":serialized(p,&full),"usable_routes":serialized(p,&usable),
         "minimal_configured":minimal(&full).iter().map(|r|serialize(p,r)).collect::<Vec<_>>(),
         "minimal_usable":minimal(&usable).iter().map(|r|serialize(p,r)).collect::<Vec<_>>(),

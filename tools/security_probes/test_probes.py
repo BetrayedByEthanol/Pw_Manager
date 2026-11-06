@@ -336,16 +336,53 @@ class CommitmentVectorTests(unittest.TestCase):
                             info=bytes.fromhex(v["commit_info_hex"])).derive(ikm)
             self.assertEqual(expected.hex(),v["commit_key_hex"])
 
+class OwnerChoicesTests(unittest.TestCase):
+    def test_s1_virtual_read_uses_resident_provider_even_when_hardware_vmk_slot_exists(self):
+        r=analyze(copy.deepcopy(POLICY), 'ordinary', 'loaded')
+        self.assertEqual(r['normal_provider'], 'virtual_prf')
+        self.assertFalse(r['fresh_physical_operation_required_per_normal_read'])
+        self.assertTrue(any('virtual' in x['factors'] and 'yubikey' not in x['factors']
+                            for x in r['configured_routes'] if not x['entry_recovery']))
+
+    def test_s1_physical_read_requires_fresh_physical_and_never_virtual_fallback(self):
+        r=analyze(copy.deepcopy(POLICY), 'strict', 'loaded')
+        self.assertEqual(r['normal_provider'], 'physical_fido2')
+        self.assertTrue(r['fresh_physical_operation_required_per_normal_read'])
+        self.assertTrue(all('yubikey' in x['factors'] for x in r['configured_routes']))
+        p=copy.deepcopy(POLICY)
+        p['factors']['yubikey']['available']=False
+        self.assertEqual(analyze(p, 'strict')['usable_routes'], [])
+
+    def test_s2_rejects_virtual_isolated_policy_even_without_recovery(self):
+        p=copy.deepcopy(POLICY)
+        next(e for e in p['entries'] if e['id']=='ordinary')['isolation_tier']='ISOLATED'
+        with self.assertRaisesRegex(PolicyError,'Isolated entry must have a physical normal policy'):
+            analyze(p,'ordinary')
+
+    def test_s2_code_only_independent_is_not_hardware_mandatory(self):
+        p=json.loads((HERE / 'fixtures/owner_isolated-independent-code-only.json').read_text())
+        r=analyze(p,'independent')
+        self.assertIn('ISOLATED_HAS_NON_HARDWARE_ACCESS_ROUTE', r['issues'])
+
+    def test_s2_independent_with_code_plus_physical_is_hardware_mandatory(self):
+        p=json.loads((HERE / 'fixtures/owner_isolated-independent-hardware-loaded.json').read_text())
+        r=analyze(p,'independent')
+        self.assertEqual(r['issues'],[])
+        self.assertTrue(r['entry_hardware_mandatory_on_all_paths'])
+
 class SharedConformanceTests(unittest.TestCase):
     def test_fixture_expected_reports(self):
         from route_graph import analyze
         cases = json.loads((HERE / "fixtures/conformance.json").read_text())
-        self.assertEqual(len(cases["cases"]), 14)
+        self.assertEqual(len(cases["cases"]), 20)
         for case in cases["cases"]:
             with self.subTest(case=case["id"]):
                 policy = json.loads((HERE / "fixtures" / case["file"]).read_text())
                 result = analyze(policy, case["entry"], case["state"])
                 self.assertEqual(result["issues"], case["issues"])
+                for field in ("isolation_tier", "normal_provider", "fresh_physical_operation_required_per_normal_read"):
+                    if field in case:
+                        self.assertEqual(result[field], case[field])
                 self.assertEqual(result["entry_hardware_mandatory_on_all_paths"],
                                  case["entry_hardware_mandatory_on_all_paths"])
                 self.assertEqual(len(result["hardware_bypass_routes"]), case["hardware_bypass_count"])
