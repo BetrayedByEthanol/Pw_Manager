@@ -193,6 +193,44 @@ fn ciphertext_nonce_and_commitment_byte_mutations_are_rejected() {
         assert!(unwrap(&corrupted,&first,second.as_ref()).is_err(),
             "HMAC altered at {pos}");
     }
+    // The loops above test the OUTER HMAC gate. To reach the INNER
+    // Poly1305 authentication gate, deliberately recompute that synthetic
+    // HMAC after each mutation using the test-only commitment key.
+    // A real offline attacker is not assumed to possess this key.
+    let (wrap, mac_key, transcript) =
+        derive(&a.descriptor, &first, second.as_ref()).unwrap();
+    let inner = XChaCha20Poly1305::new(Key::from_slice(&*wrap));
+    for pos in 0..a.ciphertext.len() {
+        let mut modified = CandidateEnvelope {
+            descriptor:a.descriptor.clone(), nonce:a.nonce,
+            ciphertext:a.ciphertext.clone(),
+            candidate_commitment:[0;32],
+        };
+        modified.ciphertext[pos]^=1;
+        modified.candidate_commitment =
+            commitment_tag(&mac_key,&transcript,&modified.nonce,&modified.ciphertext).unwrap();
+        // Outer HMAC is valid now; authentication MUST fail at AEAD.
+        assert!(inner.decrypt(XNonce::from_slice(&modified.nonce),
+            Payload{msg:&modified.ciphertext,aad:&transcript}).is_err(),
+            "Poly1305 accepted tampered ciphertext byte {pos}");
+        assert!(matches!(unwrap(&modified,&first,second.as_ref()),
+            Err(V02Error::AuthenticationFailed)));
+    }
+    for pos in 0..24 {
+        let mut modified = CandidateEnvelope {
+            descriptor:a.descriptor.clone(), nonce:a.nonce,
+            ciphertext:a.ciphertext.clone(),
+            candidate_commitment:[0;32],
+        };
+        modified.nonce[pos]^=1;
+        modified.candidate_commitment =
+            commitment_tag(&mac_key,&transcript,&modified.nonce,&modified.ciphertext).unwrap();
+        assert!(inner.decrypt(XNonce::from_slice(&modified.nonce),
+            Payload{msg:&modified.ciphertext,aad:&transcript}).is_err(),
+            "Poly1305 accepted tampered nonce byte {pos}");
+        assert!(matches!(unwrap(&modified,&first,second.as_ref()),
+            Err(V02Error::AuthenticationFailed)));
+    }
     let mut corrupted=a;
     corrupted.ciphertext.pop();
     assert!(unwrap(&corrupted,&first,second.as_ref()).is_err());
