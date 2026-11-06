@@ -129,7 +129,7 @@ No A02A row certifies a security property. Code, test and runtime status are unc
 | --- | --- | --- | --- |
 | A02C-01 | Six route-specific deterministic descriptor/HKDF/AEAD/HMAC interoperability KATs | `src/v02/v02c_tests.rs`, frozen fixture and Python/libsodium reference | Independent **external** vector authorship/review; final protocol version |
 | A02C-02 | Argon2id KAT and hostile KDF limits | system `libargon2` reference component, Rust test of parameter rejection | Production KDF calibration/DoS tests |
-| A02C-03 | Bytewise ciphertext/nonce/tag tampering, descriptor/provider/KDF/policy substitution | Rust negative suite; [V02-C matrix](../security/V02C-cryptographic-conformance.md) | Formal multi-key/key-substitution and timing/error-oracle review |
+| A02C-03 | Bytewise ciphertext/nonce/tag tampering and descriptor/provider/KDF/policy substitution | Rust negative suite: original outer HMAC rejection **plus** recomputed synthetic HMAC to force inner Poly1305 failure; [V02-C matrix](../security/V02C-cryptographic-conformance.md) | Formal multi-key/key-substitution and timing/error-oracle review |
 | A02C-04 | Hardware PRF enrollment, UV/UP, RP binding, freshness, batches and shared-root fanout | **Only an unexecuted test plan** in [V02-C packet](../security/V02C-cryptographic-conformance.md) | Independent OPEN-15 real-device trials + verdict |
 | A02C-05 | Stay inactive and avoid silent wire migration | V02-B private module; no active VLY2 writer changes, existing CI fail-closed check | Real V03/V04/V06 authorization, canonical wire migration and full release gates |
 
