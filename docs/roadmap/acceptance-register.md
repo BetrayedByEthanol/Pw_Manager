@@ -1,6 +1,6 @@
 # Vaulty — Acceptance, Evidence and Security Gap Register
 
-**Snapshot date:** 2026-11-06 | **Repository evidence baseline:** `main` merge commit `0249bb6af76a71bf79dab7a12f709963b94f3851` (V02-B PR #10 merged, *review-only cryptographic candidate*). V02-C is a test/review workstream, **not independent security approval**.  
+**Snapshot date:** 2026-11-07 | **Repository evidence baseline:** `main` merge commit `961cde0eba27a35edf84f20310c09f15ef576f7a` (V02-C PR #11 merged, cross-library candidate conformance). V02-D is review-preparation, **not independent security approval**.  
 **Purpose:** provide a reviewable distinction between **design approved**, **source merged**, **CI passed**, **security behavior verified** and **release certified**. None is interchangeable. See [implementation roadmap](implementation.md).
 
 ## 1. Recorded merged evidence
@@ -23,7 +23,9 @@
 
 | EV-012 | [Merged V02-B PR #10](https://github.com/BetrayedByEthanol/Pw_Manager/pull/10); [final V02 CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42302525461); [final product CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42302525543); [security probes](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42302525447); [candidate transcript](../architecture/v02b-keyslot-candidate.md) | **MERGED candidate** (`0249bb6`) with all three final-head GitHub workflows successful; Codex final-head review at `5265e2e` found no major issues. Previously inspected V02 test run passed 26/26 including 9 candidate tests. | Not OPEN-01/15 independent approval, proven key commitment, real hardware, trusted factor sources, stable wire format, VERIFIED/READY slots or production unlock. |
 
-| EV-013 | [V02-C PR #11](https://github.com/BetrayedByEthanol/Pw_Manager/pull/11); [focused V02-C CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42309538813); [conformance packet](../security/V02C-cryptographic-conformance.md); [synthetic fixtures](../../tools/v02_verifier/fixtures/v02c_kats.txt); [reference generator](../../tools/v02_verifier/reference_v02c.py) | **Unmerged candidate:** at source commit `f4825a7`, 31/31 focused Rust tests passed, six Python/libsodium KATs matched, and mandatory libargon2 KAT passed. Codex P2 on inner-AEAD rejection fixed and review thread resolved. Full product/final-head checks still pending. | Cross-library match is **not** independent cryptographic review, formal commitment proof, real device verification or release authorization. |
+| EV-013 | [Merged V02-C PR #11](https://github.com/BetrayedByEthanol/Pw_Manager/pull/11); [final V02 CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42309791103); [final product CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42309791121); [security probes](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42309791147); [conformance packet](../security/V02C-cryptographic-conformance.md) | **Merged synthetic conformance** at `961cde0`: all final-head workflows passed at `40b54ad`; 31 focused Rust tests, six Python/libsodium KATs and libargon2 KAT; one valid Codex P2 inner AEAD check fixed/resolved; final-head Codex reported no major issues. | No OPEN-01/15 independent approval, multi-key commitment proof, FIDO2 evidence, active slot, reviewed wire or release acceptance. |
+
+| EV-014 | [V02-D independent review handoff](../security/V02D-independent-review-handoff.md); [source/fixture manifest script](../../tools/v02_verifier/review_bundle.py) | **Unmerged review candidate:** fixed source/file allowlist and deterministic per-file SHA256 inventory, test suite rejects source/commit drift and false approval; synthetic route/domain/factor-provenance regression coverage; 12 separately owned security gaps. CI outcomes pending. | Neither a signed external review nor cryptographic proof, hardware measurements, or G1/G2/G3 approval. |
 
 Evidence links are immutable run/PR references where possible. New status claims require their own evidence and must not overwrite an older evidence record's scope.
 
@@ -134,6 +136,18 @@ No A02A row certifies a security property. Code, test and runtime status are unc
 | A02C-05 | Stay inactive and avoid silent wire migration | V02-B private module; no active VLY2 writer changes, existing CI fail-closed check | Real V03/V04/V06 authorization, canonical wire migration and full release gates |
 
 **No A02C test alone can mark OPEN-01, OPEN-15, G1 or G2 complete.**
+
+## 2g. V02-D reviewer readiness (NOT independent approval)
+
+| ID | Review-preparation acceptance | Evidence to verify | Still blocked |
+| --- | --- | --- | --- |
+| A02D-01 | Exact reviewed source, fixture and dependency bytes identifiable | Deterministic Git-commit and SHA-256 inventory with explicit path allowlist; recheck rejects file/commit drift and altered gate statuses | Third-party authenticated signature/verdict and supply-chain assurance |
+| A02D-02 | All sample factor/slot/route boundaries are executable as negative tests | Rust `v02d_tests.rs` checks valid/invalid route table, single/two-factor mismatch, forbidden Isolated/STRICT_NONE software or code routes | Full effective runtime graph, real device proof and actual code-dependent provisioning |
+| A02D-03 | Key schedule cannot accidentally collapse tested vault/slot/target/purpose domains | Rust domain/KEK-versus-MAC separation regression | Expert multi-key/key-commitment attack analysis, not proven by finite tests |
+| A02D-04 | Hardware trust gap is explicitly demonstrated | Synthetic caller-provided PRF bytes can unwrap candidate with no real assertion; recorded as **unresolved** OPEN-15 | Real credential/RP/UP/UV binding, freshness, device negative evidence and independent reviewer verdict |
+| A02D-05 | Reviewer-ready questions and acceptance receipts | [V02-D handoff](../security/V02D-independent-review-handoff.md) with 12-gap ownership and blank OPEN-01/15 verdict/evidence templates | Named qualified reviewers and signed/recorded actual results |
+
+V02-D may merge as **review-preparation only**, leaving G1/G2/G3 **BLOCKED**.
 
 ## 3. Security findings register
 
