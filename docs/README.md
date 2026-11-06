@@ -13,7 +13,7 @@ Start here rather than relying on previous chats or the historical README featur
 | [Product & security specification v0.4.5](specification/v0.4.5.md) | Normative behavior, keys, states, entry policies, recovery, client trust and migration | **Canonical design** |
 | [V02 candidate vault format v0](architecture/v02-format-candidate.md) | Merged experimental binary schema, independent keys, AEAD, strict parsing and explicit OPEN-01/15 limitations | **Candidate only; not approved runtime or frozen wire format** |
 | [V02-A cryptographic protocol and key-slot review](architecture/v02a-crypto-keyslot-review.md) | Merged protocol gaps, transcript questions, recovery/PRF threat matrix and independent reviewer exit criteria | **Merged design; not approved cryptography** |
-| [V02-B candidate key-slot cryptography](architecture/v02b-keyslot-candidate.md) | Private test-only Argon2id/HKDF/AEAD/HMAC prototype, scoped descriptor and negative tests | **Draft implementation; NOT activated or approved** |
+| [V02-B candidate key-slot cryptography](architecture/v02b-keyslot-candidate.md) | Private test-only Argon2id/HKDF/AEAD/HMAC prototype, scoped descriptor and negative tests | **PR #10 in review; NOT activated or approved** |
 | [Architecture v0.4.5](architecture/v0.4.5.md) | System components, single-file structure, trust boundaries, key flows and operation sequences | **Target design** |
 | [Implementation roadmap](roadmap/implementation.md) | V01-A through V09, V04M workstream, dependencies and release gates | **Work plan** |
 | [Feature roadmap](roadmap/features.md) | All 38 normalized requirements, four N-features and links to the 67 historical source items | **Feature ledger** |
