@@ -81,7 +81,7 @@ fn tampering_header_and_body_fails_authenticated_open() {
     }
     // A valid but differently described route is still rejected by outer AAD.
     let mut changed = header.clone();
-    changed.vmk_slots[0].factors = FactorPolicy::CodeOnly;
+    changed.vmk_slots[0].state = SlotState::Disabled;
     let parsed = codec::parse_header(&original).unwrap();
     let mut fake = codec::encode_header(&changed, parsed.ciphertext.len(), &parsed.outer_nonce).unwrap();
     fake.extend_from_slice(parsed.ciphertext);
@@ -278,4 +278,41 @@ fn storage_pre_and_post_replace_faults_and_symlink_rejection() {
         assert_eq!(fs::read(victim).unwrap(), original);
         fs::remove_dir_all(dir).unwrap();
     }
+}
+
+#[test]
+fn virtual_seed_bootstrap_is_preload_and_authenticated_not_inner_only() {
+    let (mut header, body, vmk, _, _) = specimen();
+    assert_eq!(header.bootstrap_slots.len(), 2);
+    assert!(header.bootstrap_slots.iter().any(|s| s.factors == FactorPolicy::CodeOnly));
+    let file = seal_file(&header, &body, &vmk).unwrap();
+    let parsed = codec::parse_header(&file).unwrap();
+    assert_eq!(parsed.header.bootstrap_slots.len(), 2);
+    // The bootstrap slots are public encrypted envelopes (currently pending);
+    // no virtual-provider seed is present or derived in this candidate.
+    header.bootstrap_slots[0].state = SlotState::Disabled;
+    let mut forged = codec::encode_header(
+        &header, parsed.ciphertext.len(), &parsed.outer_nonce
+    ).unwrap();
+    forged.extend_from_slice(parsed.ciphertext);
+    assert_eq!(open_file(&forged, &vmk).err(), Some(V02Error::AuthenticationFailed));
+    header.bootstrap_slots.pop();
+    assert!(seal_file(&header, &body, &vmk).is_err());
+}
+#[test]
+fn hardware_vault_requires_both_recovery_envelope_descriptors() {
+    let (mut header, body, vmk, _, _) = specimen();
+    header.mode = VaultMode::PasswordPhysical;
+    header.vmk_slots = vec![
+        Slot::pending(SlotTarget::Vmk, Uuid::nil(), FactorPolicy::VaultPasswordPhysical),
+        Slot::pending(SlotTarget::Vmk, Uuid::nil(), FactorPolicy::CodePassword),
+    ];
+    header.bootstrap_slots.clear();
+    assert!(seal_file(&header, &body, &vmk).is_err());
+    header.vmk_slots.push(Slot::pending(
+        SlotTarget::Vmk, Uuid::nil(), FactorPolicy::CodePhysical
+    ));
+    // Structurally representable, but ALL factor states are still PENDING;
+    // no provisioned/verified hardware recovery is claimed.
+    assert!(seal_file(&header, &body, &vmk).is_ok());
 }

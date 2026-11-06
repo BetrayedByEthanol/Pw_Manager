@@ -1,6 +1,6 @@
 # Vaulty — Acceptance, Evidence and Security Gap Register
 
-**Snapshot date:** 2026-11-06 | **Repository evidence baseline:** `main` at `d192e6bb04f785659159facb17c42ff4621d40a3` (PR #6 merged).  
+**Snapshot date:** 2026-11-06 | **Repository evidence baseline:** `main` at `ae6d38794728d7e8b109a726bbf40be3ba94a97b` (PR #7 merged).  
 **Purpose:** provide a reviewable distinction between **design approved**, **source merged**, **CI passed**, **security behavior verified** and **release certified**. None is interchangeable. See [implementation roadmap](implementation.md).
 
 ## 1. Recorded merged evidence
@@ -15,7 +15,9 @@
 | EV-006 | [Security probes on merged main](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42217284398) | GitHub Rust/Python reference probe jobs succeeded on merge commit `7c3ba719` | Synthetic policy/crypto vectors do not prove runtime encryption or authorization |
 | EV-007 | [Independent cryptography review request](../../tools/security_probes/CRYPTO_REVIEW_REQUEST.md) | Review requirements and candidate construction documented; current disposition explicitly NOT APPROVED | OPEN-01 and OPEN-15 remain blockers |
 | EV-008 | [PR #6](https://github.com/BetrayedByEthanol/Pw_Manager/pull/6) | Canonical v0.4.5 documentation/reconciliation merged into main `d192e6b` | Not evidence of cryptographic or runtime policy implementation |
-| EV-009 | [V01-A PR #7](https://github.com/BetrayedByEthanol/Pw_Manager/pull/7); [first CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42236810534); [expanded CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42237908044) | **Unmerged branch only:** expanded run passed 20 root unit, 1 executable integration, 6 native-host unit and **3 native stdio process tests**, plus extension syntax/config. | Do not mark V01-A MERGED, G0 independently security-accepted, or actual daemon/recovery implemented |
+| EV-009 | [V01-A PR #7](https://github.com/BetrayedByEthanol/Pw_Manager/pull/7); [first CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42236810534); [expanded CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42237908044) | **Merged PR #7:** expanded run passed 20 root unit, 1 executable integration, 6 native-host unit and 3 native stdio process tests, plus extension syntax/config; merge commit `ae6d387`. | V01-A implementation MERGED; does not establish G0 independent security certification, actual daemon or recovery |
+
+| EV-010 | [PR #8 — V02 candidate](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8) | **Unmerged V02 candidate branch only:** isolated `src/v02` candidate codec, independent random key types, dual-layer AEAD, strict parsing, encrypted ancestry and synthetic negative tests. CI must verify this PR head. | Not a frozen wire standard, OPEN-01/15 approval, production password/physical factor wrap, runtime authorization or certified recovery |
 
 Evidence links are immutable run/PR references where possible. New status claims require their own evidence and must not overwrite an older evidence record's scope.
 
@@ -25,19 +27,19 @@ Evidence links are immutable run/PR references where possible. New status claims
 | --- | --- | --- | --- | --- |
 | A01-01 | Rust root crate, native host compile and tests execute | MERGED | EV-004/005 | **PASS build gate only** |
 | A01-02 | Browser extension manifests and JS syntax valid | MERGED | EV-005 | **PASS syntax only**; no browser behavior tests |
-| A01-03 | Default executable refuses real vault use | MERGED V01; V01-A PR IN REVIEW | `src/main.rs`; V01-A child-process smoke | First PR #7 CI verifies nonzero exit, no file writes and synthetic secret suppression; acceptance pending merge/review |
+| A01-03 | Default executable refuses real vault use | MERGED V01/V01-A | `src/main.rs`; V01-A child-process smoke | First PR #7 CI verifies nonzero exit, no file writes and synthetic secret suppression; acceptance pending merge/review |
 | A01-04 | No master-password/PIN fallback to environment | MERGED | `src/cli.rs` secure terminal prompt | **PARTIAL:** scan/negative prompt tests before production |
-| A01-05 | No dangerous secret-bearing debug operations in compiled paths | V01-A PR IN REVIEW | PR #7 removes experimental gocrypt source, disables legacy direct stdout secret reveal and redacts password display | Security review and merged-main verification still pending |
+| A01-05 | No dangerous secret-bearing debug operations in compiled paths | MERGED V01-A | PR #7 removes experimental gocrypt source, disables legacy direct stdout secret reveal and redacts password display | Security review and merged-main verification still pending |
 | A01-06 | Fresh outer AEAD nonce per seal and legacy JSON re-encrypt | MERGED | V01 unit tests + EV-005 | **PASS V01 regression**, not multi-key security proof |
 | A01-07 | FIDO2 attestation/assertion fail closed | MERGED | `src/fido2.rs` verifies results | **PARTIAL:** negative mocks/UV and mismatch tests missing |
 | A01-08 | Strict body counts/truncation; reject unsupported client registry | MERGED | `src/vault/body.rs` regression tests | **PASS body decoder**, not header/payload parser |
-| A01-09 | Atomic replacement + previous encrypted version + fsync | MERGED V01; V01-A PR IN REVIEW | Deterministic checkpoints before/after temp/backup/commit sync, symlink rejection and simulated abrupt exit | Limited test-path assurance; V02 still needs fd-based race safety and authenticated ancestry |
+| A01-09 | Atomic replacement + previous encrypted version + fsync | MERGED V01/V01-A | Deterministic checkpoints before/after temp/backup/commit sync, symlink rejection and simulated abrupt exit | Limited test-path assurance; V02 still needs fd-based race safety and authenticated ancestry |
 | A01-10 | Single writer lock fails closed when lock exists | MERGED | `src/fsutil.rs` basic lock test | **PASS narrow lock test**, crash/stale-lock recovery procedures not certified |
-| A01-11 | Native host must not falsely claim credential success by default | V01-A PR IN REVIEW | Default `RELAY_ERROR/UNAVAILABLE` for all recognized requests; synthetic secret not echoed | Native host is NOT yet an E2E encrypted relay; pending merged CI/security review |
-| A01-12 | Native host request/IPC behavioral tests | V01-A PR IN REVIEW | Six native-host Rust unit tests and three child-process stdio tests passed in expanded PR #7 CI; merged-main evidence pending | Review and merged-main test evidence pending |
+| A01-11 | Native host must not falsely claim credential success by default | MERGED V01-A | Default `RELAY_ERROR/UNAVAILABLE` for all recognized requests; synthetic secret not echoed | Native host is NOT yet an E2E encrypted relay; pending merged CI/security review |
+| A01-12 | Native host request/IPC behavioral tests | MERGED V01-A | Six native-host Rust unit tests and three child-process stdio tests passed in expanded PR #7 CI; merged-main evidence pending | Review and merged-main test evidence pending |
 | A01-13 | Canonical header/payload parser safely reject malformed input | NOT V01 SCOPE | Legacy header/payload still index unchecked ranges | **V02 P1:** bounded parser/format replacement and fuzz |
 | A01-14 | Exact v0.4.5 VMK/VERS/DEK, modes and recovery | NOT V01 SCOPE | No canonical runtime | **V02–V05**, independent reviews |
-| A01-15 | Documentation/version/status consistent with merged evidence | MERGED design baseline | PR #6, EV-008; V01-A branch adds provisional evidence | Update status after PR #7 merge and verify new CI; no release claim |
+| A01-15 | Documentation/version/status consistent with merged evidence | MERGED PR #6 / V01-A PR #7 | PR #6, EV-008; V01-A branch adds provisional evidence | Update status after PR #7 merge and verify new CI; no release claim |
 
 **Assessment:** V01 source and CI foundation are merged; do not label V01 security acceptance COMPLETE until V01-A controls and their tests pass. The main binary remains deliberately unusable for real credentials.
 
@@ -63,16 +65,31 @@ The updated PR #6 restores nine binding requirements from the owner-approved v0.
 
 | ID | V01-A review requirement | Proposed code and tests | Current disposition |
 | --- | --- | --- | --- |
-| VA-01 | Remove master-key dump/destructive experiment | Delete `src/util/gocrypt.rs`, remove module include | PR #7 IN REVIEW |
+| VA-01 | Remove master-key dump/destructive experiment | Delete `src/util/gocrypt.rs`, remove module include | PR #7 MERGED; final runtime verification still required before product use |
 | VA-02 | No false native-host success | Valid requests always `RELAY_ERROR/UNAVAILABLE` | Initial CI PASS; merge/review pending |
 | VA-03 | Native-host framing and origin negative tests | Unit tests plus child-process stdio integration | Unit and process CI PASS on PR #7; merge/review pending |
 | VA-04 | Default executable inert | Synthetic env-secret and sentinel-vault child-process smoke | Initial CI PASS; merge/review pending |
 | VA-05 | Interruption safety checks | Deterministic fault stages, symlinks, simulated abrupt exit and stale lock | Initial CI PASS; not proof of power-loss durability |
 | VA-06 | Legacy malformed header/payload rejection | Header length/record preflight, strict password payload decode, truncation tests | Initial CI PASS; V02 full format still required |
 | VA-07 | FIDO2 fail-closed negative boundary | Unit tests for rejected verifier results; hardware UV/RP fixtures remain future | Synthetic CI PASS, **real hardware/OPEN-15 NOT VERIFIED** |
-| VA-08 | Recovery/runbook and release boundaries | Document manual stale lock and ambiguous post-rename commit; keep G0 partial | PR #7 IN REVIEW; no production authorization |
+| VA-08 | Recovery/runbook and release boundaries | Document manual stale lock and ambiguous post-rename commit; keep G0 partial | PR #7 MERGED; security release gate remains partial; no production authorization |
 
 This branch removes mock success; it **does not** implement native daemon authentication, canonical VMK/DEK, R1 recovery, S1/S2 route enforcement, secure provenance of a browser origin, or race-free dirfd/openat. G0 remains PARTIAL until source merge, reproducible tests, and accepted review receipts.
+
+## 2c. V02 candidate codec v0 — acceptance matrix (PR #8, unmerged)
+
+| ID | Required property | Candidate evidence | Not yet verified |
+| --- | --- | --- | --- |
+| A02-01 | Public header bounded/versioned; outer metadata AEAD with complete header AAD | `src/v02/codec.rs`, `open_file`, tamper and malformed input tests | Independent byte-format freeze, parser fuzz signoff, public leakage budget |
+| A02-02 | VMK, VERS, per-entry DEKs independently random; no VMK-derived entry encryption | Separate zeroizing key types and inner/outer AEAD negative tests | OPEN-01 approved transcript, real factor wrapping and key commitment |
+| A02-03 | Four entry normal modes, Standard/Isolated and all recovery policy enum encodings | Typed slot/policy schema; reject hardware code-only VMK and software-only Isolated DEK descriptors | V04 route-graph integration and S1/S2 real hardware operation enforcement |
+| A02-04 | Authenticated encrypted ancestry, revisions and tombstones | Commit/generation/predecessor hash; duplicate, revision and tombstone tests | Last-seen-head outside vault dir, full S4 conflict/restore review |
+| A02-05 | Atomic candidate writer rejects stale base, preserves encrypted conflict copy | `src/v02/storage.rs` and deterministic pre/post-rename tests | Race-free descriptor-relative I/O, malicious same-user filesystem threat, full power-loss drill |
+| A02-06 | Legacy VLT1/JSON never implicitly treated as v2 | Version discrimination and corrupt/truncated-format tests | V04M-1 authorized, read-only legacy import + verified backup |
+| A02-07 | Root, native host, probe and candidate tests run in CI | PR #8 GitHub CI **pending at this ledger snapshot** | Exact run receipt and independent security review |
+| A02-08 | Main executable and native host remain fail-closed | No changes to existing runtime entry points | No production unlock, key factor route, recovery, R5/R6 or trusted daemon implementation |
+
+**V02 v0 is an experimental library only.** Do not mark A02 complete, OPEN-01/15 approved, G1 passed or any FR implementation DONE merely because it compiles or passes synthetic vectors. [Candidate format and limitations](../architecture/v02-format-candidate.md).
 
 ## 3. Security findings register
 

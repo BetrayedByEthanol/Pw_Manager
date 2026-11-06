@@ -138,6 +138,7 @@ pub(super) fn encode_header(
     w.raw(nonce);
     w.u8(header.mode as u8);
     encode_slots(&mut w, &header.vmk_slots)?;
+    encode_slots(&mut w, &header.bootstrap_slots)?;
     let mut bytes = w.finish();
     if bytes.len() > MAX_HEADER { return Err(V02Error::TooLarge); }
     let total: u32 = bytes.len().try_into().map_err(|_| V02Error::TooLarge)?;
@@ -168,7 +169,7 @@ pub(super) fn parse_header(file: &[u8]) -> Result<ParsedHeader<'_>, V02Error> {
     let head_len = u32::from_le_bytes(file[8..12].try_into().map_err(|_| V02Error::Invalid("head len"))?) as usize;
     let encrypted_len = u32::from_le_bytes(file[12..16].try_into().map_err(|_| V02Error::Invalid("cipher len"))?) as usize;
     let total = head_len.checked_add(encrypted_len).ok_or(V02Error::TooLarge)?;
-    if head_len < 115 || head_len > MAX_HEADER || encrypted_len < 16
+    if head_len < 117 || head_len > MAX_HEADER || encrypted_len < 16
         || encrypted_len > MAX_BODY + 16 || total > MAX_FILE || total != file.len() {
         return Err(V02Error::Invalid("invalid file or declared lengths"));
     }
@@ -186,9 +187,10 @@ pub(super) fn parse_header(file: &[u8]) -> Result<ParsedHeader<'_>, V02Error> {
     let outer_nonce = r.array::<24>()?;
     let mode = VaultMode::try_from(r.u8()?)?;
     let vmk_slots = decode_slots(&mut r)?;
+    let bootstrap_slots = decode_slots(&mut r)?;
     r.finish()?;
     let header = PublicHeader {
-        vault_id, commit_id, generation, predecessor_hash, mode, vmk_slots
+        vault_id, commit_id, generation, predecessor_hash, mode, vmk_slots, bootstrap_slots
     };
     header.validate()?;
     if outer_nonce == [0u8;24] { return Err(V02Error::Invalid("zero outer nonce")); }

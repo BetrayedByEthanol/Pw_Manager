@@ -226,11 +226,23 @@ pub struct PublicHeader {
     pub predecessor_hash: [u8; 32], // hash of preceding complete encrypted file
     pub mode: VaultMode,
     pub vmk_slots: Vec<Slot>,
+    /// Pre-load provider-seed envelopes, outside VMK encryption to avoid
+    /// the virtual-provider/VMK bootstrap circularity (OPEN-02).
+    pub bootstrap_slots: Vec<Slot>,
 }
 impl PublicHeader {
     pub fn genesis(mode: VaultMode, vmk_slots: Vec<Slot>) -> Self {
         Self { vault_id: Uuid::new_v4(), commit_id: Uuid::new_v4(),
-            generation: 1, predecessor_hash: [0u8; 32], mode, vmk_slots }
+            generation: 1, predecessor_hash: [0u8; 32], mode, vmk_slots,
+            bootstrap_slots: if mode == VaultMode::PasswordVirtual {
+                vec![
+                    Slot::pending(SlotTarget::ProviderSeed, Uuid::nil(),
+                        FactorPolicy::VaultPasswordVirtual),
+                    Slot::pending(SlotTarget::ProviderSeed, Uuid::nil(),
+                        FactorPolicy::CodeOnly),
+                ]
+            } else { Vec::new() },
+        }
     }
     fn validate(&self) -> Result<(), V02Error> {
         if self.vault_id.is_nil() || self.commit_id.is_nil() || self.generation == 0 {
@@ -239,7 +251,9 @@ impl PublicHeader {
         if (self.generation == 1) != (self.predecessor_hash == [0u8;32]) {
             return Err(V02Error::Invalid("invalid authenticated predecessor"));
         }
-        if self.vmk_slots.len() > MAX_SLOTS { return Err(V02Error::TooLarge); }
+        if self.vmk_slots.len() > MAX_SLOTS || self.bootstrap_slots.len() > MAX_SLOTS {
+            return Err(V02Error::TooLarge);
+        }
         let mut ids = HashSet::new();
         for slot in &self.vmk_slots {
             slot.validate(self.mode)?;
@@ -255,8 +269,44 @@ impl PublicHeader {
             };
             if !allowed { return Err(V02Error::Invalid("invalid vault-level route")); }
         }
-        // A pending route is NOT an active route. This structural candidate
-        // does not declare recovery coverage READY (V04 owns that).
+        // The specification requires both hardware administrative recovery
+        // ceremonies to be provisionable. Descriptors may remain PENDING,
+        // which is NOT a verified recovery path and cannot unlock anything.
+        let has = |factors: FactorPolicy| self.vmk_slots.iter().any(|s| s.factors == factors);
+        match self.mode {
+            VaultMode::PasswordVirtual if !has(FactorPolicy::VaultPasswordVirtual)
+                || !has(FactorPolicy::CodeOnly) =>
+                return Err(V02Error::Invalid("password-only required VMK slots missing")),
+            VaultMode::PasswordPhysical if !has(FactorPolicy::VaultPasswordPhysical)
+                || !has(FactorPolicy::CodePassword) || !has(FactorPolicy::CodePhysical) =>
+                return Err(V02Error::Invalid("hardware recovery descriptors incomplete")),
+            _ => {}
+        }
+        for slot in &self.bootstrap_slots {
+            slot.validate(self.mode)?;
+            if slot.target != SlotTarget::ProviderSeed || !ids.insert(slot.id) {
+                return Err(V02Error::Invalid("invalid public bootstrap slot"));
+            }
+            let allowed = match self.mode {
+                VaultMode::PasswordVirtual => matches!(slot.factors,
+                    FactorPolicy::VaultPasswordVirtual | FactorPolicy::CodeOnly),
+                VaultMode::PasswordPhysical => matches!(slot.factors,
+                    FactorPolicy::VaultPasswordPhysical |
+                    FactorPolicy::CodePassword | FactorPolicy::CodePhysical),
+            };
+            if !allowed { return Err(V02Error::Invalid("invalid bootstrap factor policy")); }
+        }
+        if self.mode == VaultMode::PasswordVirtual {
+            let has_seed = |factor: FactorPolicy| self.bootstrap_slots.iter()
+                .any(|s| s.factors == factor);
+            if !has_seed(FactorPolicy::VaultPasswordVirtual)
+                || !has_seed(FactorPolicy::CodeOnly) {
+                return Err(V02Error::Invalid("missing pre-load seed normal/recovery slots"));
+            }
+        }
+        // A pending route is NOT an active route. This candidate never declares
+        // coverage READY; actual factor derivation, sealing and verification
+        // remain V04/OPEN-01/15 work.
         Ok(())
     }
 }
@@ -349,7 +399,8 @@ impl VaultBody {
             || self.provider_seed_slots.len() > MAX_SLOTS || self.clients.len() > MAX_CLIENTS {
             return Err(V02Error::TooLarge);
         }
-        let mut ids = HashSet::new();
+        let mut ids: HashSet<Uuid> = header.vmk_slots.iter()
+            .chain(header.bootstrap_slots.iter()).map(|s| s.id).collect();
         for slot in self.vers_slots.iter().chain(self.provider_seed_slots.iter()) {
             slot.validate(header.mode)?;
             if !ids.insert(slot.id) { return Err(V02Error::Invalid("duplicate secret slot")); }
