@@ -55,6 +55,12 @@ fn check_regular(path: &Path) -> Result<bool, V02Error> {
         Err(e) => Err(io_error(e)),
     }
 }
+/// A bare relative filename has an empty parent component, which denotes the
+/// current directory. Normalize it before filesystem operations or comparisons.
+fn normalized_parent(path: &Path) -> Result<&Path, V02Error> {
+    let parent = path.parent().ok_or(V02Error::Invalid("vault directory absent"))?;
+    if parent.as_os_str().is_empty() { Ok(Path::new(".")) } else { Ok(parent) }
+}
 fn check_directory(dir: &Path) -> Result<(), V02Error> {
     let m = fs::symlink_metadata(dir).map_err(io_error)?;
     if !m.file_type().is_dir() || m.file_type().is_symlink() {
@@ -95,7 +101,7 @@ fn write_private_with_cleanup(path: &Path, bytes: &[u8]) -> Result<(), V02Error>
 }
 fn conflict_copy(dir: &Path, path: &Path, bytes: &[u8]) -> Result<PathBuf, V02Error> {
     let new = sidecar_path(path, &format!("conflict-{}", Uuid::new_v4()))?;
-    if new.parent() != Some(dir) { return Err(V02Error::Invalid("invalid conflict parent")); }
+    if normalized_parent(&new)? != dir { return Err(V02Error::Invalid("invalid conflict parent")); }
     write_private_with_cleanup(&new, bytes)?;
     sync_dir(dir)?;
     Ok(new)
@@ -129,7 +135,7 @@ where F: FnMut(Phase) -> Result<(), V02Error> {
         return Err(V02Error::Invalid("invalid candidate lineage"));
     }
     let _ = active_basename(path)?; // reject sidecar names before opening files
-    let dir = path.parent().ok_or(V02Error::Invalid("vault directory absent"))?;
+    let dir = normalized_parent(path)?;
     check_directory(dir)?;
     #[cfg(not(unix))]
     { return Err(V02Error::Invalid("V02 writer requires reviewed platform support")); }
