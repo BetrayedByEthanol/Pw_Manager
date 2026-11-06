@@ -72,10 +72,15 @@ fn read_bounded(path: &Path) -> Result<Vec<u8>, V02Error> {
 }
 #[cfg(unix)]
 fn make_private_file(path: &Path, bytes: &[u8]) -> Result<(), V02Error> {
+    // create_new must succeed BEFORE cleanup owns this path. A failed open
+    // must never delete a preexisting unrelated file or previous snapshot.
     let mut file = OpenOptions::new().write(true).create_new(true)
         .mode(0o600).open(path).map_err(io_error)?;
-    file.write_all(bytes).map_err(io_error)?;
-    file.sync_all().map_err(io_error)?;
+    let write_result = file.write_all(bytes).and_then(|_| file.sync_all());
+    if let Err(e) = write_result {
+        let _ = fs::remove_file(path);
+        return Err(io_error(e));
+    }
     Ok(())
 }
 #[cfg(not(unix))]
@@ -86,9 +91,7 @@ fn sync_dir(dir: &Path) -> Result<(), V02Error> {
     File::open(dir).map_err(io_error)?.sync_all().map_err(io_error)
 }
 fn write_private_with_cleanup(path: &Path, bytes: &[u8]) -> Result<(), V02Error> {
-    let result = make_private_file(path, bytes);
-    if result.is_err() { let _ = fs::remove_file(path); }
-    result
+    make_private_file(path, bytes)
 }
 fn conflict_copy(dir: &Path, path: &Path, bytes: &[u8]) -> Result<PathBuf, V02Error> {
     let new = sidecar_path(path, &format!("conflict-{}", Uuid::new_v4()))?;
@@ -176,4 +179,19 @@ where F: FnMut(Phase) -> Result<(), V02Error> {
         let _ = fs::remove_file(&tmp);
     }
     result
+}
+
+#[cfg(test)]
+mod sidecar_ownership_tests {
+    use super::*;
+    #[test]
+    fn failed_create_new_does_not_delete_an_existing_sidecar() {
+        let dir = std::env::temp_dir().join(format!("vaulty-v02-existing-{}", Uuid::new_v4()));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("vault.v2.previous-existing");
+        fs::write(&path, b"EXISTING_ENCRYPTED_SNAPSHOT").unwrap();
+        assert!(write_private_with_cleanup(&path, b"NOT_ALLOWED").is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"EXISTING_ENCRYPTED_SNAPSHOT");
+        fs::remove_dir_all(dir).unwrap();
+    }
 }
