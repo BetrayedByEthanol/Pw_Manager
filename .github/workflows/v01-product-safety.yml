@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches:
+      - main
       - fix/v01-prototype-safety-build-foundation
 permissions:
   contents: read
@@ -13,6 +14,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkgconf \
+            libpcsclite-dev \
+            libudev-dev \
+            libusb-1.0-0-dev \
+            libxkbcommon-dev \
+            libssl-dev \
+            libclang-dev
       - name: Root binary and tests
         run: |
           cargo check --locked --all-targets
