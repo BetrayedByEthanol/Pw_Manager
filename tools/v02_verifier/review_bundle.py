@@ -17,6 +17,8 @@ from pathlib import Path
 SCHEMA = "vaulty-v02d-review-inventory-v1"
 MAX_FILE_BYTES = 2 * 1024 * 1024
 FILE_ALLOWLIST = (
+    "Cargo.toml",
+    "Cargo.lock",
     "src/v02/model.rs",
     "src/v02/codec.rs",
     "src/v02/mod.rs",
@@ -25,6 +27,8 @@ FILE_ALLOWLIST = (
     "src/v02/v02d_tests.rs",
     "tools/v02_verifier/Cargo.toml",
     "tools/v02_verifier/reference_v02c.py",
+    "tools/v02_verifier/review_bundle.py",
+    "tools/v02_verifier/test_review_bundle.py",
     "tools/v02_verifier/fixtures/v02c_kats.txt",
     "tools/security_probes/CRYPTO_REVIEW_REQUEST.md",
     "docs/specification/v0.4.5.md",
