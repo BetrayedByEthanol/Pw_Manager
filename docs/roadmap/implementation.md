@@ -1,6 +1,6 @@
 # Vaulty — Implementation Roadmap
 
-**As of:** 2026-11-06 | **Merged baseline:** through PR #7, `main` at `ae6d387`. **Current implementation PR:** [V02 v0 candidate #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8) (in review, not merged).  
+**As of:** 2026-11-06 | **Merged baseline:** through [PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8), merge commit `84f92be` (V02 candidate only). **Current work:** V02-A [cryptographic protocol/key-slot review](../architecture/v02a-crypto-keyslot-review.md); OPEN-01/15 external approvals pending.  
 **Target:** [v0.4.5 specification](../specification/v0.4.5.md) | [architecture](../architecture/v0.4.5.md) | [feature ledger](features.md) | [acceptance register](acceptance-register.md)
 
 > **Status rules:** MERGED means source merged; CI-PASSED means its specified automated checks passed; VERIFIED means explicit acceptance tests and independent review evidence; DESIGN-APPROVED means intent only. Do not use “DONE” for unverified cryptographic behavior. A green workflow is not authorization to store real credentials.
@@ -11,7 +11,8 @@
 | --- | --- | --- |
 | V01 — Prototype Safety & Build Foundation | **Merged + CI-PASSED; security acceptance incomplete** | PR #4/#5; 11 root tests and browser/config checks; main GitHub CI green |
 | V01-A — Security Closure & Verification Hardening | **MERGED + PR CI PASSED; production security not certified** | PR #7 (`ae6d387`), fail-closed host, removed key dump, executable/IPC/fault tests; see [evidence register](acceptance-register.md) |
-| V02 — Canonical Format & Independent Keys | **PR #8 OPEN — candidate library, NOT final wire/production** | Typed VMK/VERS/DEKs, authenticated outer header/body, independent entry AEAD, pending scoped slot encoding, bounded parser, ancestry and synthetic conflict tests. **OPEN-01/15 approval and trusted runtime pending**; see [candidate format](../architecture/v02-format-candidate.md) |
+| V02 — Canonical Format & Independent Keys | **MERGED PR #8; candidate library only, NOT final wire/production** | Typed VMK/VERS/DEKs, authenticated outer header/body, independent entry AEAD, pending slots, bounded codec and ancestry checks; all four Codex P2 findings resolved, final-head V02/product CI passed. **OPEN-01/15 and runtime pending**; see [candidate format](../architecture/v02-format-candidate.md) |
+| V02-A — Cryptographic Protocol & Key-Slot Design Review | **Review candidate; not independently approved** | [Threat matrix, proposed transcript, Option A/OPEN-02 and reviewer gates](../architecture/v02a-crypto-keyslot-review.md); no production wrapping implemented |
 | V04M — Safe Migration Foundation | Not implemented | Separate format detection, non-destructive import and verify-before-commit |
 | V03 — Operations, States & Authenticators | Not implemented | Requires V02; masked LOADED VERS and virtual/physical adapter enforcement |
 | V04 — Recovery & Slot Provisioning | Not implemented | Option A semantics; code-only conditions; all dependent envelopes |
@@ -31,6 +32,8 @@
 | **V01** | Build and prototype safety | Compiling CLI/root/host; fail-closed default executable; fresh outer nonces; strict body checks; atomic backup/lock; CI on main | — |
 | **V01-A** | Security closure (merged; acceptance limited) | Remove reachable key-dump/debug helpers; make default native host fail closed rather than report fake success; test host IPC and executable; inject filesystem faults; classify remaining V01 security review items; update evidence | V01 |
 | **V02** | Authenticated canonical format and separated roots | Bounded single-file codec, independent VMK/VERS/DEKs, policy-bound slots, full authenticity and version gates, generation index, tombstones, nonced AEAD, crash writer, negative/fuzz tests | V01-A + OPEN-01 approval before activating crypto |
+| **V02-A** | Cryptographic protocol and key-slot design review | Threat/slot discrepancy analysis, proposed factor/PRF transcripts, Option A recovery and bootstrap matrices, review handoff; **OPEN-01/15 remain blocked until independent approval** | V02 candidate merged |
+| **V02-B** | Reviewed, versioned key-slot wrapping implementation (future) | Implement only after independent protocol approval: final slot schema/AEAD/commitment, Argon2id/HKDF, known-answer and substitution vectors; explicit migration/version behavior | V02-A + OPEN-01, OPEN-15 where physical slots apply |
 | **V04M-1** | Migration foundation | Version detector, read-only legacy parser, backup manifest, separate destination output, reopen/verify and rollback instructions. Do not auto-import unknown files | V02 codec |
 | **V03** | Session states and authenticator adapters | CLOSED/OPEN/LOADED/LOCKED, READ/WRITE; masked two-share VERS and virtual adapter while LOADED; no master-password prompt on reads; fresh physical FIDO2 on physical entry read; trusted prompt | V02 + OPEN-15 |
 | **V04** | Recovery / rewrap provisioning | Distinct VMK/VERS/DEK slots; code-only VMK recovery **password-only vaults exclusively**, hardware vaults with separately provisioned code+existing-password replacement and code+registered-hardware reset routes; Option A explicit code prompts; READY/PENDING/MISSING/DEGRADED/UNVERIFIED/STRICT_NONE; recovery test matrix | V02–V03 |
@@ -59,9 +62,9 @@ The V04M identifiers name a **migration/transfer workstream**; they may be sched
 | **G4 — Pilot/release assurance** | CRUD with four modes, real browser flows, backups/restore, threat-model review and independent release evidence | **Blocked** |
 | **G5 — Optional postponed** | Passkeys/typing/automatic sync-specific separate gates | **Deferred** |
 
-## D. Merged V01-A #7 and current V02 v0 #8
+## D. Merged V01-A #7 and V02 v0 #8
 
-**V01-A source was merged in PR #7; remaining cryptographic/release acceptance is tracked separately. V02 candidate PR #8 adds a standalone codec library and does NOT change the disabled main executable.**
+**V01-A source was merged in PR #7. V02 candidate source was merged in PR #8 (`84f92be`); remaining cryptographic/release acceptance is tracked separately. The standalone codec library does NOT change the disabled main executable.**
 1. Strip or isolate `src/util/gocrypt.rs` master-key-dump and destructive experiment helpers from the compiled runtime, plus any uncontrolled credential logging. Keep tests synthetic.
 2. Default native host must report UNAVAILABLE/NOT_IMPLEMENTED for secret and persistence operations unless an explicitly test-only mock is enabled; no default successful fake “saved” receipt or unlocked status. Add host protocol behavior tests.
 3. Test executable fails nonzero, does not create/modify a vault and does not print real secrets.
@@ -71,7 +74,7 @@ The V04M identifiers name a **migration/transfer workstream**; they may be sched
 
 **Out-of-scope for V01-A:** enabling legacy CLI or mock native host; implementing the canonical format; marking OPEN-01/15 approved; marketing Vaulty as safe for real credentials.
 
-### V02 v0 — staged acceptance (PR #8, not merged)
+### V02 v0 — staged acceptance (PR #8 merged, candidate only)
 
 | Candidate deliverable | Implementation | Remaining approval |
 | --- | --- | --- |
@@ -94,10 +97,10 @@ Only move an item to DONE when merged implementation plus applicable acceptance 
 
 | Blocker | Needs new user decision? | Owner / next action |
 | --- | --- | --- |
-| V01-A cleanup and tests | No | Implement PR and run CI |
+| V01-A cleanup and tests | No | PR #7 merged; security acceptance remains separately gated |
 | OPEN-01 combined-factor KEK/key commitment | **Independent reviewer approval**; may require design decision if rejected | Secure review before V02 crypto enablement |
 | OPEN-15 PRF scope/batching/UV | **Independent reviewer approval**; may require capability trade-off choice | Review before V03/V06 hardware policy |
-| Canonical codec and authenticated ancestry | No for approved principles; cryptographic details require review | Implement V02 with adversarial tests |
+| Canonical codec and authenticated ancestry | No for approved principles; cryptographic details require review | V02 candidate merged; finish S4/dirfd/fuzz and independent cryptographic acceptance |
 | Option A code-dependent recovery envelopes | **Approved**, no repeat decision | Implement V04 |
 | ISOLATED hardware normal access; hardware-only recovery or STRICT_NONE | **Approved**, no repeat decision | Test that STRICT_NONE never permits a virtual normal route; implement and test V04/V05 |
 | INDEPENDENT UI setup | **Deferred**, not blocked by schema | Later product milestone |

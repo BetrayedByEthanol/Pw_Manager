@@ -13,7 +13,7 @@
 | **FR-LIFE-02** | Open / load existing vault; transient VMK then discard | V02/V03 | V02 candidate decrypt primitive accepts caller-supplied VMK; no real unlock/LOADED state |
 | **FR-LIFE-03** | Lock / close; wipe masked VERS and provider state | V03 | Planned |
 | **FR-LIFE-04** | Start / stop / status daemon | V07A | Prototype socket only |
-| **FR-VLT-01** | Create canonical one-file vault; independent entry DEKs | V02–V04 | V02 candidate codec PR #8 in review; no authenticated vault creation/unlock runtime |
+| **FR-VLT-01** | Create canonical one-file vault; independent entry DEKs | V02–V04 | V02 candidate codec merged in PR #8; no authenticated vault creation/unlock runtime |
 | **FR-ENT-01** | Add entry, independent DEK + VMK-authorized index write | V05 | Planned |
 | **FR-ENT-02** | Edit entry, entry factors + VMK-authorized transaction | V05 | Planned |
 | **FR-ENT-03** | Update stored credential vs entry-protection password | V05/V08B | Planned |
@@ -27,7 +27,7 @@
 | **FR-AUTH-04** | Bounded retry UX (not offline brute-force protection) | V03/V07A | Planned |
 | **FR-DEV-01** | Distinct trusted authenticator and client inventory | V06/V07 | Planned |
 | **FR-GEN-01** | CSPRNG password generator; selectable policy without modulo bias | V01/V08B | Prototype unit-tested; main disabled |
-| **FR-CRY-01** | Argon2id/HKDF/AEAD/nonce and reviewed key commitment | V02 | V02 candidate independent random keys + dual AEAD and bounded codec under PR #8; factor combiner/commitment OPEN-01 blocked |
+| **FR-CRY-01** | Argon2id/HKDF/AEAD/nonce and reviewed key commitment | V02/V02-A/V02-B | V02 candidate random keys/dual AEAD merged; [V02-A review packet](../architecture/v02a-crypto-keyslot-review.md) proposes protocol; actual factor wrapping, commitment and OPEN-01/15 approval not delivered |
 | **FR-SEC-01** | Secret lifetimes; masked VERS/virtual adapter while LOADED | V03/V05 | Planned |
 | **FR-PKY-01** | Software / hardware passkeys with RP-bound assertions | V08C | Deferred, separately gated |
 | **FR-HOT-01** | Register and manage global shortcut activation | V08A | Prototype code; disabled |
@@ -39,7 +39,7 @@
 | **FR-IPC-02** | Owner-approved paired scoped client identity | V07 | Planned |
 | **FR-IPC-03** | User-initiated fill with origin/frame and E2E binding | V08B | Extension prototype; no E2E |
 | **FR-IPC-04** | Save/register through relay and durable receipt | V08B/V08C | Native mock returns false success |
-| **FR-STO-01** | Atomic authenticated file writes + previous generation + ancestry | V02 | V01 partial writer tests; canonical format missing |
+| **FR-STO-01** | Atomic authenticated file writes + previous generation + ancestry | V02 | V02 candidate writer/ancestry merged in PR #8; race-free storage, last-seen-head and production durability not done |
 | **FR-REC-01** | Provisioned VMK/VERS recovery; code-only vault recovery restricted to password-only mode | V04 | Planned; Option A approved |
 | **FR-REC-02** | Lost hardware recovery and code-dependent new-device slots | V04/V06 | Planned; Option A approved |
 | **FR-REC-03** | Backup authenticator and verified rewrap coverage | V06 | Planned |
@@ -61,7 +61,7 @@ N-01, N-02 and N-03 should share vetted import/transaction primitives but requir
 
 ## V01-A safety verification (PR #7, **not a finished feature**)
 
-The pending [V01-A safety PR](https://github.com/BetrayedByEthanol/Pw_Manager/pull/7) hardens the **disabled** legacy implementation. It does not complete the planned feature requirements. Its expanded CI verified root smoke and negative unit tests plus 3 native-host child-process tests; source merge and independent review are still pending.
+The merged [V01-A safety PR](https://github.com/BetrayedByEthanol/Pw_Manager/pull/7) hardens the **disabled** legacy implementation. It does not complete planned feature requirements. Its expanded CI verified root smoke and negative unit tests plus 3 native-host child-process tests; production security acceptance remains pending.
 
 | FR | Changed supporting safety evidence | Not delivered |
 | --- | --- | --- |
@@ -73,9 +73,13 @@ The pending [V01-A safety PR](https://github.com/BetrayedByEthanol/Pw_Manager/pu
 
 No FR status is upgraded to DONE by this PR.
 
-## V02 candidate v0 (PR #8 — no feature completion claims)
+## V02 candidate v0 (PR #8 merged — no feature completion claims)
 
-The pending [V02 PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8) introduces a separate authenticated **candidate** vault-format library, not an enabled application feature. `FR-VLT-01`, `FR-LIFE-02`, `FR-CRY-01`, `FR-STO-01` and `FR-ENT-06` have implementation components and negative tests; **none are fully delivered** without runtime authorization, approved combined-factor KEKs, recovery/entry route graph, cross-platform persistence and migration. The 38 requirement IDs and 67 historical O-references remain unchanged. See the [V02 format proposal](../architecture/v02-format-candidate.md) and [A02 acceptance matrix](acceptance-register.md#2c-v02-candidate-codec-v0--acceptance-matrix-pr-8-unmerged).
+The merged [V02 PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8) introduces a separate authenticated **candidate** vault-format library, not an enabled application feature. `FR-VLT-01`, `FR-LIFE-02`, `FR-CRY-01`, `FR-STO-01` and `FR-ENT-06` have implementation components and negative tests; **none are fully delivered** without runtime authorization, approved combined-factor KEKs, recovery/entry route graph, cross-platform persistence and migration. The 38 requirement IDs and 67 historical O-references remain unchanged. See the [V02 format proposal](../architecture/v02-format-candidate.md) and [A02 acceptance matrix](acceptance-register.md#2c-v02-candidate-codec-v0--acceptance-matrix-pr-8-merged-candidate-only).
+
+## V02-A review status (not implementation)
+
+The [V02-A cryptographic protocol and key-slot review](../architecture/v02a-crypto-keyslot-review.md) records candidate transcript fields, independent review questions, effective access/recovery route requirements and failure tests. No active slots, password KDF, physical PRF or key commitment are delivered by the design packet. **OPEN-01/15 and G1/G2 remain BLOCKED.**
 
 ## Source-feature preservation
 
@@ -91,4 +95,4 @@ No original feature intent is silently removed. Existing `O-01`…`O-67` mapping
 4. Report separately: design approved, implementation merged, tests verified, security review approved and production release gate.
 5. Never mark a feature complete merely because reference route graphs, placeholder structs, mock native-host results or synthetic crypto vectors exist.
 
-**Current work:** V02 candidate PR #8 after merged V01-A PR #7; OPEN-01/15 review and runtime integration remain blockers. See [implementation roadmap](implementation.md).
+**Current work:** V02-A protocol and key-slot review following merged V02 candidate PR #8; OPEN-01/15 independent approval and runtime integration remain blockers. See [implementation roadmap](implementation.md).

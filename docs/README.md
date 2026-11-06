@@ -1,7 +1,7 @@
 # Vaulty Documentation Index
 
 **Canonical design target:** **v0.4.5**, 6 November 2026.  
-**Implementation reference:** GitHub `main` `ae6d387` (PR #7 merged); [V02 v0 PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8) is an unmerged candidate.  
+**Implementation reference:** GitHub `main` `84f92be` ([PR #8 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8), candidate codec only). V02-A key-slot design review is in progress; independent crypto acceptance is not obtained.  
 **Safety status:** Prototype foundation builds and tests; **not safe for real credentials and not security-certified**.
 
 Start here rather than relying on previous chats or the historical README feature checklist.
@@ -11,7 +11,8 @@ Start here rather than relying on previous chats or the historical README featur
 | Document | Purpose | Authority |
 | --- | --- | --- |
 | [Product & security specification v0.4.5](specification/v0.4.5.md) | Normative behavior, keys, states, entry policies, recovery, client trust and migration | **Canonical design** |
-| [V02 candidate vault format v0](architecture/v02-format-candidate.md) | Experimental binary schema, independent keys, AEAD, strict parsing and explicit OPEN-01/15 limitations | **Candidate only; not approved runtime or frozen wire format** |
+| [V02 candidate vault format v0](architecture/v02-format-candidate.md) | Merged experimental binary schema, independent keys, AEAD, strict parsing and explicit OPEN-01/15 limitations | **Candidate only; not approved runtime or frozen wire format** |
+| [V02-A cryptographic protocol and key-slot review](architecture/v02a-crypto-keyslot-review.md) | Protocol gaps, transcript questions, recovery/PRF threat matrix and independent review exit criteria | **Review candidate; not approved cryptography** |
 | [Architecture v0.4.5](architecture/v0.4.5.md) | System components, single-file structure, trust boundaries, key flows and operation sequences | **Target design** |
 | [Implementation roadmap](roadmap/implementation.md) | V01-A through V09, V04M workstream, dependencies and release gates | **Work plan** |
 | [Feature roadmap](roadmap/features.md) | All 38 normalized requirements, four N-features and links to the 67 historical source items | **Feature ledger** |
@@ -47,4 +48,4 @@ Each PR affecting keys, policy, recovery, storage, migration or client behavior 
 
 ## Recommended immediate milestone
 
-**V02 — Candidate Vault Format v0** ([PR #8 in review](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8)), following merged V01-A PR #7. OPEN-01/15 independent reviews and runtime policy integration are required before G1 acceptance. OPEN-01 and OPEN-15 must be independently reviewed before corresponding cryptographic and physical-PRF release gates.
+**V02-A — Cryptographic Protocol & Key-Slot Design Review**, following merged V02 candidate [PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8). [Review packet](architecture/v02a-crypto-keyslot-review.md) records candidate protocols, unanswered cryptographic/device questions and implementation gates. OPEN-01/15 independent approval and runtime policy integration are required before G1/G2 acceptance. OPEN-01 and OPEN-15 must be independently reviewed before corresponding cryptographic and physical-PRF release gates.
