@@ -18,55 +18,48 @@ pub struct PasswordEntry {
 }
 
 impl PasswordEntry {
+    /// Strict, bounded reader for the legacy password payload.
+    /// Full canonical schema/padding belongs to V02.
     pub fn deserialize(data: &Vec<u8>) -> Result<PasswordEntry, Box<dyn std::error::Error>> {
-        let mut idx : usize = 0;
-        let title_length: u16 = u16::from_le_bytes([data[idx], data[idx+1]]);
-        idx += 2;
-        let title = String::from_utf8(data[idx..idx+title_length as usize].to_vec())?;
-        idx += title_length as usize;
-        let username_length: u16 = u16::from_le_bytes([data[idx], data[idx+1]]);
-        idx += 2;
-        let username = if username_length > 0 {
-            Some(String::from_utf8(data[idx..idx+username_length as usize].to_vec())?)
-        } else {
-            None
-        };
-        idx += username_length as usize;
-        let password_length: u16 = u16::from_le_bytes([data[idx], data[idx+1]]);
-        idx += 2;
-        let password = SecretString::from(String::from_utf8(data[idx..idx+password_length as usize].to_vec())?);
-        idx += password_length as usize;
-        let url_count: u16 = u16::from_le_bytes([data[idx], data[idx+1]]);
-        idx += 2;
-        let mut urls: Vec<String> = vec![];
+        fn bytes<'a>(data: &'a [u8], at: &mut usize, n: usize)
+            -> Result<&'a [u8], Box<dyn std::error::Error>>
+        {
+            let end = at.checked_add(n).ok_or("payload length overflow")?;
+            let value = data.get(*at..end).ok_or("truncated password payload")?;
+            *at = end;
+            Ok(value)
+        }
+        fn len(data: &[u8], at: &mut usize) -> Result<u16, Box<dyn std::error::Error>> {
+            Ok(u16::from_le_bytes(bytes(data, at, 2)?.try_into()?))
+        }
+        fn field(data: &[u8], at: &mut usize)
+            -> Result<(u16, String), Box<dyn std::error::Error>>
+        {
+            let n = len(data, at)?;
+            let value = String::from_utf8(bytes(data, at, n as usize)?.to_vec())?;
+            Ok((n, value))
+        }
+        let mut at = 0usize;
+        let (title_length, title) = field(data, &mut at)?;
+        let (username_length, username_raw) = field(data, &mut at)?;
+        let username = (username_length != 0).then_some(username_raw);
+        let (password_length, password_raw) = field(data, &mut at)?;
+        let password = SecretString::from(password_raw);
+        let url_count = len(data, &mut at)?;
+        if url_count as usize > (data.len() - at) / 2 {
+            return Err("invalid URL count".into());
+        }
+        let mut urls = Vec::with_capacity(url_count as usize);
         for _ in 0..url_count {
-            let url_length: u16 = u16::from_le_bytes([data[idx], data[idx+1]]);
-            idx += 2;
-            let url = String::from_utf8(data[idx..idx+url_length as usize].to_vec())?;
-            idx += url_length as usize;
+            let (_, url) = field(data, &mut at)?;
             urls.push(url);
         }
-        let notes_length: u16 = u16::from_le_bytes([data[idx], data[idx+1]]);
-        idx += 2;
-
-        let notes = if notes_length > 0 {
-            Some(String::from_utf8(data[idx..idx+notes_length as usize].to_vec())?)
-        } else {
-            None
-        };
-        idx += notes_length as usize;
-
+        let (notes_length, notes_raw) = field(data, &mut at)?;
+        let notes = (notes_length != 0).then_some(notes_raw);
+        if at != data.len() { return Err("unexpected trailing password payload data".into()); }
         Ok(Self {
-            title_length,
-            title,
-            username_length,
-            username,
-            password_length,
-            password,
-            url_count,
-            urls,
-            notes_length,
-            notes,
+            title_length, title, username_length, username, password_length,
+            password, url_count, urls, notes_length, notes,
         })
     }
 }
@@ -146,7 +139,7 @@ impl fmt::Display for PasswordEntry {
             writeln!(f, "Username: {}", username)?;
         }
 
-        writeln!(f, "Password: {}", self.password.expose_secret())?;
+        writeln!(f, "Password: [REDACTED]")?;
 
         if !self.urls.is_empty() {
             writeln!(f, "URLs    :")?;
@@ -160,5 +153,46 @@ impl fmt::Display for PasswordEntry {
         }
 
         Ok(())
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn malformed_legacy_password_payload_rejected_without_panicking() {
+        let entry = PasswordEntry {
+            title_length: 4, title: "test".into(),
+            username_length: 4, username: Some("user".into()),
+            password_length: 6, password: SecretString::from("secret".to_owned()),
+            url_count: 1, urls: vec!["https://example.org".into()],
+            notes_length: 4, notes: Some("note".into()),
+        };
+        let data = entry.serialize();
+        let restored = PasswordEntry::deserialize(&data).unwrap();
+        assert_eq!(restored.title, "test");
+        assert_eq!(restored.username.as_deref(), Some("user"));
+        assert_eq!(restored.urls.len(), 1);
+        for len in 0..data.len() {
+            assert!(PasswordEntry::deserialize(&data[..len].to_vec()).is_err());
+        }
+        let mut oversized = data.clone();
+        oversized[0..2].copy_from_slice(&u16::MAX.to_le_bytes());
+        assert!(PasswordEntry::deserialize(&oversized).is_err());
+        let mut trailing = data.clone();
+        trailing.push(42);
+        assert!(PasswordEntry::deserialize(&trailing).is_err());
+    }
+    #[test]
+    fn password_display_is_redacted_by_default() {
+        let entry = PasswordEntry {
+            title_length: 0, title: String::new(),
+            username_length: 0, username: None,
+            password_length: 25, password: SecretString::from("SYNTHETIC_DISPLAY_TEST_KEY".to_owned()),
+            url_count: 0, urls: Vec::new(),
+            notes_length: 0, notes: None,
+        };
+        let shown = entry.to_string();
+        assert!(shown.contains("[REDACTED]"));
+        assert!(!shown.contains("SYNTHETIC_DISPLAY_TEST_KEY"));
     }
 }

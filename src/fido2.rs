@@ -18,7 +18,7 @@ pub fn ctap_register(pin: &SecretString) -> Result<(Vec<u8>, String, Vec<u8>), B
     let mut buf = vec![0u8; 32];
     OsRng.fill_bytes(&mut buf);
     const RP_ID: &str = "vaulty.app";
-    let username = "Dennis";
+    let username = "Vaulty";
     let args = MakeCredentialArgsBuilder::new(RP_ID, &buf)
         .user_entity(
             &(PublicKeyCredentialUserEntity::new(
@@ -38,7 +38,7 @@ pub fn ctap_register(pin: &SecretString) -> Result<(Vec<u8>, String, Vec<u8>), B
     // let pub_key = verify.credential_public_key.clone();
     // PublicKey::with_der(&pub_key.der, public_key::PublicKeyType::Ecdsa256);
     // println!("{:}", hex::encode(verify.credential_public_key.der));
-    if !verify.is_success { return Err("FIDO2 attestation verification failed".into()); }
+    require_verified(verify.is_success, "FIDO2 attestation verification failed")?;
     Ok((verify.credential_id, RP_ID.to_string(), verify.credential_public_key.der))
 }
 
@@ -83,6 +83,33 @@ pub fn ctap_authenticate(kek: &[u8; 32],  pin: &SecretString, cred_id: Vec<Vec<u
         &(assert),
     );
     let credential_id = assert.credential_id.clone();
-    if !verify { return Err("FIDO2 assertion verification failed".into()); }
+    require_verified(verify, "FIDO2 assertion verification failed")?;
     Ok((prf, verify, credential_id))
+}
+/// V01-A unit-testable fail-closed verification boundary; no synthetic
+/// boolean can replace real verifier output in production operations.
+fn require_verified(ok: bool, reason: &'static str)
+    -> Result<(), Box<dyn std::error::Error>>
+{
+    if !ok { return Err(reason.into()); }
+    Ok(())
+}
+
+#[cfg(test)]
+mod v01a_negative_verification_tests {
+    use super::*;
+    #[test]
+    fn attestation_and_assertion_verification_fail_closed() {
+        assert!(require_verified(false, "attestation rejected").is_err());
+        assert!(require_verified(false, "assertion rejected").is_err());
+        assert!(require_verified(true, "assertion rejected").is_ok());
+    }
+    #[test]
+    fn credential_identity_or_uv_verification_cannot_be_substituted() {
+        // A real wrong-credential/RP/UV/PRF hardware suite and pinned slot AAD
+        // remain OPEN-15 / V03-V06 work. This validates only failure
+        // propagation, not CTAP security or attestation provenance.
+        assert!(require_verified(false, "wrong credential").is_err());
+        assert!(require_verified(false, "UV mismatch").is_err());
+    }
 }

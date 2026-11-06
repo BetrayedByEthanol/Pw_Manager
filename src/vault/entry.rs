@@ -130,11 +130,10 @@ impl VaultyEntry {
         Ok(Rc::new(PasswordEntry::deserialize(&payload)?))
     }
 
-    pub fn print_entry(&self, vault_id: Uuid, kdf: &KdfSection, vault_secret: &SecretBox<[u8]>) -> Result<(), Box<dyn Error>> {
-        let entry = self.decrypt_entry_payload(vault_id, kdf, vault_secret)?;
-        let cast_entry = entry.as_any().downcast_ref::<PasswordEntry>().ok_or("Failed to downcast entry")?;
-        println!("{:}",cast_entry.password.expose_secret());
-        Ok(())
+    /// Deprecated legacy CLI path. Direct stdout credential release is
+    /// forbidden until V07 trusted approval and scoped reveal are implemented.
+    pub fn print_entry(&self, _vault_id: Uuid, _kdf: &KdfSection, _vault_secret: &SecretBox<[u8]>) -> Result<(), Box<dyn Error>> {
+        Err("direct legacy password printing is disabled".into())
     }
 
     pub fn set_entry(&mut self, title: String, username: String, password: SecretString, url: String) {

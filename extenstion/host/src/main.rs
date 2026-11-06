@@ -15,10 +15,6 @@ const MAX_GENERATED_REQUEST_ID_CHARS: usize = 128;
 const MIN_PASSWORD_POLICY_LENGTH: u64 = 8;
 const MAX_PASSWORD_POLICY_LENGTH: u64 = 128;
 
-const MOCK_USERNAME: &str = "demo@example.com";
-const MOCK_PASSWORD: &str = "demo-password";
-const MOCK_GENERATED_PASSWORD: &str = "Vaulty-Demo-Generated-Password-123!";
-
 const ALLOWED_EXTENSION_REQUESTS: &[&str] = &[
     "GENERATE_PASSWORD",
     "SAVE_CREDENTIAL",
@@ -34,17 +30,16 @@ struct ValidationError {
     message: String,
 }
 
-fn main() {
-    if let Err(err) = run() {
-        let _ = write_native_message(&json!({
-            "ok": false,
-            "type": "RELAY_ERROR",
-            "requestId": "",
-            "error": {
-                "code": "NATIVE_HOST_ERROR",
-                "message": err.to_string()
-            }
-        }));
+fn main() -> std::process::ExitCode {
+    match run() {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(_) => {
+            // Error context may contain sensitive bytes: never echo it.
+            let _ = write_native_message(&relay_error(
+                "", "NATIVE_HOST_ERROR", "Native message rejected",
+            ));
+            std::process::ExitCode::FAILURE
+        }
     }
 }
 
@@ -52,7 +47,7 @@ fn run() -> Result<()> {
     let request = read_native_message()
         .context("failed to read browser native message")?;
 
-    let response = handle_mock_request(request);
+    let response = handle_request(request);
 
     write_native_message(&response)
         .context("failed to write native response")?;
@@ -60,71 +55,15 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-fn handle_mock_request(request: Value) -> Value {
+/// Default installation has no daemon or verified E2E channel.
+/// Valid requests must never claim a credential was saved or retrieved.
+fn handle_request(request: Value) -> Value {
     if let Err(err) = validate_request(&request) {
         return relay_error(&err.request_id, err.code, &err.message);
     }
-
-    let request_id = request
-        .get("requestId")
-        .and_then(Value::as_str)
-        .unwrap_or("");
-
-    let request_type = request
-        .get("type")
-        .and_then(Value::as_str)
-        .unwrap_or("");
-
-    match request_type {
-        "GENERATE_PASSWORD" => json!({
-            "ok": true,
-            "type": "GENERATE_PASSWORD_RESULT",
-            "requestId": request_id,
-            "generatedRequestId": "mock-generated-request-id",
-            "password": MOCK_GENERATED_PASSWORD
-        }),
-
-        "RETRIEVE_CREDENTIAL" => json!({
-            "ok": true,
-            "type": "RETRIEVE_CREDENTIAL_RESULT",
-            "requestId": request_id,
-            "origin": request.get("origin").cloned().unwrap_or(Value::Null),
-            "credential": {
-                "username": MOCK_USERNAME,
-                "password": MOCK_PASSWORD
-            }
-        }),
-
-        "SAVE_CREDENTIAL" => json!({
-            "ok": true,
-            "type": "SAVE_CREDENTIAL_RESULT",
-            "requestId": request_id,
-            "status": "saved",
-            "action": "created",
-            "credentialId": "mock-credential-id"
-        }),
-
-        "CHECK_LOCK_STATE" => json!({
-            "ok": true,
-            "type": "CHECK_LOCK_STATE_RESULT",
-            "requestId": request_id,
-            "locked": false,
-            "state": "unlocked_mock"
-        }),
-
-        "CHECK_DUPLICATE_CREDENTIAL" => json!({
-            "ok": true,
-            "type": "CHECK_DUPLICATE_CREDENTIAL_RESULT",
-            "requestId": request_id,
-            "duplicate": false
-        }),
-
-        _ => relay_error(
-            request_id,
-            "UNIMPLEMENTED_MOCK_REQUEST",
-            &format!("Allowed but not implemented by mock host: {}", request_type),
-        ),
-    }
+    let id = request.get("requestId").and_then(Value::as_str).unwrap_or("");
+    relay_error(id, "UNAVAILABLE",
+        "Vaulty secure daemon relay is unavailable; no credential was accessed or saved")
 }
 
 fn validate_request(request: &Value) -> StdResult<(), ValidationError> {
@@ -323,6 +262,39 @@ fn validate_origin(request_id: &str, origin: &str) -> StdResult<(), ValidationEr
         ));
     }
 
+    // This check only rejects malformed input. The untrusted browser-supplied
+    // origin MUST NOT authorize any action at the daemon.
+    if rest.contains('@') || rest.contains('\\') || rest.contains('%')
+        || rest.chars().any(|c| c.is_whitespace() || c.is_control())
+    {
+        return Err(validation_error(request_id, "INVALID_ORIGIN", "malformed origin"));
+    }
+    let port = if let Some(ip6) = rest.strip_prefix('[') {
+        let (address, suffix) = ip6.split_once(']').ok_or_else(||
+            validation_error(request_id, "INVALID_ORIGIN", "malformed IPv6 origin"))?;
+        if address.parse::<std::net::Ipv6Addr>().is_err() {
+            return Err(validation_error(request_id, "INVALID_ORIGIN", "invalid IPv6 host"));
+        }
+        if suffix.is_empty() { None }
+        else { Some(suffix.strip_prefix(':').ok_or_else(||
+            validation_error(request_id, "INVALID_ORIGIN", "invalid IPv6 port"))?) }
+    } else {
+        let (host, port) = match rest.split_once(':') {
+            Some((h, p)) => (h, Some(p)),
+            None => (rest, None),
+        };
+        if host.len() > 253 || !host.split('.').all(|label|
+            !label.is_empty() && label.len() <= 63
+            && !label.starts_with('-') && !label.ends_with('-')
+            && label.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+        {
+            return Err(validation_error(request_id, "INVALID_ORIGIN", "invalid DNS host"));
+        }
+        port
+    };
+    if port.is_some_and(|p| p.parse::<u16>().map_or(true, |n| n == 0)) {
+        return Err(validation_error(request_id, "INVALID_ORIGIN", "invalid port"));
+    }
     Ok(())
 }
 
@@ -601,58 +573,141 @@ fn relay_error(request_id: &str, code: &str, message: &str) -> Value {
     })
 }
 
+/// Reads exactly one bounded native-messaging frame.
+fn read_native_message_from<R: Read>(reader: &mut R) -> Result<Value> {
+    let mut len = [0u8; 4];
+    reader.read_exact(&mut len).context("missing length prefix")?;
+    let n = u32::from_ne_bytes(len) as usize;
+    if n == 0 || n > MAX_MESSAGE_BYTES { bail!("invalid message length"); }
+    let mut bytes = vec![0u8; n];
+    reader.read_exact(&mut bytes).context("truncated frame")?;
+    serde_json::from_slice(&bytes).context("invalid JSON")
+}
 fn read_native_message() -> Result<Value> {
-    let mut len_buf = [0u8; 4];
-
-    std::io::stdin()
-        .read_exact(&mut len_buf)
-        .context("missing message length prefix")?;
-
-    let len = u32::from_ne_bytes(len_buf) as usize;
-
-    if len == 0 {
-        bail!("empty message");
-    }
-
-    if len > MAX_MESSAGE_BYTES {
-        bail!("message too large: {} bytes", len);
-    }
-
-    let mut buffer = vec![0u8; len];
-
-    std::io::stdin()
-        .read_exact(&mut buffer)
-        .context("failed to read message body")?;
-
-    let value = serde_json::from_slice(&buffer)
-        .context("message body is not valid JSON")?;
-
-    Ok(value)
+    read_native_message_from(&mut std::io::stdin().lock())
+}
+fn write_native_message_to<W: Write>(writer: &mut W, response: &Value) -> Result<()> {
+    let bytes = serde_json::to_vec(response).context("failed to serialize response")?;
+    if bytes.len() > MAX_MESSAGE_BYTES { bail!("response too large"); }
+    writer.write_all(&(bytes.len() as u32).to_ne_bytes())?;
+    writer.write_all(&bytes)?;
+    writer.flush()?;
+    Ok(())
+}
+fn write_native_message(response: &Value) -> Result<()> {
+    write_native_message_to(&mut std::io::stdout().lock(), response)
 }
 
-fn write_native_message(value: &Value) -> Result<()> {
-    let bytes = serde_json::to_vec(value)
-        .context("failed to serialize response")?;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
 
-    let len = bytes.len();
-
-    if len > MAX_MESSAGE_BYTES {
-        bail!("response too large: {} bytes", len);
+    fn framed(body: &[u8]) -> Vec<u8> {
+        let mut bytes = (body.len() as u32).to_ne_bytes().to_vec();
+        bytes.extend_from_slice(body);
+        bytes
     }
 
-    let mut stdout = std::io::stdout();
+    #[test]
+    fn native_request_and_error_frame_round_trip() {
+        let wire = framed(br#"{"type":"CHECK_LOCK_STATE","requestId":"req_42"}"#);
+        let input = read_native_message_from(&mut Cursor::new(wire)).unwrap();
+        let response = handle_request(input);
+        assert_eq!(response["requestId"], "req_42");
+        assert_eq!(response["type"], "RELAY_ERROR");
+        assert_eq!(response["ok"], false);
+        assert_eq!(response["error"]["code"], "UNAVAILABLE");
+        let mut output = Vec::new();
+        write_native_message_to(&mut output, &response).unwrap();
+        assert_eq!(read_native_message_from(&mut Cursor::new(output)).unwrap(), response);
+    }
 
-    stdout
-        .write_all(&(len as u32).to_ne_bytes())
-        .context("failed to write response length")?;
+    #[test]
+    fn no_request_type_can_claim_real_secret_or_save() {
+        let probes = [
+            json!({"type":"GENERATE_PASSWORD","requestId":"g","origin":"https://example.org"}),
+            json!({"type":"RETRIEVE_CREDENTIAL","requestId":"r","origin":"https://example.org","purpose":"login_fill"}),
+            json!({"type":"SAVE_CREDENTIAL","requestId":"s","origin":"https://example.org",
+                   "credential":{"username":"tester","password":"SYNTHETIC_NEVER_ECHO_SECRET"}}),
+            json!({"type":"CHECK_LOCK_STATE","requestId":"l"}),
+            json!({"type":"CHECK_DUPLICATE_CREDENTIAL","requestId":"d","origin":"https://example.org"}),
+        ];
+        for request in probes {
+            let answer = handle_request(request);
+            assert_eq!(answer["ok"], false);
+            assert_eq!(answer["type"], "RELAY_ERROR");
+            assert_eq!(answer["error"]["code"], "UNAVAILABLE");
+            assert!(answer.get("password").is_none());
+            assert!(answer.get("credential").is_none());
+            assert!(answer.get("status").is_none());
+            assert!(answer.get("locked").is_none());
+            assert!(!answer.to_string().contains("SYNTHETIC_NEVER_ECHO_SECRET"));
+        }
+    }
 
-    stdout
-        .write_all(&bytes)
-        .context("failed to write response body")?;
+    #[test]
+    fn invalid_requests_do_not_reach_unavailable_handler() {
+        let requests = [
+            json!({"requestId":"x","type":"OWNER_UNLOCK"}),
+            json!({"requestId":"bad id","type":"CHECK_LOCK_STATE"}),
+            json!({"requestId":9,"type":"CHECK_LOCK_STATE"}),
+            json!({"requestId":"x","type":"RETRIEVE_CREDENTIAL","origin":"https://a@b.org"}),
+            json!({"requestId":"x","type":"RETRIEVE_CREDENTIAL","origin":"https://example.org/path"}),
+            json!({"requestId":"x","type":"RETRIEVE_CREDENTIAL","origin":"https://example.org:zz"}),
+            json!({"requestId":"x","type":"RETRIEVE_CREDENTIAL","origin":"https://a..example"}),
+            json!({"requestId":"x","type":"RETRIEVE_CREDENTIAL","origin":"file://example.org"}),
+            json!({"requestId":"x","type":"SAVE_CREDENTIAL","origin":"https://example.org",
+                   "credential":{"username":"user","password":""}}),
+            json!({"requestId":"x","type":"GENERATE_PASSWORD","origin":"https://example.org",
+                   "policy":{"length":1}}),
+        ];
+        for request in requests {
+            let answer = handle_request(request);
+            assert_eq!(answer["ok"], false);
+            assert_ne!(answer["error"]["code"], "UNAVAILABLE");
+        }
+    }
 
-    stdout
-        .flush()
-        .context("failed to flush response")?;
+    #[test]
+    fn native_frame_length_and_json_errors_are_bounded() {
+        let examples = [
+            vec![],
+            vec![0x01],
+            0u32.to_ne_bytes().to_vec(),
+            ((MAX_MESSAGE_BYTES + 1) as u32).to_ne_bytes().to_vec(),
+            framed(b"this is not JSON"),
+            { let mut x = 50u32.to_ne_bytes().to_vec(); x.extend_from_slice(b"{}"); x },
+        ];
+        for frame in examples {
+            assert!(read_native_message_from(&mut Cursor::new(frame)).is_err());
+        }
+    }
 
-    Ok(())
+    #[test]
+    fn large_request_fields_and_response_rejected() {
+        let probes = [
+            json!({"requestId":"x".repeat(MAX_REQUEST_ID_CHARS + 1),"type":"CHECK_LOCK_STATE"}),
+            json!({"requestId":"x","type":"RETRIEVE_CREDENTIAL",
+                  "origin":format!("https://{}.org", "a".repeat(MAX_ORIGIN_CHARS))}),
+            json!({"requestId":"x","type":"SAVE_CREDENTIAL","origin":"https://example.org",
+                  "credential":{"username":"u","password":"z".repeat(MAX_PASSWORD_CHARS + 1)}}),
+        ];
+        for request in probes {
+            let response = handle_request(request);
+            assert_ne!(response["error"]["code"], "UNAVAILABLE");
+        }
+        let large_response = json!({"payload":"x".repeat(MAX_MESSAGE_BYTES + 1)});
+        assert!(write_native_message_to(&mut Vec::new(), &large_response).is_err());
+    }
+
+    #[test]
+    fn allowed_ipv6_and_port_origin_still_fail_closed() {
+        for origin in ["http://[::1]:8080", "https://example.org:443", "https://localhost"] {
+            let response = handle_request(json!({
+                "type":"RETRIEVE_CREDENTIAL","requestId":"ok","origin":origin
+            }));
+            assert_eq!(response["error"]["code"], "UNAVAILABLE");
+        }
+    }
 }
