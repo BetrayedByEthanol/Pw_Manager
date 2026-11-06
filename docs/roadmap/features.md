@@ -61,7 +61,7 @@ N-01, N-02 and N-03 should share vetted import/transaction primitives but requir
 
 ## V01-A safety verification (PR #7, **not a finished feature**)
 
-The pending [V01-A safety PR](https://github.com/BetrayedByEthanol/Pw_Manager/pull/7) hardens the **disabled** legacy implementation. It does not complete the planned feature requirements. Its initial CI verified root smoke and negative unit tests; the added native-host child-process tests still require current-head CI and review.
+The pending [V01-A safety PR](https://github.com/BetrayedByEthanol/Pw_Manager/pull/7) hardens the **disabled** legacy implementation. It does not complete the planned feature requirements. Its expanded CI verified root smoke and negative unit tests plus 3 native-host child-process tests; source merge and independent review are still pending.
 
 | FR | Changed supporting safety evidence | Not delivered |
 | --- | --- | --- |
