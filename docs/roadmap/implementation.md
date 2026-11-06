@@ -92,6 +92,15 @@ Only move an item to DONE when merged implementation plus applicable acceptance 
 | N-04 automatic sync-conflict merge | **Deferred** | Do not begin in MVP |
 | Forgejo switch | Runner/environment setup, not product decision | Verify before cutover |
 
+### Approved contract gates carried forward
+
+- **R1:** Password-only code recovery; hardware-backed vaults require separately provisioned code+existing-master (replacement token) and code+already-registered hardware (master reset) routes. **No hardware code-only VMK/metadata recovery or emergency override.** Show metadata and entry-DEK access paths independently.
+- **R5/R6:** Before enabling runtime, enforce idle plus absolute LOADED timeout, OS lock/suspend/hibernate fail-closed cleanup, and bounded `WRITE_TRANSACTION` (ID, base, TTL, cap) without VMK; require trusted daemon change summary and fresh VMK for one atomic commit.
+- **S4:** Authentic ancestry, stable entry revisions/tombstones, local best-effort head outside vault directory checked after decrypt and before LOADED; refuse stale/divergent writes and retain both encrypted copies for owner reconciliation.
+- **OPEN-02 / OPEN-15:** Random virtual-provider seed with password/recovery bootstrap and pinned physical PRF UV/salt/credential enrollment checks; independent cryptographic/device reviews still block release.
+- **R8:** Encrypted pre-operation backups, historical factor inventory, purge-on-rotate and old-code-only warning when converting password-only to hardware-backed vaults.
+- **Traceability:** Keep approved D-01…D-32 IDs (D-19/D-20 RESERVED); DEC aliases and the 67 historic source features must remain mapped. These entries are **design requirements, not implemented or tested** by this documentation update.
+
 ## G. Verification commands (current baseline)
 
 - Root: `cargo check --locked --all-targets`, `cargo test --locked --all-targets`
