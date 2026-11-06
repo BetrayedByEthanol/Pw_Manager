@@ -244,8 +244,6 @@ impl Vault {
 
     pub fn seal_vault(&mut self) -> Result<SealedVault, Box<dyn Error>> {
         let payload = self.body.serialize()?;
-        // CRIT-01: a fresh nonce for every outer encryption, including repeat saves.
-        OsRng.fill_bytes(&mut self.header.wrapping.master_nonce);
         let master_hash = crypto::hash_fix_salt(prompt_pw("Master password: ".parse()?)?, &self.header.kdf.salt , self.header.kdf.memory_cost_kib, self.header.kdf.time_cost, self.header.kdf.parallelism)?;
 
         let mut wrapping_secret = crypto::decrypt(&self.header.wrapping.wrapped_master_key.as_slice().try_into()?, &master_hash, &self.header.wrapping.wrapping_nonce, &AADHeader::from(&self.header).to_aad_bytes())?;
@@ -274,7 +272,7 @@ impl Vault {
         let kek_master = hkdf_derive(&mix, Some(&entry.kdf_salt), "vault-master-wrap-v1".as_bytes())?;
 
         let mut master_key: [u8; 32] =  crypto::decrypt(&entry.wrapped_wrapping_key.to_vec(), &kek_master, &entry.wrap_nonce, &base_aad)?.as_slice().try_into()?;
-        let cipher_text = crypto::encrypt(&payload, &master_key, &self.header.wrapping.master_nonce, &AADHeader::from(&self.header).to_aad_bytes())?;
+        let cipher_text = encrypt_outer_payload(&mut self.header, &payload, &master_key)?;
         master_key.zeroize();
         // Do not destroy loaded default-entry material after a save.
         Ok(SealedVault::new(self.header.clone(), cipher_text))
@@ -437,4 +435,33 @@ impl SealedVault {
         return Ok(Vault::new(self.header.clone(),derived, body));
     }
 
+}
+
+/// Legacy binary outer-body helper: the nonce is minted only once the VMK
+/// is available and encryption is about to occur.
+fn encrypt_outer_payload(
+    header: &mut VaultyHeader, plaintext: &[u8], vmk: &[u8; 32]
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    OsRng.fill_bytes(&mut header.wrapping.master_nonce);
+    crypto::encrypt(&plaintext.to_vec(), vmk, &header.wrapping.master_nonce, &AADHeader::from(header).to_aad_bytes())
+}
+
+#[cfg(test)]
+mod v01_nonce_tests {
+    use super::*;
+    #[test]
+    fn successive_binary_outer_encryptions_use_fresh_nonces() {
+        let mut header = VaultyHeader::new(0);
+        let vmk = [17u8; 32];
+        let payload = b"synthetic sensitive bytes";
+        let a = encrypt_outer_payload(&mut header, payload, &vmk).unwrap();
+        let nonce_a = header.wrapping.master_nonce;
+        let b = encrypt_outer_payload(&mut header, payload, &vmk).unwrap();
+        let nonce_b = header.wrapping.master_nonce;
+        assert_ne!(nonce_a, nonce_b);
+        assert_ne!(a, b);
+        let opened = crypto::decrypt(&b, &vmk, &nonce_b, &AADHeader::from(&header).to_aad_bytes()).unwrap();
+        assert_eq!(opened, payload);
+        assert!(crypto::decrypt(&a, &vmk, &nonce_b, &AADHeader::from(&header).to_aad_bytes()).is_err());
+    }
 }

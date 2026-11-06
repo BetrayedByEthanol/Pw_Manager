@@ -301,6 +301,10 @@ pub fn decrypt_vault(
 }
 
 pub(crate) fn hash(pw: SecretString, m: u32, t: u32, p: u32) -> Result<([u8; 32], [u8; 32]), Box<dyn std::error::Error>> {
+    if !(16 * 1024..=512 * 1024).contains(&m)
+        || !(1..=10).contains(&t) || !(1..=16).contains(&p) {
+        return Err(CryptoError::InvalidFormat("Argon2 work parameters out of bounds".into()).into());
+    }
     let params = Params::new(m, t, p, None)
         .map_err(|e| CryptoError::Crypto(format!("Bad Argon2 params: {e}")))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
@@ -314,6 +318,10 @@ pub(crate) fn hash(pw: SecretString, m: u32, t: u32, p: u32) -> Result<([u8; 32]
 }
 
 pub(crate) fn hash_with_bytes(bytes: &[u8], m: u32, t: u32, p: u32) -> Result<([u8; 32], [u8; 32]), Box<dyn std::error::Error>> {
+    if !(16 * 1024..=512 * 1024).contains(&m)
+        || !(1..=10).contains(&t) || !(1..=16).contains(&p) {
+        return Err(CryptoError::InvalidFormat("Argon2 work parameters out of bounds".into()).into());
+    }
     let params = Params::new(m, t, p, None)
         .map_err(|e| CryptoError::Crypto(format!("Bad Argon2 params: {e}")))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
@@ -326,6 +334,10 @@ pub(crate) fn hash_with_bytes(bytes: &[u8], m: u32, t: u32, p: u32) -> Result<([
 }
 
 pub(crate) fn hash_fix_salt(pw: SecretString,salt: &[u8; 32], m: u32, t: u32, p: u32) -> Result<([u8; 32]), Box<dyn std::error::Error>> {
+    if !(16 * 1024..=512 * 1024).contains(&m)
+        || !(1..=10).contains(&t) || !(1..=16).contains(&p) {
+        return Err(CryptoError::InvalidFormat("Argon2 work parameters out of bounds".into()).into());
+    }
     let params = Params::new(m, t, p, None)
         .map_err(|e| CryptoError::Crypto(format!("Bad Argon2 params: {e}")))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
@@ -336,6 +348,10 @@ pub(crate) fn hash_fix_salt(pw: SecretString,salt: &[u8; 32], m: u32, t: u32, p:
 }
 
 pub(crate) fn hash_bytes_fix_salt(bytes: &[u8], salt: &[u8; 32], m: u32, t: u32, p: u32) -> Result<([u8; 32]), Box<dyn std::error::Error>> {
+    if !(16 * 1024..=512 * 1024).contains(&m)
+        || !(1..=10).contains(&t) || !(1..=16).contains(&p) {
+        return Err(CryptoError::InvalidFormat("Argon2 work parameters out of bounds".into()).into());
+    }
     let params = Params::new(m, t, p, None)
         .map_err(|e| CryptoError::Crypto(format!("Bad Argon2 params: {e}")))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);

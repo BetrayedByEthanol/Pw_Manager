@@ -72,7 +72,11 @@ impl VaultyBody {
             if flag > 1 { return Err(VaultError::ParseError.into()); }
             let created_at = u64::from_le_bytes(read::<8>(data, &mut at)?);
             let updated_at = u64::from_le_bytes(read::<8>(data, &mut at)?);
-            if at - start != entry_len as usize { return Err(VaultError::LengthMismatch.into()); }
+            // Prototype VLT1 initially wrote zero entry lengths. Read those
+            // safely for eventual migration, but emit correct lengths on save.
+            if entry_len != 0 && at - start != entry_len as usize {
+                return Err(VaultError::LengthMismatch.into());
+            }
             entries.push(VaultyEntry {
                 entry_length: entry_len, wrapped_key, wrapping_nonce,
                 domain_tag_length: domain_tag_len, domain_tag, entry_type,
@@ -119,6 +123,17 @@ mod tests {
         }
         raw.push(1);
         assert!(VaultyBody::deserialize(&raw).is_err());
+    }
+    #[test]
+    fn historical_zero_entry_length_is_readable_for_migration() {
+        let mut b = VaultyBody::new();
+        b.entries.push(VaultyEntry::new(0));
+        let mut raw = b.serialize().unwrap();
+        raw[4..8].fill(0); // legacy VLT1 bug
+        let (opened, _) = VaultyBody::deserialize(&raw).unwrap();
+        assert_eq!(opened.entries.len(), 1);
+        let migrated = opened.serialize().unwrap();
+        assert_ne!(&migrated[4..8], &[0u8; 4]);
     }
     #[test]
     fn unknown_client_registry_is_rejected() {
