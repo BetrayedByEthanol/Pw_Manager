@@ -81,7 +81,7 @@ The merged [V02 PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8) i
 
 The [V02-A cryptographic protocol and key-slot review](../architecture/v02a-crypto-keyslot-review.md) records candidate transcript fields, independent review questions, effective access/recovery route requirements and failure tests. No active slots, password KDF, physical PRF or key commitment are delivered by the design packet. **OPEN-01/15 and G1/G2 remain BLOCKED.**
 
-## V02-B candidate implementation (draft PR #10)
+## V02-B candidate implementation (PR #10 in review)
 
 The [V02-B private key-slot prototype](../architecture/v02b-keyslot-candidate.md) tests candidate Argon2id components, typed route/provider context, two-input and code-only HKDF derivation, XChaCha20-Poly1305 slot envelopes, draft HMAC binding and fail-closed structural route checks. It is **not** connected to the active VLY2 codec or runtime: no real YubiKey assertion, recovery prompt, VERIFIED slot or production key path. FR-CRY-01, FR-AUTH-02 and FR-REC-01/02 remain incomplete; OPEN-01 and OPEN-15 independent approval remains blocked.
 
