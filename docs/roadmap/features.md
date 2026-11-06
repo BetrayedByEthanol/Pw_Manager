@@ -40,7 +40,7 @@
 | **FR-IPC-03** | User-initiated fill with origin/frame and E2E binding | V08B | Extension prototype; no E2E |
 | **FR-IPC-04** | Save/register through relay and durable receipt | V08B/V08C | Native mock returns false success |
 | **FR-STO-01** | Atomic authenticated file writes + previous generation + ancestry | V02 | V01 partial writer tests; canonical format missing |
-| **FR-REC-01** | Provisioned VMK/VERS recovery, permitted code-only routes | V04 | Planned; Option A approved |
+| **FR-REC-01** | Provisioned VMK/VERS recovery; code-only vault recovery restricted to password-only mode | V04 | Planned; Option A approved |
 | **FR-REC-02** | Lost hardware recovery and code-dependent new-device slots | V04/V06 | Planned; Option A approved |
 | **FR-REC-03** | Backup authenticator and verified rewrap coverage | V06 | Planned |
 | **FR-MIG-01** | N-01: verified legacy format migration (P0) | V04M-1 | Planned |
