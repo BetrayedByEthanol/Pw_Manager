@@ -1,6 +1,6 @@
 # Vaulty — Acceptance, Evidence and Security Gap Register
 
-**Snapshot date:** 2026-11-06 | **Repository evidence baseline:** `main` at `ae6d38794728d7e8b109a726bbf40be3ba94a97b` (PR #7 merged).  
+**Snapshot date:** 2026-11-06 | **Repository evidence baseline:** `main` merge commit `84f92be9849fab2afce57223d4bf3c113bcf5e46` (PR #8 merged, V02 candidate only). V02-A is a design-review branch, not independent approval.  
 **Purpose:** provide a reviewable distinction between **design approved**, **source merged**, **CI passed**, **security behavior verified** and **release certified**. None is interchangeable. See [implementation roadmap](implementation.md).
 
 ## 1. Recorded merged evidence
@@ -17,7 +17,9 @@
 | EV-008 | [PR #6](https://github.com/BetrayedByEthanol/Pw_Manager/pull/6) | Canonical v0.4.5 documentation/reconciliation merged into main `d192e6b` | Not evidence of cryptographic or runtime policy implementation |
 | EV-009 | [V01-A PR #7](https://github.com/BetrayedByEthanol/Pw_Manager/pull/7); [first CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42236810534); [expanded CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42237908044) | **Merged PR #7:** expanded run passed 20 root unit, 1 executable integration, 6 native-host unit and 3 native stdio process tests, plus extension syntax/config; merge commit `ae6d387`. | V01-A implementation MERGED; does not establish G0 independent security certification, actual daemon or recovery |
 
-| EV-010 | [V02 candidate PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8); [focused 16-test CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42294266541); [prior full product CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42293271516) | **Unmerged candidate:** code commit `f98cae5` passed 16/16 V02 tests. Three Codex P2 issues were corrected: commit-time entry transition revalidation; aggregate body budget before writer allocation; full-basename noncolliding immutable sidecar backups. | Final code review, latest-head product CI, OPEN-01/15 approval, runtime factor routes and race-free writer still outstanding |
+| EV-010 | [Merged V02 PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8); [final-head focused CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42296105084); [final-head product CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42296105131) | **Merged candidate** at `84f92be` from head `9264da3`: both final-head workflows passed; four Codex P2 findings resolved (transition validation, aggregate encoding bounds, sidecar collisions, relative vault filenames), with fresh final-head Codex review reporting no major issues. | No independent OPEN-01/15 approval; no real factor unwrapping, ready recovery, reviewed dirfd writer or production runtime |
+
+| EV-011 | [V02-A candidate protocol review](../architecture/v02a-crypto-keyslot-review.md) | Documents current slot-schema gaps, proposed transcripts, Option A/OPEN-02 provisioning, threat matrix and OPEN-01/15 external reviewer exit criteria. **Document review only; PR not merged at this checkpoint.** | Not independent cryptographic approval, runtime negative-test evidence, key commitment proof or V02-B implementation |
 
 Evidence links are immutable run/PR references where possible. New status claims require their own evidence and must not overwrite an older evidence record's scope.
 
@@ -76,7 +78,7 @@ The updated PR #6 restores nine binding requirements from the owner-approved v0.
 
 This branch removes mock success; it **does not** implement native daemon authentication, canonical VMK/DEK, R1 recovery, S1/S2 route enforcement, secure provenance of a browser origin, or race-free dirfd/openat. G0 remains PARTIAL until source merge, reproducible tests, and accepted review receipts.
 
-## 2c. V02 candidate codec v0 — acceptance matrix (PR #8, unmerged)
+## 2c. V02 candidate codec v0 — acceptance matrix (PR #8 merged, candidate only)
 
 | ID | Required property | Candidate evidence | Not yet verified |
 | --- | --- | --- | --- |
@@ -86,12 +88,24 @@ This branch removes mock success; it **does not** implement native daemon authen
 | A02-04 | Authenticated encrypted ancestry, revisions and tombstones | Commit/generation/predecessor hash; duplicate, revision and tombstone tests | Last-seen-head outside vault dir, full S4 conflict/restore review |
 | A02-05 | Atomic candidate writer rejects stale base, preserves encrypted conflict copy | `src/v02/storage.rs` and deterministic pre/post-rename tests | Race-free descriptor-relative I/O, malicious same-user filesystem threat, full power-loss drill |
 | A02-06 | Legacy VLT1/JSON never implicitly treated as v2 | Version discrimination and corrupt/truncated-format tests | V04M-1 authorized, read-only legacy import + verified backup |
-| A02-07 | Root, native host and candidate codec tests in CI | V02 focused run `42294266541` on `f98cae5`: **16/16 PASS**; prior root/full CI `42293271516` PASS; latest root run pending. | OPEN-01/15 independent security and Forgejo runner evidence still outstanding |
+| A02-07 | Root, native host and candidate codec tests in CI | Final-head V02 focused workflow `42296105084` **PASS**; full V01 product safety workflow `42296105131` **PASS** on `9264da3`. | OPEN-01/15 independent security and Forgejo runner evidence still outstanding |
 | A02-09 | Cross-generation revision policy and bounded encoding | Shared prepare/commit transition validator; checked aggregate 16 MiB encoding preflight. Two P2 review threads resolved with negative tests. | No runtime slot authentication or production memory/commit certification |
-| A02-10 | Complete-basename sidecar safety | Unique immutable encrypted `.previous-<uuid>` backups, separate `.lock`/`.tmp-<uuid>`/`.conflict-<uuid>` per active name; reject active sidecar aliases; fail-open-file never deletes preexisting file. Code `f98cae5` V02 tests PASS. | Descriptor-relative race-free storage and power-loss proof remain future G1 gates |
+| A02-10 | Complete-basename sidecar safety | Unique immutable encrypted `.previous-<uuid>` backups, separate `.lock`/`.tmp-<uuid>`/`.conflict-<uuid>` per active name; reject active sidecar aliases; fail-open-file never deletes preexisting file. Final-head V02 workflow PASS. | Descriptor-relative race-free storage and power-loss proof remain future G1 gates |
 | A02-08 | Main executable and native host remain fail-closed | No changes to existing runtime entry points | No production unlock, key factor route, recovery, R5/R6 or trusted daemon implementation |
 
-**V02 v0 is an experimental library only.** Do not mark A02 complete, OPEN-01/15 approved, G1 passed or any FR implementation DONE merely because it compiles or passes synthetic vectors. [Candidate format and limitations](../architecture/v02-format-candidate.md).
+**V02 v0 is a merged experimental library only.** Do not mark A02 complete, OPEN-01/15 approved, G1 passed or any FR implementation DONE merely because it compiles or passes synthetic vectors. [Candidate format and limitations](../architecture/v02-format-candidate.md).
+
+## 2d. V02-A protocol/key-slot design review — proposed evidence only
+
+| ID | Review package acceptance | Recorded evidence | Still blocked |
+| --- | --- | --- | --- |
+| A02A-01 | Map merged V02 slot schema to missing algorithm/KDF/PRF/commitment parameters | [V02-A review §1–3](../architecture/v02a-crypto-keyslot-review.md) | Versioned production wire schema and independent OPEN-01 approval |
+| A02A-02 | Distinguish VMK metadata, VERS, provider seed and DEK normal/recovery routes | [V02-A review §2–4](../architecture/v02a-crypto-keyslot-review.md) | Runtime ancestry-aware route enforcement and actual provisioning |
+| A02A-03 | Define Option A and OPEN-02 bootstrap dependency/slot activation failure cases | [V02-A review §4](../architecture/v02a-crypto-keyslot-review.md) | Verified password-reset, token-loss and code-dependent rewrap tests |
+| A02A-04 | Document FIDO2 PRF scope, fresh ceremony and blast-radius trade-off | [V02-A review §5](../architecture/v02a-crypto-keyslot-review.md) | Hardware capability results and independent OPEN-15 approval |
+| A02A-05 | Record attack scenarios and independent reviewer deliverables | [V02-A review §6–7](../architecture/v02a-crypto-keyslot-review.md) | Formal/informal expert assessment, key-substitution vectors and reviewed implementation |
+
+No A02A row certifies a security property. Code, test and runtime status are unchanged by this documentation PR; G1/G2/G3 stay **BLOCKED**.
 
 ## 3. Security findings register
 
@@ -101,8 +115,8 @@ This branch removes mock success; it **does not** implement native daemon authen
 | SEC-02 | P1 | Native host previously returned realistic credential/save/unlocked success | V01-A | PR #7 fail-closed host + tests; pending merge |
 | SEC-03 | P1 | Unbounded/indexing legacy header/payload parsing can panic on untrusted bytes | V02 | Open; default main disabled |
 | SEC-04 | P1 | Legacy unkeyed header hash does not authenticate against malicious editing | V02 | Open; full canonical AEAD required |
-| SEC-05 | P1 | Authoritative key hierarchy/slot commitments are not production-approved | OPEN-01 + V02 | Blocked |
-| SEC-06 | P1 | Hardware PRF salt/UV/freshness/fanout not approved or enforced at runtime | OPEN-15 + V03/V06 | Blocked |
+| SEC-05 | P1 | Authoritative key hierarchy/slot commitments are not production-approved | OPEN-01 + V02-A/V02-B | Blocked; V02-A design gaps documented, external review needed |
+| SEC-06 | P1 | Hardware PRF salt/UV/freshness/fanout not approved or enforced at runtime | OPEN-15 + V02-A/V03/V06 | Blocked; V02-A review questions documented, real device evidence needed |
 | SEC-07 | P2 | Native-host Rust behavior tests absent on old main | V01-A | First PR #7 CI: six host unit tests; child-process tests pending |
 | SEC-08 | P2 | Filesystem crash/fault and malicious path risks | V01-A/V02 | PR #7 deterministic negative tests; TOCTOU/openat guarantee remains V02 |
 | SEC-09 | P2 | Secret copies not consistently scoped to failure-path RAII zeroization | V02/V03 | Open |
