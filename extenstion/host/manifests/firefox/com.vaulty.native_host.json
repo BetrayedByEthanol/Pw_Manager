@@ -1,6 +1,6 @@
 {
   "name": "com.vaulty.native_host",
-  "description": "Vaulty native host mock",
+  "description": "Vaulty native host (fail-closed; daemon unavailable)",
   "path": "/home/nieke/.local/bin/vaulty-native-host",
   "type": "stdio",
   "allowed_extensions": [

@@ -159,6 +159,57 @@ pub struct MetadataSection {
 
 
 
+/// Legacy VLT1 framing guard only. The V02 canonical parser must independently
+/// validate and authenticate every field; this checksum is not a MAC.
+fn check_legacy_header_frame(data: &[u8]) -> Result<usize, VaultError> {
+    const MAX_HEADER_BYTES: usize = 1024 * 1024;
+    const MIN_HEADER_BYTES: usize = 264; // zero FIDO credentials
+    if data.len() < 10 || data.get(0..4) != Some(&b"VLT1"[..]) {
+        return Err(VaultError::ParseError);
+    }
+    let version = u16::from_le_bytes(data[4..6].try_into().map_err(VaultError::Slice)?);
+    if version != 0x0100 { return Err(VaultError::ParseError); }
+    let total = u32::from_le_bytes(data[6..10].try_into().map_err(VaultError::Slice)?) as usize;
+    if !(MIN_HEADER_BYTES..=MAX_HEADER_BYTES).contains(&total) || total > data.len() {
+        return Err(VaultError::ParseError);
+    }
+    let head = &data[..total];
+    let mut i = 10usize;
+    fn take<'a>(head: &'a [u8], i: &mut usize, n: usize) -> Result<&'a [u8], VaultError> {
+        let end = i.checked_add(n).ok_or(VaultError::TooLarge)?;
+        let value = head.get(*i..end).ok_or(VaultError::ParseError)?;
+        *i = end;
+        Ok(value)
+    }
+    fn field16(head: &[u8], i: &mut usize) -> Result<(), VaultError> {
+        let len = u16::from_le_bytes(take(head, i, 2)?.try_into().map_err(VaultError::Slice)?) as usize;
+        let _ = take(head, i, len)?;
+        Ok(())
+    }
+    // KDF (47), wrapping (98), then FIDO version/salt/count.
+    let _ = take(head, &mut i, 47 + 98 + 2 + 32)?;
+    let count = u16::from_le_bytes(take(head, &mut i, 2)?.try_into().map_err(VaultError::Slice)?);
+    // Each credential consumes at least 4+2+2+2+4+48+24+48+24+32+32+32 bytes.
+    if count as usize > (total - i) / 254 { return Err(VaultError::ParseError); }
+    for _ in 0..count {
+        let at = i;
+        let claimed = u32::from_le_bytes(take(head, &mut i, 4)?.try_into().map_err(VaultError::Slice)?) as usize;
+        field16(head, &mut i)?; // credential ID
+        field16(head, &mut i)?; // obfuscated RP ID
+        field16(head, &mut i)?; // COSE public key
+        let _ = take(head, &mut i, 4 + 48 + 24 + 48 + 24 + 32 + 32 + 32)?;
+        if i - at != claimed { return Err(VaultError::LengthMismatch); }
+    }
+    // Cipher (7), timestamps/UUID metadata (34), unkeyed digest (32).
+    let _ = take(head, &mut i, 7 + 34)?;
+    let tag_at = i;
+    let got: [u8; 32] = take(head, &mut i, 32)?.try_into().map_err(VaultError::Slice)?;
+    if i != total || blake3::hash(&head[..tag_at]).as_bytes() != &got {
+        return Err(VaultError::ParseError);
+    }
+    Ok(total)
+}
+
 impl VaultyHeader {
     pub fn new(now: u64) -> Self {
 
@@ -312,6 +363,9 @@ impl VaultyHeader {
     }
 
     pub fn deserialize(data: &Vec<u8>) -> Result<(Self, usize), Box<dyn std::error::Error>> {
+        // Validate all variable-width offsets and the declared total before
+        // accessing legacy unchecked fields. The format remains deprecated.
+        let _validated_len = check_legacy_header_frame(data)?;
         let now: u64 = SystemTime::now()
             .duration_since(UNIX_EPOCH)?
             .as_secs();
@@ -583,5 +637,32 @@ impl VaultyHeader {
         idx += 32;
 
         return Ok((header, idx));
+    }
+}
+
+#[cfg(test)]
+mod v01a_frame_tests {
+    use super::*;
+    #[test]
+    fn malformed_header_and_truncations_fail_cleanly() {
+        let encoded = VaultyHeader::new(0).serialize().unwrap();
+        assert_eq!(VaultyHeader::deserialize(&encoded).unwrap().1, encoded.len());
+        for n in 0..encoded.len() {
+            assert!(VaultyHeader::deserialize(&encoded[..n].to_vec()).is_err());
+        }
+        let mut damaged = encoded.clone();
+        damaged[0] ^= 1;
+        assert!(VaultyHeader::deserialize(&damaged).is_err());
+        let mut bad_length = encoded.clone();
+        bad_length[6..10].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(VaultyHeader::deserialize(&bad_length).is_err());
+        let mut bad_version = encoded.clone();
+        bad_version[4..6].copy_from_slice(&2u16.to_le_bytes());
+        assert!(VaultyHeader::deserialize(&bad_version).is_err());
+        let mut bad_count = encoded.clone();
+        // Credential count offset: prelude 10, KDF 47, wrapping 98, FIDO ver+salt 34.
+        let offset = 10 + 47 + 98 + 34;
+        bad_count[offset..offset + 2].copy_from_slice(&u16::MAX.to_le_bytes());
+        assert!(VaultyHeader::deserialize(&bad_count).is_err());
     }
 }
