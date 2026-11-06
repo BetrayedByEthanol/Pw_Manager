@@ -20,6 +20,12 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends python3 libsodium23 libargon2-1
           python3 tools/v02_verifier/reference_v02c.py --verify
+      - name: V02-D reviewer source inventory and tamper tests
+        run: |
+          python3 -m unittest discover -s tools/v02_verifier -p 'test_review_bundle.py' -v
+          python3 tools/v02_verifier/review_bundle.py --write /tmp/v02d-review-manifest.json
+          python3 tools/v02_verifier/review_bundle.py --check /tmp/v02d-review-manifest.json
+          sha256sum /tmp/v02d-review-manifest.json
       - name: Inert legacy executable remains fail-closed
         run: |
           grep -F 'ExitCode::FAILURE' src/main.rs
