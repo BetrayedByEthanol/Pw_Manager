@@ -10,7 +10,7 @@
 | Track | Current disposition | Evidence / outstanding |
 | --- | --- | --- |
 | V01 — Prototype Safety & Build Foundation | **Merged + CI-PASSED; security acceptance incomplete** | PR #4/#5; 11 root tests and browser/config checks; main GitHub CI green |
-| V01-A — Security Closure & Verification Hardening | **PR #7 OPEN — initial CI PASS; not merged/accepted** | Default native-host UNAVAILABLE, removed key-dump experiment, executable/host tests, legacy parsing and crash-fault evidence; see [acceptance register](acceptance-register.md#2b-v01-a-implementation-review-checklist--no-automatic-security-acceptance) |
+| V01-A — Security Closure & Verification Hardening | **PR #7 OPEN — expanded CI PASS; not merged/security-accepted** | Default native-host UNAVAILABLE, removed key-dump experiment, executable/host tests, legacy parsing and crash-fault evidence; see [acceptance register](acceptance-register.md#2b-v01-a-implementation-review-checklist--no-automatic-security-acceptance) |
 | V02 — Canonical Format & Independent Keys | Not implemented | Requires OPEN-01 cryptographic review before production key graph |
 | V04M — Safe Migration Foundation | Not implemented | Separate format detection, non-destructive import and verify-before-commit |
 | V03 — Operations, States & Authenticators | Not implemented | Requires V02; masked LOADED VERS and virtual/physical adapter enforcement |
