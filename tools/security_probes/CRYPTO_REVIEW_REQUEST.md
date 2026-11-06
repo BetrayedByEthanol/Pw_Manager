@@ -75,6 +75,10 @@ The reviewer should return reproducible attack examples where possible, independ
 
 **Review versioning note:** Existing `tools/security_probes/fixtures/kek_vectors.json` tests the historical `VAULTY-KEK-v0.4-CANDIDATE` transcript, **not** V02-B's `Vaulty/V02-B/REVIEW-ONLY/slot/v1`. Neither matching suite is an independent cross-implementation known-answer test; the review must explicitly choose/revise one version and generate a new external vector corpus. Never implicitly treat V02-B envelopes as compatible with the VLY2 `Slot` codec.
 
+## V02-C cross-library evidence and security-review submission
+
+The [V02-C conformance report](../../docs/security/V02C-cryptographic-conformance.md) now packages six **synthetic** Python/libsodium versus Rust frozen descriptor/HKDF/HMAC/XChaCha20-Poly1305 vectors and an Argon2id cross-library KAT. The `src/v02/v02c_tests.rs` suite rejects bytewise ciphertext/nonce/tag mutations and altered vault/slot/target/entry, KDF, credential/RP, scope, UP/UV and virtual-provider fields. These are **interoperability and negative-test observations**, NOT an independent cryptographic review or proof of key commitment. The external OPEN-01 reviewer must explicitly analyze multi-key/key-substitution attacks and approve or reject a fixed, final transcript. The [OPEN-15 test matrix](../../docs/security/V02C-cryptographic-conformance.md#4-open-15-real-device-verification-packet-not-executed) is **not executed**; no real token PRF capability/UV/freshness claim is made.
+
 ## Review gates to resolve before shipping
 
 1. Formal/independent analysis of the combiner and committing construction, including password-derived input, arbitrary PRF output correlations and domain separation.
