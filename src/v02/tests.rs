@@ -482,3 +482,48 @@ fn full_basename_sidecars_do_not_overwrite_another_active_vault() {
     assert_eq!(fs::read(&second).unwrap(), next);
     fs::remove_dir_all(dir).unwrap();
 }
+
+
+#[test]
+fn bare_relative_vault_path_supports_commit_and_conflict_preservation() {
+    // No process-global chdir: each test uses its own unique filename in the
+    // current working directory, avoiding interference with parallel tests.
+    let (header, body, vmk, _, _) = specimen();
+    let original = seal_file(&header, &body, &vmk).unwrap();
+    let next_a = prepare_successor(&original, &vmk, |body| {
+        body.clients.push(ClientRecord {
+            id: Uuid::new_v4(), public_identity: [3; 32], revoked: false
+        });
+        Ok(())
+    }).unwrap();
+    let next_b = prepare_successor(&original, &vmk, |body| {
+        body.clients.push(ClientRecord {
+            id: Uuid::new_v4(), public_identity: [4; 32], revoked: false
+        });
+        Ok(())
+    }).unwrap();
+    let relative = std::path::PathBuf::from(format!(
+        "vaulty-v02-relative-{}.v2", Uuid::new_v4()
+    ));
+    assert_eq!(relative.parent(), Some(std::path::Path::new("")));
+    fs::write(&relative, &original).unwrap();
+
+    assert_eq!(storage::commit_candidate(&relative, &original, &next_a, &vmk).unwrap(),
+        CommitOutcome::Committed);
+    assert_eq!(fs::read(&relative).unwrap(), next_a);
+    let conflict = match storage::commit_candidate(&relative, &original, &next_b, &vmk).unwrap() {
+        CommitOutcome::ConflictPreserved(p) => p,
+        CommitOutcome::Committed => panic!("stale candidate unexpectedly committed"),
+    };
+    assert_eq!(fs::read(&relative).unwrap(), next_a);
+    assert_eq!(fs::read(&conflict).unwrap(), next_b);
+
+    let backups = immutable_backups(std::path::Path::new("."), &relative);
+    assert_eq!(backups.len(), 1);
+    assert_eq!(fs::read(&backups[0]).unwrap(), original);
+    assert!(!vault_lock(&relative).exists());
+
+    fs::remove_file(&conflict).unwrap();
+    for backup in backups { fs::remove_file(backup).unwrap(); }
+    fs::remove_file(&relative).unwrap();
+}
