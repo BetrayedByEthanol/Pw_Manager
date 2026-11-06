@@ -9,6 +9,7 @@ const SPECIAL: &[u8] = b"!@#$%^&*()-_=+[]{};:,.?";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CharSet(u8);
 impl CharSet {
+    pub const EMPTY: Self = Self(0);
     pub const UPPERCASE: Self = Self(0b0001);
     pub const LOWERCASE: Self = Self(0b0010);
     pub const DIGITS: Self = Self(0b0100);
@@ -54,7 +55,7 @@ mod tests {
     fn generator_bounds() {
         assert!(generate_password(CharSet::ALL, 7).is_err());
         assert!(generate_password(CharSet::ALL, 129).is_err());
-        assert!(generate_password(CharSet(0), 20).is_err());
+        assert!(generate_password(CharSet::EMPTY, 20).is_err());
     }
     #[test]
     fn generator_output() {
