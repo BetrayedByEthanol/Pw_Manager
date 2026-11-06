@@ -7,14 +7,14 @@
 ## 1. Reproducibility and immutable fixture provenance
 
 - **Tested Rust DUT:** `src/v02/v02b.rs` (unexported, not connected to VLY2).
-- **Independent-library reference program:** `tools/v02_verifier/reference_v02c.py` uses Python stdlib `hashlib`/`hmac` for HKDF-SHA256 and candidate commitment HMAC, system **libsodium XChaCha20-Poly1305** through ctypes, and optional `argon2-cffi` for Argon2id. The reference is separate from Rust `hkdf`/`hmac`/`chacha20poly1305`/`argon2` implementations, **but was written in this project and has not been externally reviewed**. It is cross-library interoperability evidence, **not independent security approval**.
+- **Independent-library reference program:** `tools/v02_verifier/reference_v02c.py` uses Python stdlib `hashlib`/`hmac` for HKDF-SHA256 and candidate commitment HMAC, system **libsodium XChaCha20-Poly1305** through ctypes, and required system **libargon2 Argon2id** through ctypes. The reference is separate from Rust `hkdf`/`hmac`/`chacha20poly1305`/`argon2` implementations, **but was written in this project and has not been externally reviewed**. It is cross-library interoperability evidence, **not independent security approval**.
 - **Frozen data:** `tools/v02_verifier/fixtures/v02c_kats.txt` contains **six** synthetic, deterministic cases with descriptor SHA256, wrap KEK, MAC key, XChaCha20-Poly1305 ciphertext+tag, and candidate HMAC. Never use deterministic fixture nonces for actual sealing. A separate Argon2id v0x13 KAT covers 8 MiB, 2 passes, one lane, fixed 16-byte salt and fake test password.
 - **Rust conformance:** `src/v02/v02c_tests.rs` rebuilds the descriptor *from explicit typed fields*, derives both keys, encrypts under the **fixture-only** nonce, and compares **each** frozen output; it then decrypts and rejects modified factor inputs. A Rust round-trip alone is not a sufficient interoperability test.
 
 **Replay commands:**
 ```sh
-# Independent-library reference reproduction (Python 3 + system libsodium;
-# optional argon2-cffi for the Argon2id comparison):
+# Independent-library reference reproduction (Python 3 + system libsodium
+# and libargon2, both required; CI installs system shared libraries):
 python3 tools/v02_verifier/reference_v02c.py --verify
 
 # Standalone exact-module CI harness:
