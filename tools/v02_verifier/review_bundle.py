@@ -54,7 +54,8 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def read_sources(root: Path, paths: tuple[str, ...]) -> dict[str, dict[str, object]]:
+def read_sources(root: Path, commit: str,
+                 paths: tuple[str, ...]) -> dict[str, dict[str, object]]:
     root = root.resolve(strict=True)
     if len(paths) != len(set(paths)):
         raise ValueError("duplicate review inventory path")
@@ -71,6 +72,16 @@ def read_sources(root: Path, paths: tuple[str, ...]) -> dict[str, dict[str, obje
         data = path.read_bytes()
         if not data:
             raise ValueError(f"empty review source: {rel}")
+        # A clean-working-tree claim is insufficient: the bytes MUST belong
+        # to the exact HEAD commit, even when the source tree has staged or
+        # unstaged changes. git show also rejects an untracked review file.
+        # Use argv, never a shell; the path list is static and traversal-free.
+        reference = subprocess.run(
+            ["git", "-C", str(root), "show", f"{commit}:{rel}"],
+            capture_output=True, check=False,
+        )
+        if reference.returncode or reference.stdout != data:
+            raise ValueError(f"review source differs from committed blob: {rel}")
         result[rel] = {"sha256": digest(data), "bytes": len(data)}
     return result
 
@@ -78,7 +89,7 @@ def read_sources(root: Path, paths: tuple[str, ...]) -> dict[str, dict[str, obje
 def inventory(root: Path, commit: str, paths: tuple[str, ...] = FILE_ALLOWLIST) -> dict:
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("review reference must be a full SHA-1 Git commit ID")
-    sources = read_sources(root, paths)
+    sources = read_sources(root, commit, paths)
     manifest = {
         "schema": SCHEMA,
         "git_commit": commit,
