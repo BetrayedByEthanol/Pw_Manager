@@ -39,6 +39,24 @@ Evidence links are immutable run/PR references where possible. New status claims
 
 **Assessment:** V01 source and CI foundation are merged; do not label V01 security acceptance COMPLETE until V01-A controls and their tests pass. The main binary remains deliberately unusable for real credentials.
 
+## 2a. Canonical v0.4.5 restoration audit — documentation only
+
+The updated PR #6 restores nine binding requirements from the owner-approved v0.4.5 design. A documentation reconciliation is **not** evidence of runtime enforcement or independent cryptographic review.
+
+| Contract | Current canonical location | Required runtime/negative evidence (still outstanding) |
+| --- | --- | --- |
+| R1 vault-mode recovery | Specification §4; decisions D-07/D-32 | Password-only code reset, two separate hardware admin routes, reject hardware code-only VMK slot; distinguish metadata and DEK recovery |
+| R6 bounded write transactions | Specification §2; architecture state machine | Unique ID/base/TTL/cap; no VMK in stage; immutable daemon summary, one authorized fresh-VMK commit; abort stale/expired |
+| R5 session lifecycle | Specification §2; architecture state machine | Idle **and** absolute expiry, lock on OS lock/suspend/hibernate; fail closed on monitor loss, wipe VERS/virtual provider |
+| S4 authenticated ancestry and conflicts | Specification §5; architecture transaction | Pre-LOADED check of local head **outside vault directory**; refuse divergent write; retain encrypted conflict copy |
+| OPEN-02 virtual bootstrap | Specification §4; architecture key graph | Independent seed, pre-load password + authorized recovery slots; recover identical seed after reset |
+| Dual assurance views | Specification §3 | VMK/metadata and per-entry DEK weakest complete paths separately; disclose metadata access via hardware-vault admin route |
+| Hardware UV invariant | Specification §4; architecture enrollment | Slot/AAD binds credential/RP/salt/UV mode; two stable enrollment derivations; no silent UV downgrade |
+| R8 historical backups | Specification §5; architecture history | Durable encrypted pre-operation snapshots, historical-factor inventory, purge-on-rotate, old code-only snapshots after conversion |
+| Historical decision traceability | Decision crosswalk D-01…D-32 | Keep D-19/D-20 RESERVED and D-23/D-30 provisional; map new DEC aliases to originals |
+
+**All nine items are text-level contract restorations, not verified new security controls.** The V01-A gaps and OPEN-01/15 independent reviews remain open; do not change release gates merely because this PR is merged.
+
 ## 3. Security findings register
 
 | Finding | Severity if enabled | Finding evidence | Fix workstream | Status |
