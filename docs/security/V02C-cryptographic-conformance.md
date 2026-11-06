@@ -26,6 +26,8 @@ cargo check --locked --all-targets
 cargo test  --locked --all-targets
 ```
 
+**Implementation CI checkpoint:** On code commit `f4825a7`, [focused GitHub V02 verification](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42309538813) passed **31/31 Rust tests**, six independent-library Python/libsodium fixtures and the mandatory libargon2 Argon2id component check. These are candidate consistency results only; final PR-head product CI and independent OPEN-01/15 reviewer verdicts remain separate.
+
 **Versioning:** Reference covers exactly `Vaulty/V02-B/REVIEW-ONLY/slot/v1`; it is **not** the historical `VAULTY-KEK-v0.4-CANDIDATE` probe transcript, does not freeze the VLY2 wire format, and does not establish commitment under adversarial multi-key attacks. Any expert-required change invalidates and regenerates these fixtures under a *new explicit version*, never silently changes their meaning.
 
 ## 2. Adversarial test matrix (actual vs pending)
