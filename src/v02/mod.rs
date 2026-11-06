@@ -10,6 +10,9 @@
 //! cannot be obtained from the VMK.
 mod codec;
 mod model;
+// Candidate-only key-slot KDF/AEAD prototype. Never activates VLY2 slots or
+// exposes unreviewed factor input as a production unlock API (OPEN-01/15).
+mod v02b;
 pub mod storage;
 pub use model::{
     ClientRecord, Dek, EntryMode, EntryRecord, EntryTier, FactorPolicy, PublicHeader,
