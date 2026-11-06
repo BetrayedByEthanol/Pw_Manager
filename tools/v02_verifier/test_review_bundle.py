@@ -1,5 +1,6 @@
 """Synthetic review inventory tamper tests; no external review is implied."""
 import json
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -8,7 +9,6 @@ import review_bundle as rb
 
 
 class ReviewBundleTests(unittest.TestCase):
-    COMMIT = "a" * 40
     PATHS = ("source.rs", "docs/review.md")
 
     def setUp(self):
@@ -18,6 +18,17 @@ class ReviewBundleTests(unittest.TestCase):
         (self.root / "source.rs").write_text("synthetic source\n")
         (self.root / "docs").mkdir()
         (self.root / "docs/review.md").write_text("not independently reviewed\n")
+        subprocess.run(["git", "-C", str(self.root), "init", "-q"], check=True)
+        subprocess.run(["git", "-C", str(self.root), "add", "--", *self.PATHS],
+                       check=True)
+        subprocess.run(
+            ["git", "-C", str(self.root),
+             "-c", "user.name=V02-D Synthetic Test",
+             "-c", "user.email=review-test@example.invalid",
+             "commit", "-q", "-m", "synthetic manifest fixture"],
+            check=True,
+        )
+        self.COMMIT = rb.git_commit(self.root)
         self.document = rb.canonical(rb.inventory(self.root, self.COMMIT, self.PATHS))
 
     def test_accepts_only_exact_contents_and_declared_blocked_gates(self):
@@ -53,6 +64,18 @@ class ReviewBundleTests(unittest.TestCase):
             rb.inventory(self.root, self.COMMIT, ("../outside.rs",))
         with self.assertRaises(ValueError):
             rb.inventory(self.root, self.COMMIT, ("docs/review.md", "docs/review.md"))
+
+    def test_rejects_staged_changes_and_untracked_files_with_commit_claim(self):
+        (self.root / "source.rs").write_text("staged change not in HEAD\n")
+        subprocess.run(["git", "-C", str(self.root), "add", "--", "source.rs"],
+                       check=True)
+        with self.assertRaisesRegex(ValueError, "committed blob"):
+            rb.inventory(self.root, self.COMMIT, self.PATHS)
+        subprocess.run(["git", "-C", str(self.root), "reset", "--hard", "-q",
+                        self.COMMIT], check=True)
+        (self.root / "untracked.rs").write_text("untracked bytes\n")
+        with self.assertRaisesRegex(ValueError, "committed blob"):
+            rb.inventory(self.root, self.COMMIT, ("untracked.rs",))
 
     def test_rejects_unlisted_and_missing_sources(self):
         with self.assertRaises(ValueError):
