@@ -1,6 +1,6 @@
 # Vaulty — Implementation Roadmap
 
-**As of:** 2026-11-06 | **Current evidence baseline:** merged PRs #1, #3, #4 and #5; `main` at `7c3ba719`.  
+**As of:** 2026-11-06 | **Current merged baseline:** PRs #1, #3, #4, #5 and #6; `main` at `d192e6b`. **Current work:** V01-A PR #7 open, pending completion/review.  
 **Target:** [v0.4.5 specification](../specification/v0.4.5.md) | [architecture](../architecture/v0.4.5.md) | [feature ledger](features.md) | [acceptance register](acceptance-register.md)
 
 > **Status rules:** MERGED means source merged; CI-PASSED means its specified automated checks passed; VERIFIED means explicit acceptance tests and independent review evidence; DESIGN-APPROVED means intent only. Do not use “DONE” for unverified cryptographic behavior. A green workflow is not authorization to store real credentials.
@@ -10,7 +10,7 @@
 | Track | Current disposition | Evidence / outstanding |
 | --- | --- | --- |
 | V01 — Prototype Safety & Build Foundation | **Merged + CI-PASSED; security acceptance incomplete** | PR #4/#5; 11 root tests and browser/config checks; main GitHub CI green |
-| V01-A — Security Closure & Verification Hardening | **NEXT — not implemented** | Native host mock containment; legacy diagnostics; negative tests; crash/failure evidence |
+| V01-A — Security Closure & Verification Hardening | **PR #7 OPEN — initial CI PASS; not merged/accepted** | Default native-host UNAVAILABLE, removed key-dump experiment, executable/host tests, legacy parsing and crash-fault evidence; see [acceptance register](acceptance-register.md#2b-v01-a-implementation-review-checklist--no-automatic-security-acceptance) |
 | V02 — Canonical Format & Independent Keys | Not implemented | Requires OPEN-01 cryptographic review before production key graph |
 | V04M — Safe Migration Foundation | Not implemented | Separate format detection, non-destructive import and verify-before-commit |
 | V03 — Operations, States & Authenticators | Not implemented | Requires V02; masked LOADED VERS and virtual/physical adapter enforcement |
@@ -59,9 +59,9 @@ The V04M identifiers name a **migration/transfer workstream**; they may be sched
 | **G4 — Pilot/release assurance** | CRUD with four modes, real browser flows, backups/restore, threat-model review and independent release evidence | **Blocked** |
 | **G5 — Optional postponed** | Passkeys/typing/automatic sync-specific separate gates | **Deferred** |
 
-## D. Proposed next PR: V01-A — Security Closure & Verification Hardening
+## D. Current PR #7: V01-A — Security Closure & Verification Hardening
 
-**Scope (implementation-only; no new product decision):**
+**Scope (implementation-only; no new product decision). PR #7 includes the following changes; completion requires merged source and CI/review evidence:**
 1. Strip or isolate `src/util/gocrypt.rs` master-key-dump and destructive experiment helpers from the compiled runtime, plus any uncontrolled credential logging. Keep tests synthetic.
 2. Default native host must report UNAVAILABLE/NOT_IMPLEMENTED for secret and persistence operations unless an explicitly test-only mock is enabled; no default successful fake “saved” receipt or unlocked status. Add host protocol behavior tests.
 3. Test executable fails nonzero, does not create/modify a vault and does not print real secrets.

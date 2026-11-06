@@ -1,6 +1,6 @@
 # Vaulty — Acceptance, Evidence and Security Gap Register
 
-**Snapshot date:** 2026-11-06 | **Repository evidence baseline:** `main` at `7c3ba719012d1a4775fadb91cbf44675c69ae0f7`.  
+**Snapshot date:** 2026-11-06 | **Repository evidence baseline:** `main` at `d192e6bb04f785659159facb17c42ff4621d40a3` (PR #6 merged).  
 **Purpose:** provide a reviewable distinction between **design approved**, **source merged**, **CI passed**, **security behavior verified** and **release certified**. None is interchangeable. See [implementation roadmap](implementation.md).
 
 ## 1. Recorded merged evidence
@@ -14,6 +14,8 @@
 | EV-005 | [V01 workflow on merged main](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42217284380) | GitHub V01 jobs succeeded on merge commit `7c3ba719`: root Rust compilation + 11 root unit tests, native host build/test command, JS/manifest syntax | Root tests are not broad integration tests; native host crate ran 0 tests in inspected PR run |
 | EV-006 | [Security probes on merged main](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42217284398) | GitHub Rust/Python reference probe jobs succeeded on merge commit `7c3ba719` | Synthetic policy/crypto vectors do not prove runtime encryption or authorization |
 | EV-007 | [Independent cryptography review request](../../tools/security_probes/CRYPTO_REVIEW_REQUEST.md) | Review requirements and candidate construction documented; current disposition explicitly NOT APPROVED | OPEN-01 and OPEN-15 remain blockers |
+| EV-008 | [PR #6](https://github.com/BetrayedByEthanol/Pw_Manager/pull/6) | Canonical v0.4.5 documentation/reconciliation merged into main `d192e6b` | Not evidence of cryptographic or runtime policy implementation |
+| EV-009 | [V01-A PR #7](https://github.com/BetrayedByEthanol/Pw_Manager/pull/7) and [first product CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42236810534) | **Unmerged branch only:** initial run passed root 20 unit + 1 executable integration and native host 6 unit tests; new child-process host tests are pending subsequent CI | Do not mark V01-A MERGED, G0 security accepted, or actual daemon/recovery implemented |
 
 Evidence links are immutable run/PR references where possible. New status claims require their own evidence and must not overwrite an older evidence record's scope.
 
@@ -23,19 +25,19 @@ Evidence links are immutable run/PR references where possible. New status claims
 | --- | --- | --- | --- | --- |
 | A01-01 | Rust root crate, native host compile and tests execute | MERGED | EV-004/005 | **PASS build gate only** |
 | A01-02 | Browser extension manifests and JS syntax valid | MERGED | EV-005 | **PASS syntax only**; no browser behavior tests |
-| A01-03 | Default executable refuses real vault use | MERGED | `src/main.rs` | **PARTIAL:** explicit failure exit; add child-process test showing no secret/file side effects |
+| A01-03 | Default executable refuses real vault use | MERGED V01; V01-A PR IN REVIEW | `src/main.rs`; V01-A child-process smoke | First PR #7 CI verifies nonzero exit, no file writes and synthetic secret suppression; acceptance pending merge/review |
 | A01-04 | No master-password/PIN fallback to environment | MERGED | `src/cli.rs` secure terminal prompt | **PARTIAL:** scan/negative prompt tests before production |
-| A01-05 | No dangerous secret-bearing debug operations in compiled paths | INCOMPLETE | `src/util/gocrypt.rs` still includes `gocryptfs-xray -dumpmasterkey` experiment and hardcoded test string | **V01-A P1:** remove/isolate from compiled runtime |
+| A01-05 | No dangerous secret-bearing debug operations in compiled paths | V01-A PR IN REVIEW | PR #7 removes experimental gocrypt source, disables legacy direct stdout secret reveal and redacts password display | Security review and merged-main verification still pending |
 | A01-06 | Fresh outer AEAD nonce per seal and legacy JSON re-encrypt | MERGED | V01 unit tests + EV-005 | **PASS V01 regression**, not multi-key security proof |
 | A01-07 | FIDO2 attestation/assertion fail closed | MERGED | `src/fido2.rs` verifies results | **PARTIAL:** negative mocks/UV and mismatch tests missing |
 | A01-08 | Strict body counts/truncation; reject unsupported client registry | MERGED | `src/vault/body.rs` regression tests | **PASS body decoder**, not header/payload parser |
-| A01-09 | Atomic replacement + previous encrypted version + fsync | MERGED | `src/fsutil.rs`; success test | **PARTIAL:** crash/fault injection, symlink/path substitution still needed |
+| A01-09 | Atomic replacement + previous encrypted version + fsync | MERGED V01; V01-A PR IN REVIEW | Deterministic checkpoints before/after temp/backup/commit sync, symlink rejection and simulated abrupt exit | Limited test-path assurance; V02 still needs fd-based race safety and authenticated ancestry |
 | A01-10 | Single writer lock fails closed when lock exists | MERGED | `src/fsutil.rs` basic lock test | **PASS narrow lock test**, crash/stale-lock recovery procedures not certified |
-| A01-11 | Native host must not falsely claim credential success by default | INCOMPLETE | `extenstion/host/src/main.rs` returns mock “saved”/“unlocked”/password | **V01-A P1:** fail-closed default host, separate test-only mock |
-| A01-12 | Native host request/IPC behavioral tests | INCOMPLETE | Host `cargo test` currently executes 0 tests | **V01-A P1:** add valid/invalid framing, origin, bounds, mock containment tests |
+| A01-11 | Native host must not falsely claim credential success by default | V01-A PR IN REVIEW | Default `RELAY_ERROR/UNAVAILABLE` for all recognized requests; synthetic secret not echoed | Native host is NOT yet an E2E encrypted relay; pending merged CI/security review |
+| A01-12 | Native host request/IPC behavioral tests | V01-A PR IN REVIEW | Six Rust host unit tests passed on initial PR #7 CI; native stdio child-process tests added for next run | Review and merged-main test evidence pending |
 | A01-13 | Canonical header/payload parser safely reject malformed input | NOT V01 SCOPE | Legacy header/payload still index unchecked ranges | **V02 P1:** bounded parser/format replacement and fuzz |
 | A01-14 | Exact v0.4.5 VMK/VERS/DEK, modes and recovery | NOT V01 SCOPE | No canonical runtime | **V02–V05**, independent reviews |
-| A01-15 | Documentation/version/status consistent with merged evidence | IN PROGRESS | This documentation PR | **Doc PR** to update links and statuses; no release claim |
+| A01-15 | Documentation/version/status consistent with merged evidence | MERGED design baseline | PR #6, EV-008; V01-A branch adds provisional evidence | Update status after PR #7 merge and verify new CI; no release claim |
 
 **Assessment:** V01 source and CI foundation are merged; do not label V01 security acceptance COMPLETE until V01-A controls and their tests pass. The main binary remains deliberately unusable for real credentials.
 
@@ -57,18 +59,33 @@ The updated PR #6 restores nine binding requirements from the owner-approved v0.
 
 **All nine items are text-level contract restorations, not verified new security controls.** The V01-A gaps and OPEN-01/15 independent reviews remain open; do not change release gates merely because this PR is merged.
 
+## 2b. V01-A implementation review checklist — no automatic security acceptance
+
+| ID | V01-A review requirement | Proposed code and tests | Current disposition |
+| --- | --- | --- | --- |
+| VA-01 | Remove master-key dump/destructive experiment | Delete `src/util/gocrypt.rs`, remove module include | PR #7 IN REVIEW |
+| VA-02 | No false native-host success | Valid requests always `RELAY_ERROR/UNAVAILABLE` | Initial CI PASS; merge/review pending |
+| VA-03 | Native-host framing and origin negative tests | Unit tests plus child-process stdio integration | Unit CI PASS; new process tests pending |
+| VA-04 | Default executable inert | Synthetic env-secret and sentinel-vault child-process smoke | Initial CI PASS; merge/review pending |
+| VA-05 | Interruption safety checks | Deterministic fault stages, symlinks, simulated abrupt exit and stale lock | Initial CI PASS; not proof of power-loss durability |
+| VA-06 | Legacy malformed header/payload rejection | Header length/record preflight, strict password payload decode, truncation tests | Initial CI PASS; V02 full format still required |
+| VA-07 | FIDO2 fail-closed negative boundary | Unit tests for rejected verifier results; hardware UV/RP fixtures remain future | Synthetic CI PASS, **real hardware/OPEN-15 NOT VERIFIED** |
+| VA-08 | Recovery/runbook and release boundaries | Document manual stale lock and ambiguous post-rename commit; keep G0 partial | PR #7 IN REVIEW; no production authorization |
+
+This branch removes mock success; it **does not** implement native daemon authentication, canonical VMK/DEK, R1 recovery, S1/S2 route enforcement, secure provenance of a browser origin, or race-free dirfd/openat. G0 remains PARTIAL until source merge, reproducible tests, and accepted review receipts.
+
 ## 3. Security findings register
 
 | Finding | Severity if enabled | Finding evidence | Fix workstream | Status |
 | --- | --- | --- | --- | --- |
-| SEC-01 | P1 | Legacy `src/util/gocrypt.rs` invokes master-key dump tool and destructive experimental helpers | V01-A | Open; not active in default main |
-| SEC-02 | P1 | Native host returns realistic mock credential/save/unlocked success; separately launchable | V01-A | Open |
+| SEC-01 | P1 | Legacy `src/util/gocrypt.rs` contains master-key dump/destructive experiments on main | V01-A | PR #7 deletes file; verification pending merge |
+| SEC-02 | P1 | Native host previously returned realistic credential/save/unlocked success | V01-A | PR #7 fail-closed host + tests; pending merge |
 | SEC-03 | P1 | Unbounded/indexing legacy header/payload parsing can panic on untrusted bytes | V02 | Open; default main disabled |
 | SEC-04 | P1 | Legacy unkeyed header hash does not authenticate against malicious editing | V02 | Open; full canonical AEAD required |
 | SEC-05 | P1 | Authoritative key hierarchy/slot commitments are not production-approved | OPEN-01 + V02 | Blocked |
 | SEC-06 | P1 | Hardware PRF salt/UV/freshness/fanout not approved or enforced at runtime | OPEN-15 + V03/V06 | Blocked |
-| SEC-07 | P2 | No native-host Rust behavior tests; root has 11 unit tests only | V01-A | Open |
-| SEC-08 | P2 | Filesystem fault injection / symlink/rename attack testing absent | V01-A/V02 | Open |
+| SEC-07 | P2 | Native-host Rust behavior tests absent on old main | V01-A | First PR #7 CI: six host unit tests; child-process tests pending |
+| SEC-08 | P2 | Filesystem crash/fault and malicious path risks | V01-A/V02 | PR #7 deterministic negative tests; TOCTOU/openat guarantee remains V02 |
 | SEC-09 | P2 | Secret copies not consistently scoped to failure-path RAII zeroization | V02/V03 | Open |
 | SEC-10 | P1 | Trusted E2E extension→daemon pairing and runtime capabilities unimplemented | V07 | Open |
 | SEC-11 | P2 | Browser extension requests broad sites access; no real user-gesture authorization E2E proven | V07/V08B | Open |

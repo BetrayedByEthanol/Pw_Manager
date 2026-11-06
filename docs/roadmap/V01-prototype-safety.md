@@ -1,5 +1,5 @@
 # V01 — Prototype Safety & Build Foundation
-**Status:** **Source merged and GitHub CI passing** (PR #4 + PR #5 on `main` at `7c3ba719`); **security acceptance still open** pending V01-A and review evidence. **Not** a v0.4.5 production key hierarchy or secure release.
+**Status:** V01 source merged and CI passed (PR #4 + PR #5); **V01-A PR #7 is open with initial CI passed, not merged or security-accepted**. Current merged documentation baseline: PR #6 / `d192e6b`. **Not** a v0.4.5 production key hierarchy or secure release.
 
 > V01 evidence: [merged main V01 workflow](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42217284380), [security reference probes](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42217284398). The first includes 11 root Rust tests; the native-host crate currently has no behavioral tests. See [acceptance register](acceptance-register.md) and [next-stage roadmap](implementation.md).
 
@@ -18,7 +18,7 @@
 - Legacy header/body parsing still needs full authenticated-format replacement and fuzzing in V02.
 - No entry-specific hardware PRF per read, recovery slot provisioning, VERS masking, trusted daemon, end-to-end extension channel, or S4 ancestry has been implemented.
 - A successful legacy regression test does **not** certify recovery, migration, or safety for real credentials. Existing vault files require a dedicated safe migration; never silently rewrite unknown formats.
-- The native host is still a mock. Its demo credential replies are not production authentication.
+- On merged main, the native host still has mock responses; **V01-A PR #7 replaces them with fail-closed UNAVAILABLE**. This is not an operational authenticated relay.
 - Security-probe PR #1 has now been merged as a **reference checker**; OPEN-01 and OPEN-15 remain **unapproved** cryptographic/device protocol reviews.
 
 ## Evidence and remaining gates
@@ -33,4 +33,4 @@
 - Add fail-closed executable smoke test, filesystem fault-injection and documented stale-lock recovery; keep legacy header/payload rewrite in V02.
 - Preserve the disabled default application and never use it for real credentials.
 
-See [V01-A in the implementation roadmap](implementation.md#d-proposed-next-pr-v01-a--security-closure--verification-hardening) and [current evidence](acceptance-register.md).
+See [V01-A PR #7](https://github.com/BetrayedByEthanol/Pw_Manager/pull/7), [V01-A implementation roadmap](implementation.md#d-current-pr-7-v01-a--security-closure--verification-hardening), [operator recovery instructions](../security/V01A-failure-recovery.md) and [current acceptance evidence](acceptance-register.md).
