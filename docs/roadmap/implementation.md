@@ -1,6 +1,6 @@
 # Vaulty — Implementation Roadmap
 
-**As of:** 2026-11-06 | **Merged baseline:** through [PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8), merge commit `84f92be` (V02 candidate only). **Current work:** V02-A [cryptographic protocol/key-slot review](../architecture/v02a-crypto-keyslot-review.md); OPEN-01/15 external approvals pending.  
+**As of:** 2026-11-06 | **Merged baseline:** through [V02-A PR #9](https://github.com/BetrayedByEthanol/Pw_Manager/pull/9), merge `6bc733b` (documentation only) after V02 candidate [PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8). **Current work:** [V02-B experimental slot cryptography PR #10](https://github.com/BetrayedByEthanol/Pw_Manager/pull/10) (DRAFT; unmerged). OPEN-01/15 independent approval pending.  
 **Target:** [v0.4.5 specification](../specification/v0.4.5.md) | [architecture](../architecture/v0.4.5.md) | [feature ledger](features.md) | [acceptance register](acceptance-register.md)
 
 > **Status rules:** MERGED means source merged; CI-PASSED means its specified automated checks passed; VERIFIED means explicit acceptance tests and independent review evidence; DESIGN-APPROVED means intent only. Do not use “DONE” for unverified cryptographic behavior. A green workflow is not authorization to store real credentials.
@@ -12,7 +12,8 @@
 | V01 — Prototype Safety & Build Foundation | **Merged + CI-PASSED; security acceptance incomplete** | PR #4/#5; 11 root tests and browser/config checks; main GitHub CI green |
 | V01-A — Security Closure & Verification Hardening | **MERGED + PR CI PASSED; production security not certified** | PR #7 (`ae6d387`), fail-closed host, removed key dump, executable/IPC/fault tests; see [evidence register](acceptance-register.md) |
 | V02 — Canonical Format & Independent Keys | **MERGED PR #8; candidate library only, NOT final wire/production** | Typed VMK/VERS/DEKs, authenticated outer header/body, independent entry AEAD, pending slots, bounded codec and ancestry checks; all four Codex P2 findings resolved, final-head V02/product CI passed. **OPEN-01/15 and runtime pending**; see [candidate format](../architecture/v02-format-candidate.md) |
-| V02-A — Cryptographic Protocol & Key-Slot Design Review | **Review candidate; not independently approved** | [Threat matrix, proposed transcript, Option A/OPEN-02 and reviewer gates](../architecture/v02a-crypto-keyslot-review.md); no production wrapping implemented |
+| V02-A — Cryptographic Protocol & Key-Slot Design Review | **MERGED PR #9; design packet only** | [Threat matrix, transcript, Option A/OPEN-02 and reviewer gates](../architecture/v02a-crypto-keyslot-review.md); not independent OPEN-01/15 approval |
+| V02-B — Factor-Bound Key-Slot Cryptography Candidate | **Draft PR #10; not merged, NOT production/approved** | [Review-only isolated Argon2id/HKDF/AEAD/HMAC prototype and synthetic tests](../architecture/v02b-keyslot-candidate.md); no VLY2 slot activation or final protocol |
 | V04M — Safe Migration Foundation | Not implemented | Separate format detection, non-destructive import and verify-before-commit |
 | V03 — Operations, States & Authenticators | Not implemented | Requires V02; masked LOADED VERS and virtual/physical adapter enforcement |
 | V04 — Recovery & Slot Provisioning | Not implemented | Option A semantics; code-only conditions; all dependent envelopes |
@@ -33,7 +34,7 @@
 | **V01-A** | Security closure (merged; acceptance limited) | Remove reachable key-dump/debug helpers; make default native host fail closed rather than report fake success; test host IPC and executable; inject filesystem faults; classify remaining V01 security review items; update evidence | V01 |
 | **V02** | Authenticated canonical format and separated roots | Bounded single-file codec, independent VMK/VERS/DEKs, policy-bound slots, full authenticity and version gates, generation index, tombstones, nonced AEAD, crash writer, negative/fuzz tests | V01-A + OPEN-01 approval before activating crypto |
 | **V02-A** | Cryptographic protocol and key-slot design review | Threat/slot discrepancy analysis, proposed factor/PRF transcripts, Option A recovery and bootstrap matrices, review handoff; **OPEN-01/15 remain blocked until independent approval** | V02 candidate merged |
-| **V02-B** | Reviewed, versioned key-slot wrapping implementation (future) | Implement only after independent protocol approval: final slot schema/AEAD/commitment, Argon2id/HKDF, known-answer and substitution vectors; explicit migration/version behavior | V02-A + OPEN-01, OPEN-15 where physical slots apply |
+| **V02-B** | Key-slot protocol candidate and review-gated implementation | **Current draft PR #10:** isolated candidate Argon2id/HKDF/slot AEAD, typed KDF/provider descriptors, synthetic negative tests; **not final protocol**. Production canonical bytes, commitment, true factor/PRF integration, independent vectors and safe migration require OPEN-01/15 approval in a subsequent activation PR | V02-A merged for candidate; independent OPEN-01/15 approval for production |
 | **V04M-1** | Migration foundation | Version detector, read-only legacy parser, backup manifest, separate destination output, reopen/verify and rollback instructions. Do not auto-import unknown files | V02 codec |
 | **V03** | Session states and authenticator adapters | CLOSED/OPEN/LOADED/LOCKED, READ/WRITE; masked two-share VERS and virtual adapter while LOADED; no master-password prompt on reads; fresh physical FIDO2 on physical entry read; trusted prompt | V02 + OPEN-15 |
 | **V04** | Recovery / rewrap provisioning | Distinct VMK/VERS/DEK slots; code-only VMK recovery **password-only vaults exclusively**, hardware vaults with separately provisioned code+existing-password replacement and code+registered-hardware reset routes; Option A explicit code prompts; READY/PENDING/MISSING/DEGRADED/UNVERIFIED/STRICT_NONE; recovery test matrix | V02–V03 |
@@ -85,7 +86,7 @@ The V04M identifiers name a **migration/transfer workstream**; they may be sched
 | Negative evidence | Synthetic tamper/wrong-key/version/limit/fuzz-like tests + injected conflict/rename failures | Broad fuzz/property/cross-language conformance and reviewed hardware factors |
 | Runtime and recovery | **Not enabled**; main CLI inert, native host UNAVAILABLE | R1/R5/R6, password/hardware bootstrap, secure daemon, migration/restore |
 
-No G1 certification or full FR closure follows automatically from the candidate codec.
+No G1 certification or full FR closure follows automatically from the candidate codec. V02-A design PR #9 is merged, but is **not** an independent security review; V02-B [draft implementation](../architecture/v02b-keyslot-candidate.md) remains unapproved and disconnected from runtime.
 
 ## E. Tracking and PR acceptance protocol
 
