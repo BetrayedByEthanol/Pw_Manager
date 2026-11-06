@@ -262,8 +262,8 @@ fn predicted_body_size(body: &VaultBody) -> Result<usize, V02Error> {
     for entry in &body.entries {
         // Entry fixed: id(16), revision(8), four enum/flags bytes,
         // three UTF-8 length u16, nonce(24), ciphertext length u32,
-        // DEK-slot count u16.
-        checked_budget(&mut total, 64)?;
+        // DEK-slot count u16 is accounted for in budget_slots below.
+        checked_budget(&mut total, 62)?;
         checked_budget(&mut total, entry.title.len())?;
         checked_budget(&mut total, entry.username.len())?;
         checked_budget(&mut total, entry.origin.len())?;
