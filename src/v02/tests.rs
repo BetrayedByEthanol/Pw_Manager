@@ -29,6 +29,16 @@ fn temp_file(label: &str) -> (std::path::PathBuf, std::path::PathBuf) {
     let file = dir.join("vault.v2");
     (dir, file)
 }
+fn immutable_backups(dir: &std::path::Path, active: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let prefix = format!("{}.previous-", active.file_name().unwrap().to_string_lossy());
+    fs::read_dir(dir).unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.file_name().unwrap().to_string_lossy().starts_with(&prefix))
+        .collect()
+}
+fn vault_lock(active: &std::path::Path) -> std::path::PathBuf {
+    active.with_file_name(format!("{}.lock", active.file_name().unwrap().to_string_lossy()))
+}
 
 #[test]
 fn separated_random_roots_and_entry_payload_round_trip() {
@@ -242,7 +252,9 @@ fn authenticated_base_comparison_conflict_preserves_both_encrypted_versions() {
     };
     assert_eq!(fs::read(&path).unwrap(), next_a);
     assert_eq!(fs::read(&conflict).unwrap(), next_b);
-    assert_eq!(fs::read(path.with_extension("previous")).unwrap(), original);
+    let backups = immutable_backups(&dir, &path);
+    assert_eq!(backups.len(), 1);
+    assert_eq!(fs::read(&backups[0]).unwrap(), original);
     fs::remove_dir_all(dir).unwrap();
 }
 
@@ -265,7 +277,7 @@ fn storage_pre_and_post_replace_faults_and_symlink_rejection() {
         } else {
             assert_eq!(fs::read(&path).unwrap(), original);
         }
-        assert!(!path.with_extension("lock").exists());
+        assert!(!vault_lock(&path).exists());
         fs::remove_dir_all(dir).unwrap();
     }
     #[cfg(unix)]
@@ -361,7 +373,7 @@ fn final_commit_revalidates_transitions_even_for_directly_sealed_candidates() {
         fs::write(&path, &original).unwrap();
         assert!(storage::commit_candidate(&path, &original, &next, &vmk).is_err());
         assert_eq!(fs::read(&path).unwrap(), original);
-        assert!(!path.with_extension("lock").exists());
+        assert!(!vault_lock(&path).exists());
         fs::remove_dir_all(dir).unwrap();
     }
 
@@ -418,4 +430,52 @@ fn aggregate_body_size_rejected_before_oversized_serialization() {
     }
     assert_eq!(codec::encode_body(&body, &header).err(), Some(V02Error::TooLarge));
     assert_eq!(seal_file(&header, &body, &vmk).err(), Some(V02Error::TooLarge));
+}
+
+#[test]
+fn full_basename_sidecars_do_not_overwrite_another_active_vault() {
+    let (header, body, vmk, _, _) = specimen();
+    let original = seal_file(&header, &body, &vmk).unwrap();
+    let next = prepare_successor(&original, &vmk, |_| Ok(())).unwrap();
+
+    let (dir, first) = temp_file("sidecar-collision");
+    let second = dir.join("vault.previous"); // formerly collided with vault.v2 backup
+    fs::write(&first, &original).unwrap();
+    fs::write(&second, b"UNRELATED_ENCRYPTED_FILE_SENTINEL").unwrap();
+
+    assert_eq!(storage::commit_candidate(&first, &original, &next, &vmk).unwrap(),
+        CommitOutcome::Committed);
+    assert_eq!(fs::read(&second).unwrap(), b"UNRELATED_ENCRYPTED_FILE_SENTINEL");
+    let first_backups = immutable_backups(&dir, &first);
+    assert_eq!(first_backups.len(), 1);
+    assert_eq!(fs::read(&first_backups[0]).unwrap(), original);
+
+    // vault.previous must also be a valid *independent* active vault filename.
+    fs::write(&second, &original).unwrap();
+    assert_eq!(storage::commit_candidate(&second, &original, &next, &vmk).unwrap(),
+        CommitOutcome::Committed);
+    assert_eq!(fs::read(&first).unwrap(), next);
+    assert_eq!(fs::read(&second).unwrap(), next);
+    let second_backups = immutable_backups(&dir, &second);
+    assert_eq!(second_backups.len(), 1);
+    assert_eq!(fs::read(&second_backups[0]).unwrap(), original);
+    assert_ne!(first_backups[0], second_backups[0]);
+
+    // An active path inside the sidecar namespace is never accepted.
+    let illegal = dir.join("vault.v2.previous-pretend");
+    fs::write(&illegal, &original).unwrap();
+    assert!(storage::commit_candidate(&illegal, &original, &next, &vmk).is_err());
+    assert_eq!(fs::read(&illegal).unwrap(), original);
+
+    // A second commit preserves the earlier immutable backup; it does not
+    // rename a fixed previous slot over another file.
+    let newer = prepare_successor(&next, &vmk, |_| Ok(())).unwrap();
+    assert_eq!(storage::commit_candidate(&first, &next, &newer, &vmk).unwrap(),
+        CommitOutcome::Committed);
+    let snapshots = immutable_backups(&dir, &first);
+    assert_eq!(snapshots.len(), 2);
+    assert!(snapshots.iter().any(|p| fs::read(p).unwrap() == original));
+    assert!(snapshots.iter().any(|p| fs::read(p).unwrap() == next));
+    assert_eq!(fs::read(&second).unwrap(), next);
+    fs::remove_dir_all(dir).unwrap();
 }

@@ -21,6 +21,27 @@ impl Drop for LockGuard {
     fn drop(&mut self) { let _ = fs::remove_file(&self.0); }
 }
 fn io_error(_: std::io::Error) -> V02Error { V02Error::Invalid("candidate file IO failed") }
+
+/// A vault is never accepted at a path reserved for the sidecars of another
+/// vault. Distinct full basenames avoid `vault.v2` vs `vault.previous`
+/// collisions caused by Path::with_extension.
+fn active_basename(path: &Path) -> Result<&str, V02Error> {
+    let name = path.file_name().and_then(|n| n.to_str())
+        .ok_or(V02Error::Invalid("invalid vault filename"))?;
+    if name.is_empty() || name == "." || name == ".."
+        || name.ends_with(".lock")
+        || name.contains(".tmp-")
+        || name.contains(".previous-")
+        || name.contains(".conflict-") {
+        return Err(V02Error::Invalid("vault path uses reserved sidecar name"));
+    }
+    Ok(name)
+}
+fn sidecar_path(path: &Path, extension: &str) -> Result<PathBuf, V02Error> {
+    let name = active_basename(path)?;
+    Ok(path.with_file_name(format!("{name}.{extension}")))
+}
+
 fn check_regular(path: &Path) -> Result<bool, V02Error> {
     match fs::symlink_metadata(path) {
         Ok(metadata) => {
@@ -70,8 +91,8 @@ fn write_private_with_cleanup(path: &Path, bytes: &[u8]) -> Result<(), V02Error>
     result
 }
 fn conflict_copy(dir: &Path, path: &Path, bytes: &[u8]) -> Result<PathBuf, V02Error> {
-    let original = path.file_name().ok_or(V02Error::Invalid("unnamed vault"))?;
-    let new = dir.join(format!("{}.conflict-{}", original.to_string_lossy(), Uuid::new_v4()));
+    let new = sidecar_path(path, &format!("conflict-{}", Uuid::new_v4()))?;
+    if new.parent() != Some(dir) { return Err(V02Error::Invalid("invalid conflict parent")); }
     write_private_with_cleanup(&new, bytes)?;
     sync_dir(dir)?;
     Ok(new)
@@ -104,13 +125,14 @@ where F: FnMut(Phase) -> Result<(), V02Error> {
         || next.header.commit_id == old.header.commit_id {
         return Err(V02Error::Invalid("invalid candidate lineage"));
     }
+    let _ = active_basename(path)?; // reject sidecar names before opening files
     let dir = path.parent().ok_or(V02Error::Invalid("vault directory absent"))?;
     check_directory(dir)?;
     #[cfg(not(unix))]
     { return Err(V02Error::Invalid("V02 writer requires reviewed platform support")); }
     #[cfg(unix)]
     let _guard = {
-        let lock = path.with_extension("lock");
+        let lock = sidecar_path(path, "lock")?;
         let _lock_file = OpenOptions::new().write(true).create_new(true)
             .mode(0o600).open(&lock).map_err(io_error)?;
         LockGuard(lock)
@@ -121,14 +143,14 @@ where F: FnMut(Phase) -> Result<(), V02Error> {
         let copy = conflict_copy(dir, path, candidate)?;
         return Ok(CommitOutcome::ConflictPreserved(copy));
     }
-    let tmp = path.with_extension(format!("tmp-{}", Uuid::new_v4()));
-    let old_tmp = path.with_extension(format!("previous-tmp-{}", Uuid::new_v4()));
+    let tmp = sidecar_path(path, &format!("tmp-{}", Uuid::new_v4()))?;
+    // Each predecessor snapshot has a unique immutable filename. Neither
+    // concurrent accepted active files nor existing snapshots are overwritten.
+    let previous_path = sidecar_path(path, &format!("previous-{}", Uuid::new_v4()))?;
     let result = (|| -> Result<CommitOutcome, V02Error> {
-        make_private_file(&tmp, candidate)?;
+        write_private_with_cleanup(&tmp, candidate)?;
         check(Phase::AfterTempSync)?;
-        make_private_file(&old_tmp, previous)?;
-        let previous_path = path.with_extension("previous");
-        fs::rename(&old_tmp, &previous_path).map_err(io_error)?;
+        write_private_with_cleanup(&previous_path, previous)?;
         sync_dir(dir)?;
         check(Phase::AfterBackupSync)?;
         // Not race-free: V02 cannot be enabled for real credentials until
@@ -149,8 +171,9 @@ where F: FnMut(Phase) -> Result<(), V02Error> {
         Ok(CommitOutcome::Committed)
     })();
     if result.is_err() {
+        // Never delete a durable predecessor snapshot on a failure: an error
+        // after rename may mean the new active generation was committed.
         let _ = fs::remove_file(&tmp);
-        let _ = fs::remove_file(&old_tmp);
     }
     result
 }
