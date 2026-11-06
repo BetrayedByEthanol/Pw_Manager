@@ -306,7 +306,6 @@ impl VaultyHeader {
         let mut hasher = Hasher::new();
         hasher.update(&data);
         let hash: [u8; 32] = hasher.finalize().into();
-        println!("Hash: {:?}", hash);
         data.extend(&hash);
 
         return Ok(data);
@@ -318,8 +317,12 @@ impl VaultyHeader {
             .as_secs();
         let mut header = VaultyHeader::new(now);
         let mut idx: usize = 0;
+        if data.len() < 10 { return Err(VaultError::ParseError.into()); }
         header.magic.copy_from_slice(&data[idx..idx + 4]);
         idx += 4;
+        if header.magic != [0x56, 0x4C, 0x54, 0x31] {
+            return Err(VaultError::ParseError.into());
+        }
 
         header.version = u16::from_le_bytes(
             data[idx..idx + 2]
@@ -573,8 +576,10 @@ impl VaultyHeader {
         let vault_hash: [u8; 32] = data[idx..idx + 32].try_into().map_err(|e| VaultError::Slice(e))?;
         header.hash = vault_hash;
         let actual: [u8; 32] = blake3::hash(&data[0..idx].to_vec()).into();
-        println!("{:?}", actual);
-        println!("{:?}", vault_hash);
+        // This detects accidental corruption, NOT malicious rollback or an
+        // attacker who can recompute the unkeyed hash. V02 authenticates the
+        // full header inside the new VMK-backed format.
+        if actual != vault_hash { return Err(VaultError::ParseError.into()); }
         idx += 32;
 
         return Ok((header, idx));

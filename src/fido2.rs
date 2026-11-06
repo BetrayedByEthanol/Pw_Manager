@@ -38,6 +38,7 @@ pub fn ctap_register(pin: &SecretString) -> Result<(Vec<u8>, String, Vec<u8>), B
     // let pub_key = verify.credential_public_key.clone();
     // PublicKey::with_der(&pub_key.der, public_key::PublicKeyType::Ecdsa256);
     // println!("{:}", hex::encode(verify.credential_public_key.der));
+    if !verify.is_success { return Err("FIDO2 attestation verification failed".into()); }
     Ok((verify.credential_id, RP_ID.to_string(), verify.credential_public_key.der))
 }
 
@@ -82,7 +83,6 @@ pub fn ctap_authenticate(kek: &[u8; 32],  pin: &SecretString, cred_id: Vec<Vec<u
         &(assert),
     );
     let credential_id = assert.credential_id.clone();
-    println!("{:}", verify);
-    println!("{:}", pub_key.len());
+    if !verify { return Err("FIDO2 assertion verification failed".into()); }
     Ok((prf, verify, credential_id))
 }
