@@ -45,6 +45,7 @@ Decrypt checks version/route/descriptor bounds, verifies the HMAC using the MAC 
 | Password-only normal VMK or VERS | Argon2id master component + software virtual PRF component | Two protocol inputs, but software-only assurance |
 | Hardware normal VMK or VERS | Argon2id master component + physical PRF component | Pinned credential/RP/salt/UP/UV descriptor; **no actual proof of fresh physical operation in this module** |
 | Default/custom entry normal | VERS or Argon2id entry password + selected virtual/physical PRF | Entry mode bound; Isolated hardware-only; no active entry read |
+| Isolated entry recovery within a password-only vault | Relevant recovery code + separately enrolled physical PRF | Permitted independently of the password-only VMK route; code-only Isolated DEK recovery forbidden; STRICT_NONE disables recovery |
 | Password-only code-only recovery | 256-bit code component alone | No fake second factor; never allowed for hardware-vault VMK or other hardware-vault protected keys |
 | Hardware administrative code + password | Recovery code + Argon2id current master component | Replaces token; VMK route does not unwrap missing-token DEKs |
 | Hardware administrative code + physical | Recovery code + registered physical PRF | Resets password; no virtual substitute |
