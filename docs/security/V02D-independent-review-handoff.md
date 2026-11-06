@@ -10,7 +10,7 @@
 | --- | --- |
 | Source to assess | `src/v02/v02b.rs`, `src/v02/model.rs`, `src/v02/codec.rs`, `src/v02/mod.rs` and isolated candidate tests `v02c_tests.rs` / `v02d_tests.rs`; candidate crypto **not exposed to production runtime** |
 | Replayable evidence | Six synthetic route-scoped cross-library fixture vectors, Python/libsodium/libargon2 reference `tools/v02_verifier/reference_v02c.py`, 31 V02-C Rust tests plus V02-D route-domain tests; results must be rerun on the *reviewed commit* |
-| Inventory / commit binding | `tools/v02_verifier/review_bundle.py` records a **full git SHA** and SHA-256/byte lengths for an explicit source/spec/fixture allowlist, canonical JSON and **BLOCKED** gates; no implicit files, no symlinks, no false self-approval |
+| Inventory / commit binding | `tools/v02_verifier/review_bundle.py` records a **full git SHA**, SHA-256/byte lengths and exact Git blob equivalence for the source/spec/fixture allowlist, including the standalone verifier Cargo.lock, canonical JSON and **BLOCKED** gates; no implicit files, no symlinks, no false self-approval |
 | Non-security evidence | CI pass, Codex review, and a self-produced manifest show reproducibility/change tracking only. **They are not independent cryptographic assurance or an authenticated reviewer signature** |
 | Unavailable evidence | Independent named cryptographer's verdict, committing-AEAD proof or accepted substitute, independent third-party vectors, authenticated FIDO2 PRF/UV assertions, device capability data, trusted owner registry, real VMK/VERS/DEK and recovery flows, production wire format and verified storage lifecycle |
 
@@ -18,15 +18,15 @@
 ```sh
 git rev-parse HEAD
 python3 tools/v02_verifier/reference_v02c.py --verify
-cargo check --manifest-path tools/v02_verifier/Cargo.toml --all-targets
-cargo test --manifest-path tools/v02_verifier/Cargo.toml --all-targets
+cargo check --manifest-path tools/v02_verifier/Cargo.toml --locked --all-targets
+cargo test --manifest-path tools/v02_verifier/Cargo.toml --locked --all-targets
 python3 -m unittest discover -s tools/v02_verifier -p 'test_review_bundle.py'
 python3 tools/v02_verifier/review_bundle.py --write /tmp/v02d-review-manifest.json
 python3 tools/v02_verifier/review_bundle.py --check /tmp/v02d-review-manifest.json
 sha256sum /tmp/v02d-review-manifest.json
 ```
 
-Repeat on independently cloned repository at the **identical full commit**, compare manifest hashes, CI logs and input vectors, and record the commit and toolchain. This checks that the same bytes were reviewed; it **does not authenticate** who supplied those bytes, prove their safety or create a signed audit receipt. Never put secrets, raw PRF values or real recovery codes in review artifacts. GitHub CI may upload the manifest as a short-lived artifact; Forgejo can emit a digest, but **Forgejo runner execution has not been established**.
+Repeat on an independently cloned, clean repository at the **identical full commit**, compare manifest hashes, locked dependency builds, CI logs and input vectors, and record the commit and toolchain. Both generation and verification reject modified or untracked allowlisted bytes: every source file is byte-compared with `git show <commit>:<path>` before accepting the hash. An ordinary file hash without committed-blob verification is insufficient. This checks that the same bytes were reviewed; it **does not authenticate** who supplied those bytes, prove their safety or create a signed audit receipt. Never put secrets, raw PRF values or real recovery codes in review artifacts. GitHub CI may upload the manifest as a short-lived artifact; Forgejo can emit a digest, but **Forgejo runner execution has not been established**.
 
 ## 2. Concrete gaps and ownership (as of this PR)
 
@@ -45,7 +45,7 @@ Repeat on independently cloned repository at the **identical full commit**, comp
 | VD-11 | FIDO2 hardware UV flag can be declared by the candidate without device proof; UI/daemon must not infer a hardware read from that flag | P1 | OPEN-15 credential/RP/UP/UV binding + fresh assertion test | BLOCKED — real-device |
 | VD-12 | Synthetic conformance and finite mutation tests cannot prove absence of multi-key substitution, side channels or all parser bugs | P1 | Independent OPEN-01 security analysis, differential fuzz/property and production parser tests | BLOCKED — external + code |
 
-**Already addressed only at candidate-test level in V02-D:** route/factor-count table, invalid code-only hardware-vault and Isolated/STRICT_NONE paths, distinct KEK/MAC/slot/vault/target domains, and an explicit regression demonstrating that synthetic physical bytes *still unwrap* the candidate without a real authenticator. This is a **negative assurance finding**, not a hardware success. A hash inventory allows reviewers to see whether the files changed after the analysis. None of VD-01..12 is labeled APPROVED or production-closed by those tests.
+**Already addressed only at candidate-test level in V02-D:** route/factor-count table, invalid code-only hardware-vault and Isolated/STRICT_NONE paths, distinct KEK/MAC/slot/vault/target domains, and an explicit regression demonstrating that synthetic physical bytes *still unwrap* the candidate without a real authenticator. This is a **negative assurance finding**, not a hardware success. A hash inventory bound to the exact committed blobs, including the standalone verifier lockfile, allows reviewers to see whether the reviewed bytes changed after the analysis. None of VD-01..12 is labeled APPROVED or production-closed by those tests.
 
 ## 3. OPEN-01 independent cryptography reviewer instructions
 
