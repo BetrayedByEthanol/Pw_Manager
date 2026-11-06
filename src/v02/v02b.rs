@@ -174,7 +174,11 @@ impl Descriptor {
                 }
                 if self.is_recovery() {
                     let allowed = match self.vault_mode {
-                        VaultMode::PasswordVirtual => matches!(self.route, F::CodeOnly),
+                        // Password-only metadata uses code-only recovery; an
+                        // ISOLATED entry in that same vault may still have a
+                        // separately provisioned code+physical DEK route.
+                        VaultMode::PasswordVirtual =>
+                            matches!(self.route, F::CodeOnly | F::CodePhysical),
                         VaultMode::PasswordPhysical =>
                             matches!(self.route, F::CodePassword | F::CodePhysical),
                     };
@@ -311,7 +315,7 @@ pub(crate) struct CandidateEnvelope {
 fn commitment_tag(
     key: &[u8;32], transcript: &[u8], nonce: &[u8;24], ciphertext: &[u8],
 ) -> Result<[u8;32], V02Error> {
-    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key)
+    let mut mac = <Hmac<Sha256> as hmac::digest::KeyInit>::new_from_slice(key)
         .map_err(|_| V02Error::Invalid("candidate MAC key"))?;
     mac.update(DOMAIN);
     mac.update(b"/mac-v1");
@@ -328,7 +332,7 @@ fn check_commitment(
     key: &[u8;32], transcript: &[u8], nonce: &[u8;24],
     ciphertext: &[u8], tag: &[u8;32],
 ) -> Result<(), V02Error> {
-    let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(key)
+    let mut mac = <Hmac<Sha256> as hmac::digest::KeyInit>::new_from_slice(key)
         .map_err(|_| V02Error::Invalid("candidate MAC key"))?;
     mac.update(DOMAIN);
     mac.update(b"/mac-v1");
@@ -507,6 +511,21 @@ mod tests {
         let backup=seal_candidate(d,Components::Single(&code),&seed).unwrap();
         assert_eq!(*open_candidate(&backup,Components::Single(&code)).unwrap(),seed);
         assert!(open_candidate(&backup,Components::Single(&pwd)).is_err());
+    }
+    #[test]
+    fn password_only_vault_can_recover_isolated_entry_with_code_and_physical() {
+        let mut d=desc(SlotTarget::EntryDek,FactorPolicy::CodePhysical,
+            VaultMode::PasswordVirtual);
+        d.entry.as_mut().unwrap().tier=EntryTier::Isolated;
+        d.entry.as_mut().unwrap().recovery=RecoveryPolicy::Shared;
+        d.provider=physical_binding(PrfScope::EntrySlotPurpose);
+        assert!(d.validate().is_ok());
+        let code=[11;32];let hardware=[12;32];let secret=[13;32];
+        let env=seal_candidate(d,Components::Combined{
+            first:&code,second:&hardware},&secret).unwrap();
+        assert_eq!(*open_candidate(&env,Components::Combined{
+            first:&code,second:&hardware}).unwrap(),secret);
+        assert!(open_candidate(&env,Components::Single(&code)).is_err());
     }
     #[test]
     fn version_policy_and_password_metadata_cannot_be_silently_downgraded() {
