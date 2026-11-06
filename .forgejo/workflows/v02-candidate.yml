@@ -17,8 +17,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Candidate format compilation and negative tests
         run: |
-          cargo check --manifest-path tools/v02_verifier/Cargo.toml --all-targets
-          cargo test --manifest-path tools/v02_verifier/Cargo.toml --all-targets
+          cargo check --manifest-path tools/v02_verifier/Cargo.toml --locked --all-targets
+          cargo test --manifest-path tools/v02_verifier/Cargo.toml --locked --all-targets
       - name: Cross-library V02-C synthetic vector conformance
         run: |
           apt-get update
