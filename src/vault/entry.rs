@@ -143,12 +143,12 @@ impl VaultyEntry {
 
     pub fn serialize(&self) -> Result<Vec<u8>, VaultError> {
         let mut data: Vec<u8> = vec![];
-        data.extend_from_slice(&self.entry_length.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes()); // filled with the encoded size below
         data.extend_from_slice(&self.wrapped_key);
         data.extend_from_slice(&self.wrapping_nonce);
         data.extend_from_slice(&self.domain_tag_length.to_le_bytes());
         if self.domain_tag.len() != usize::from(self.domain_tag_length) {
-            panic!("Serialized domain tag length does not match domain tag length");
+            return Err(VaultError::LengthMismatch);
         }
         data.extend_from_slice(self.domain_tag.as_bytes());
         data.extend_from_slice(&self.nonce);
@@ -158,7 +158,7 @@ impl VaultyEntry {
         data.extend_from_slice(self.entry_id.as_bytes());
         data.extend_from_slice(&self.payload_length.to_le_bytes());
         if self.payload.len() != usize::from(self.payload_length) {
-            panic!("Serialized payload length does not match payload length");
+            return Err(VaultError::LengthMismatch);
         }
         data.extend(&self.payload);
         data.extend_from_slice(&self.target_length.to_le_bytes());
@@ -166,10 +166,12 @@ impl VaultyEntry {
         data.push(if self.is_default { 1 } else { 0 });
         data.extend_from_slice(&self.created_at.to_le_bytes());
         data.extend_from_slice(&self.updated_at.to_le_bytes());
-        // if data.len() != self.entry_length as usize {
-        //     panic!("Serialized entry length does not match entry length");
-        // }
-        return Ok(data);
+        if self.target.as_bytes().len() != usize::from(self.target_length) {
+            return Err(VaultError::LengthMismatch);
+        }
+        let total: u32 = data.len().try_into().map_err(|_| VaultError::TooLarge)?;
+        data[0..4].copy_from_slice(&total.to_le_bytes());
+        Ok(data)
     }
 
     pub fn deserialize(data: &Vec<u8>) -> Result<(Self, usize), Box<dyn Error>> {

@@ -110,6 +110,13 @@ fn derive_key(master_password: &str, kdf: &KdfParams) -> Result<[u8; 32], Crypto
     let salt_bytes = engine.decode(&kdf.salt)
         .map_err(|e| CryptoError::InvalidFormat(format!("Bad salt b64: {e}")))?;
 
+    if !(16 * 1024..=512 * 1024).contains(&kdf.memory)
+        || !(1..=10).contains(&kdf.time) || !(1..=16).contains(&kdf.parallelism) {
+        return Err(CryptoError::InvalidFormat("unsupported Argon2id work parameters".into()));
+    }
+    if salt_bytes.len() < 16 || salt_bytes.len() > 64 {
+        return Err(CryptoError::InvalidFormat("invalid Argon2id salt size".into()));
+    }
     let params = Params::new(kdf.memory, kdf.time, kdf.parallelism, None)
         .map_err(|e| CryptoError::Crypto(format!("Bad Argon2 params: {e}")))?;
 
@@ -159,8 +166,11 @@ pub fn  encrypt_vault(
     mut header: VaultHeader,
     payload: &VaultPayload,
 ) -> Result<Vec<u8>, CryptoError> {
-    // If header has no nonce/salt set by caller, ensure they’re set
-    // (here we assume caller uses create_new_header).
+    // Legacy JSON code path: regenerate nonce on EVERY encryption.
+    // Reusing a caller-supplied header must never reuse a key/nonce pair.
+    let mut fresh_nonce = [0u8; 24];
+    OsRng.fill_bytes(&mut fresh_nonce);
+    header.cipher.nonce = base64::engine::general_purpose::STANDARD.encode(fresh_nonce);
     let engine = GeneralPurpose::new(&base64::alphabet::STANDARD, base64::engine::GeneralPurposeConfig::new());
 
     let header_json = serde_json::to_vec(&header)?;
@@ -373,3 +383,31 @@ pub fn decrypt(ciphertext: &Vec<u8>, key_bytes: &[u8; 32], nonce: &[u8; 24], aad
 
 
 
+
+#[cfg(test)]
+mod v01_security_tests {
+    use super::*;
+    #[test]
+    fn repeated_legacy_json_encryptions_have_distinct_nonces() {
+        let header = create_new_header();
+        let body = VaultPayload {
+            vault_id: "synthetic".into(),
+            created_at: "0".into(),
+            updated_at: "0".into(),
+            items: vec![],
+        };
+        let first = encrypt_vault("test-only-passphrase", header.clone(), &body).unwrap();
+        let second = encrypt_vault("test-only-passphrase", header, &body).unwrap();
+        let (head_a, opened_a) = decrypt_vault("test-only-passphrase", &first).unwrap();
+        let (head_b, opened_b) = decrypt_vault("test-only-passphrase", &second).unwrap();
+        assert_ne!(head_a.cipher.nonce, head_b.cipher.nonce);
+        assert_eq!(opened_a.vault_id, opened_b.vault_id);
+        assert_ne!(first, second);
+    }
+    #[test]
+    fn extreme_preauth_kdf_cost_is_rejected() {
+        let mut head = create_new_header();
+        head.kdf.memory = u32::MAX;
+        assert!(derive_key("test", &head.kdf).is_err());
+    }
+}

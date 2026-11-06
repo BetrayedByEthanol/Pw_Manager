@@ -153,13 +153,13 @@ pub fn init_vault() -> Result<Vault, Box<dyn std::error::Error>> {
         let mix = hmac_sha256(&ws_hmac_key, &prf_out)?;
         let kek_master = hkdf_derive(&mix, Some(&kdf_salt), "vault-master-wrap-v1".as_bytes())?;
 
+        if !verify { return Err("FIDO2 registration assertion verification failed".into()); }
         let wrapped_key = crypto::encrypt(&master_key.to_vec(), &kek_master, &master_wrapping_nonce, &base_aad)?;
-        if !verify {
-            println!("Authentication failed!");
-            continue;
-        }
 
         let (prf_out_derive, verify_derive, credential_id_derive) = fido2::ctap_authenticate(&prf_input, &pin, cred_ids.clone(), &rp_id, pub_keys.clone())?;
+        if !verify_derive || credential_id_derive != credential_id {
+            return Err("FIDO2 registration PRF verification failed".into());
+        }
 
         let derive_mix = hmac_sha256(&derive_input, &prf_out_derive)?;
 
@@ -198,6 +198,11 @@ pub fn init_vault() -> Result<Vault, Box<dyn std::error::Error>> {
     vh.wrapping.wrapping_nonce = wrapping_nonce;
     wrapping_secret.zeroize();
 
+    // Fail closed: V01 has no software FIDO2 provider, so legacy password-only
+    // vault creation must not produce an unreadable or falsely protected vault.
+    if fido2_devices.is_empty() {
+        return Err("password-only vaults require the V03 virtual-provider implementation".into());
+    }
     vh.fido2.credential_count = fido2_device_count;
     vh.fido2.credentials = fido2_devices;
     vh.fido2.derive_input = derive_input;
@@ -239,6 +244,8 @@ impl Vault {
 
     pub fn seal_vault(&mut self) -> Result<SealedVault, Box<dyn Error>> {
         let payload = self.body.serialize()?;
+        // CRIT-01: a fresh nonce for every outer encryption, including repeat saves.
+        OsRng.fill_bytes(&mut self.header.wrapping.master_nonce);
         let master_hash = crypto::hash_fix_salt(prompt_pw("Master password: ".parse()?)?, &self.header.kdf.salt , self.header.kdf.memory_cost_kib, self.header.kdf.time_cost, self.header.kdf.parallelism)?;
 
         let mut wrapping_secret = crypto::decrypt(&self.header.wrapping.wrapped_master_key.as_slice().try_into()?, &master_hash, &self.header.wrapping.wrapping_nonce, &AADHeader::from(&self.header).to_aad_bytes())?;
@@ -251,6 +258,7 @@ impl Vault {
         let ws_hmac_key = hkdf_derive(&wrapping_secret, None, "vault-wrapping-hmac-v1".as_bytes())?;
 
         let (prf_out, verify, credential_id) = fido2::ctap_authenticate(&ws_prf_salt, &pin, cred_ids.clone(), &rp_id, pub_key.clone())?;
+        if !verify { return Err("FIDO2 assertion verification failed".into()); }
 
 
         let mix = hmac_sha256(&ws_hmac_key, &prf_out)?;
@@ -268,12 +276,12 @@ impl Vault {
         let mut master_key: [u8; 32] =  crypto::decrypt(&entry.wrapped_wrapping_key.to_vec(), &kek_master, &entry.wrap_nonce, &base_aad)?.as_slice().try_into()?;
         let cipher_text = crypto::encrypt(&payload, &master_key, &self.header.wrapping.master_nonce, &AADHeader::from(&self.header).to_aad_bytes())?;
         master_key.zeroize();
-        self.derived.vault_secret.zeroize();
+        // Do not destroy loaded default-entry material after a save.
         Ok(SealedVault::new(self.header.clone(), cipher_text))
     }
 
 
-    pub fn add_entry(&mut self, is_default: bool, title: String, username: Option<String>, password: SecretString, urls: Vec<String>, notes: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn add_entry(&mut self, is_default: bool, domain: String, target: String, title: String, username: Option<String>, password: SecretString, urls: Vec<String>, notes: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         let payload = PasswordEntry {
             title_length: title.len().try_into()?,
             title: title,
@@ -297,9 +305,6 @@ impl Vault {
 
         let mut wrapping_nonce: [u8; 24] = [0u8; 24];
         OsRng.fill_bytes(&mut wrapping_nonce);
-
-        let domain = String::from("amazon");    // could be broader like bank or e-mail
-        let target = String::from("amazon.de"); // target top level url
 
 
         let (hash, salt) = if is_default {crypto::hash_with_bytes(self.derived.vault_secret.expose_secret(), self.header.kdf.memory_cost_kib, self.header.kdf.time_cost, self.header.kdf.parallelism)?} else {crypto::hash(prompt_pw("Entry Password:".parse()?)?, self.header.kdf.memory_cost_kib, self.header.kdf.time_cost, self.header.kdf.parallelism)?};
@@ -340,6 +345,20 @@ impl Vault {
         self.body.entries_count += 1;
         self.header.metadata.updated_at_unix = now;
         Ok(())
+    }
+
+    /// Disabled until reviewed entry-DEK rewrap and policy checks exist.
+    pub fn update_entry(&mut self, _index: usize, _default: bool, _domain: String,
+        _target: String, _title: String, _username: Option<String>,
+        _password: Option<SecretString>, _urls: Vec<String>, _notes: Option<String>,
+    ) -> Result<(), Box<dyn Error>> {
+        Err("entry update requires the V02 protected rewrap path".into())
+    }
+
+    /// Never give the impression a password rotation succeeded without rewrapping.
+    pub fn change_master(&mut self, _current: SecretString, _next: SecretString)
+        -> Result<(), Box<dyn Error>> {
+        Err("master rotation requires V04 recovery-slot management".into())
     }
 }
 
@@ -382,6 +401,7 @@ impl SealedVault {
         let ws_hmac_key = hkdf_derive(&wrapping_secret, None, "vault-wrapping-hmac-v1".as_bytes())?;
 
         let (prf_out, verify, credential_id) = fido2::ctap_authenticate(&ws_prf_salt, &pin, cred_ids.clone(), &rp_id, pub_key.clone())?;
+        if !verify { return Err("FIDO2 assertion verification failed".into()); }
 
 
         let mix = hmac_sha256(&ws_hmac_key, &prf_out)?;
@@ -399,11 +419,13 @@ impl SealedVault {
         let mut master_key: [u8; 32] =  crypto::decrypt(&entry.wrapped_wrapping_key.to_vec(), &kek_master, &entry.wrap_nonce, &base_aad)?.as_slice().try_into()?;
         let cipher_text = crypto::decrypt(&self.payload, &master_key, &self.header.wrapping.master_nonce, &AADHeader::from(&self.header).to_aad_bytes())?;
         master_key.zeroize();
-        println!("{:?}", cipher_text.clone());
         let (body, idx) = VaultyBody::deserialize(&cipher_text)?;
 
 
         let (prf_out_derive, derive_verify, derive_credential_id) =  fido2::ctap_authenticate(&entry.prf_input, &pin, cred_ids.clone(), &rp_id, pub_key.clone())?;
+        if !derive_verify || derive_credential_id != credential_id {
+            return Err("FIDO2 PRF verification failed".into());
+        }
         let derive_mix = hmac_sha256(&self.header.fido2.derive_input, &prf_out_derive)?;
 
         let derive_kek = hkdf_derive(&derive_mix, Some(&entry.derive_salt), "vault-master-derive-v1".as_bytes())?;

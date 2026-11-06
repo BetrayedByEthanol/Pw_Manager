@@ -60,16 +60,7 @@ pub fn prompt_question(question: &str) -> Result<String, Box<dyn Error>> {
 pub fn prompt_pw(question: String) -> Result<SecretString, Box<dyn Error>> {
     print!("{}", question);
 
-    let env_var = if question.to_lowercase().contains("password") {
-        "MASTER_PASSWORD"
-    } else {
-        "PIN"
-    };
-
-    if let Ok(value) = env::var(env_var) {
-        return Ok(SecretString::from(value));
-    }
-
+    // Require trusted terminal input. No environment-variable fallback for secrets.
     io::stdout().flush()?;
 
     match read_password() {
@@ -581,6 +572,7 @@ fn remove_entry(vault: &mut Vault) -> Result<(), Box<dyn Error>> {
     }
 
     vault.body.entries.remove(index);
+    vault.body.entries_count = vault.body.entries.len().try_into()?;
     save_vault(vault)?;
 
     println!("Entry \"{}\" removed.", tag);

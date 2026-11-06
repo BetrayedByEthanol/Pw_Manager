@@ -1,0 +1,34 @@
+name: Vaulty V01 product safety
+on:
+  pull_request:
+  push:
+    branches:
+      - fix/v01-prototype-safety-build-foundation
+permissions:
+  contents: read
+jobs:
+  product-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Root binary and tests
+        run: |
+          cargo check --locked --all-targets
+          cargo test --locked --all-targets
+      - name: Native host
+        run: |
+          cargo check --manifest-path extenstion/host/Cargo.toml --locked --all-targets
+          cargo test --manifest-path extenstion/host/Cargo.toml --locked --all-targets
+  extension-configuration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate browser manifest JSON
+        run: |
+          python3 -m json.tool extenstion/manifest.json >/dev/null
+          python3 -m json.tool extenstion/host/manifests/chromium/com.vaulty.native_host.json >/dev/null
+          python3 -m json.tool extenstion/host/manifests/firefox/com.vaulty.native_host.json >/dev/null
+      - name: JavaScript syntax checks
+        run: |
+          for f in extenstion/*.js; do node --check "$f"; done
