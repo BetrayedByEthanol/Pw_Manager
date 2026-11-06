@@ -27,7 +27,7 @@
 | **FR-AUTH-04** | Bounded retry UX (not offline brute-force protection) | V03/V07A | Planned |
 | **FR-DEV-01** | Distinct trusted authenticator and client inventory | V06/V07 | Planned |
 | **FR-GEN-01** | CSPRNG password generator; selectable policy without modulo bias | V01/V08B | Prototype unit-tested; main disabled |
-| **FR-CRY-01** | Argon2id/HKDF/AEAD/nonce and reviewed key commitment | V02/V02-A/V02-B | V02 candidate random keys/dual AEAD merged; [V02-A review packet](../architecture/v02a-crypto-keyslot-review.md) proposes protocol; actual factor wrapping, commitment and OPEN-01/15 approval not delivered |
+| **FR-CRY-01** | Argon2id/HKDF/AEAD/nonce and reviewed key commitment | V02/V02-A/V02-B | V02 candidate and V02-A design merged; V02-B [draft isolated prototype](../architecture/v02b-keyslot-candidate.md) has test-only factor wrapping, but **no approved commitment, real factor provenance, final wire format or OPEN-01/15 signoff** |
 | **FR-SEC-01** | Secret lifetimes; masked VERS/virtual adapter while LOADED | V03/V05 | Planned |
 | **FR-PKY-01** | Software / hardware passkeys with RP-bound assertions | V08C | Deferred, separately gated |
 | **FR-HOT-01** | Register and manage global shortcut activation | V08A | Prototype code; disabled |
@@ -81,6 +81,10 @@ The merged [V02 PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8) i
 
 The [V02-A cryptographic protocol and key-slot review](../architecture/v02a-crypto-keyslot-review.md) records candidate transcript fields, independent review questions, effective access/recovery route requirements and failure tests. No active slots, password KDF, physical PRF or key commitment are delivered by the design packet. **OPEN-01/15 and G1/G2 remain BLOCKED.**
 
+## V02-B candidate implementation (draft PR #10)
+
+The [V02-B private key-slot prototype](../architecture/v02b-keyslot-candidate.md) tests candidate Argon2id components, typed route/provider context, two-input and code-only HKDF derivation, XChaCha20-Poly1305 slot envelopes, draft HMAC binding and fail-closed structural route checks. It is **not** connected to the active VLY2 codec or runtime: no real YubiKey assertion, recovery prompt, VERIFIED slot or production key path. FR-CRY-01, FR-AUTH-02 and FR-REC-01/02 remain incomplete; OPEN-01 and OPEN-15 independent approval remains blocked.
+
 ## Source-feature preservation
 
 The immutable historical baseline contains **exactly 67** O-ID occurrences across ten groups: Product (14), Start (4), CLI (14), Vault (12), Crypto (10), Fido (2), Socket (6), Hotkey (1), IO–File (1), Recovery (3). Duplicate occurrences are intentional. Every original O-ID points to one of the 34 preexisting FR-IDs; the 4 new FRs do not alter that history.
@@ -95,4 +99,4 @@ No original feature intent is silently removed. Existing `O-01`…`O-67` mapping
 4. Report separately: design approved, implementation merged, tests verified, security review approved and production release gate.
 5. Never mark a feature complete merely because reference route graphs, placeholder structs, mock native-host results or synthetic crypto vectors exist.
 
-**Current work:** V02-A protocol and key-slot review following merged V02 candidate PR #8; OPEN-01/15 independent approval and runtime integration remain blockers. See [implementation roadmap](implementation.md).
+**Current work:** V02-B draft isolated slot crypto candidate [PR #10](https://github.com/BetrayedByEthanol/Pw_Manager/pull/10), after merged V02-A design [PR #9](https://github.com/BetrayedByEthanol/Pw_Manager/pull/9). OPEN-01/15 independent approval and actual runtime integration remain blockers. See [implementation roadmap](implementation.md).
