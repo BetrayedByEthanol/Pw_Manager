@@ -24,7 +24,11 @@ jobs:
   v02-only:
     runs-on: ubuntu-latest
     steps:
+      # Review inventory must bind to the actual PR head, never an ephemeral
+      # synthetic pull_request merge commit that external reviewers cannot pin.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
       - name: Candidate format compilation and negative tests
         run: |
