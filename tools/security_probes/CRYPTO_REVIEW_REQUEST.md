@@ -1,6 +1,6 @@
 # Vaulty OPEN-01 — independent cryptographic review request
 
-**Review status: REQUESTED / NOT COMPLETED.** See the [V02-A threat and key-slot review](../../docs/architecture/v02a-crypto-keyslot-review.md) for the merged PR #8 gap analysis, R1/Option A and OPEN-02 bootstrap matrices, proposed envelope fields and failure cases. The reference transcript below is an *unapproved candidate*, not production code. Review is requested before enabling it in the vault engine, advertising key commitment, or declaring G1 complete.
+**Review status: REQUESTED / NOT COMPLETED.** See the merged [V02-A threat and key-slot review](../../docs/architecture/v02a-crypto-keyslot-review.md) for R1/Option A/OPEN-02 dependencies and the [V02-B internal candidate prototype](../../docs/architecture/v02b-keyslot-candidate.md) for an additional, **unapproved** experimental HKDF/HMAC/AEAD transcript. The older reference transcript below is also an *unapproved candidate*, not production code. Review is requested before enabling it in the vault engine, advertising key commitment, or declaring G1 complete.
 
 ## Scope and reviewer deliverables
 
@@ -72,6 +72,8 @@ The graph reads only authenticated policy snapshots, distinguishes VMK outer acc
 7. What changes to VLY2 wire format and migration strategy are required before producing `VERIFIED` slots, including future compatibility with v0.4.5 Option A code prompts?
 
 The reviewer should return reproducible attack examples where possible, independent vector changes, a revised wire/transcript proposal and an explicit scope-limited verdict for **each** of OPEN-01 and OPEN-15; no cross-review status is implied.
+
+**Review versioning note:** Existing `tools/security_probes/fixtures/kek_vectors.json` tests the historical `VAULTY-KEK-v0.4-CANDIDATE` transcript, **not** V02-B's `Vaulty/V02-B/REVIEW-ONLY/slot/v1`. Neither matching suite is an independent cross-implementation known-answer test; the review must explicitly choose/revise one version and generate a new external vector corpus. Never implicitly treat V02-B envelopes as compatible with the VLY2 `Slot` codec.
 
 ## Review gates to resolve before shipping
 

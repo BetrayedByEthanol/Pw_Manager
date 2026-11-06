@@ -100,8 +100,8 @@ The numbering remains authoritative for traceability; this crosswalk does **not*
 
 | ID | Status | What must be settled before enabling |
 | --- | --- | --- |
-| **OPEN-01** | **BLOCKED — independent cryptographic review** | [V02-A candidate review](../architecture/v02a-crypto-keyslot-review.md) records missing final slot fields, transcript/commitment questions, potential key-substitution/online-oracle risks and negative-test needs. **No external approval**; candidate KEK probes are not production protocol |
-| **OPEN-15** | **BLOCKED — independent security/device review** | [V02-A candidate review](../architecture/v02a-crypto-keyslot-review.md) separates fresh ceremony from reusable PRF output; exact PRF scope/salts, UV/UP, credential/RP binding, batch fanout, device limits and recovery re-enrollment require external review and real-device evidence |
+| **OPEN-01** | **BLOCKED — independent cryptographic review** | Merged [V02-A review](../architecture/v02a-crypto-keyslot-review.md) specifies open transcript and key-substitution questions; [V02-B internal candidate](../architecture/v02b-keyslot-candidate.md) has draft HKDF/HMAC/slot AEAD but is **not** independent commitment approval or final wire protocol |
+| **OPEN-15** | **BLOCKED — independent security/device review** | [V02-B descriptor candidate](../architecture/v02b-keyslot-candidate.md) binds declared credential/RP/salt/UP/UV fields, but **does not attest hardware provenance or freshness**. Exact device protocol, batching/fanout, real hardware failures and external review remain required |
 | OPEN-ENC | **OPEN implementation/security review** | Exact authenticated single-file envelope, header leakage/padding, KDF cost caps, full input fuzzing and key/nonce binding |
 | OPEN-ROLLBACK | **OPEN if claiming stronger guarantees** | Independent trusted anti-rollback anchor if protection from malicious historical-file replacement is required; S4 otherwise only warns about accidental divergences |
 | OPEN-IPC | **OPEN independent protocol review** | Authenticated E2E pairing, key pinning/rotation, replay resistance and trusted local approval UI |

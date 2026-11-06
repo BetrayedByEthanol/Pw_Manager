@@ -1,7 +1,7 @@
 # Vaulty Documentation Index
 
 **Canonical design target:** **v0.4.5**, 6 November 2026.  
-**Implementation reference:** GitHub `main` `84f92be` ([PR #8 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8), candidate codec only). V02-A key-slot design review is in progress; independent crypto acceptance is not obtained.  
+**Implementation reference:** GitHub `main` `6bc733b` ([V02-A PR #9 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/9), review packet only), following [V02 PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8). [V02-B PR #10](https://github.com/BetrayedByEthanol/Pw_Manager/pull/10) is an unmerged review-only crypto candidate. Independent approval is not obtained.  
 **Safety status:** Prototype foundation builds and tests; **not safe for real credentials and not security-certified**.
 
 Start here rather than relying on previous chats or the historical README feature checklist.
@@ -12,7 +12,8 @@ Start here rather than relying on previous chats or the historical README featur
 | --- | --- | --- |
 | [Product & security specification v0.4.5](specification/v0.4.5.md) | Normative behavior, keys, states, entry policies, recovery, client trust and migration | **Canonical design** |
 | [V02 candidate vault format v0](architecture/v02-format-candidate.md) | Merged experimental binary schema, independent keys, AEAD, strict parsing and explicit OPEN-01/15 limitations | **Candidate only; not approved runtime or frozen wire format** |
-| [V02-A cryptographic protocol and key-slot review](architecture/v02a-crypto-keyslot-review.md) | Protocol gaps, transcript questions, recovery/PRF threat matrix and independent review exit criteria | **Review candidate; not approved cryptography** |
+| [V02-A cryptographic protocol and key-slot review](architecture/v02a-crypto-keyslot-review.md) | Merged protocol gaps, transcript questions, recovery/PRF threat matrix and independent reviewer exit criteria | **Merged design; not approved cryptography** |
+| [V02-B candidate key-slot cryptography](architecture/v02b-keyslot-candidate.md) | Private test-only Argon2id/HKDF/AEAD/HMAC prototype, scoped descriptor and negative tests | **PR #10 in review; NOT activated or approved** |
 | [Architecture v0.4.5](architecture/v0.4.5.md) | System components, single-file structure, trust boundaries, key flows and operation sequences | **Target design** |
 | [Implementation roadmap](roadmap/implementation.md) | V01-A through V09, V04M workstream, dependencies and release gates | **Work plan** |
 | [Feature roadmap](roadmap/features.md) | All 38 normalized requirements, four N-features and links to the 67 historical source items | **Feature ledger** |
@@ -48,4 +49,4 @@ Each PR affecting keys, policy, recovery, storage, migration or client behavior 
 
 ## Recommended immediate milestone
 
-**V02-A — Cryptographic Protocol & Key-Slot Design Review**, following merged V02 candidate [PR #8](https://github.com/BetrayedByEthanol/Pw_Manager/pull/8). [Review packet](architecture/v02a-crypto-keyslot-review.md) records candidate protocols, unanswered cryptographic/device questions and implementation gates. OPEN-01/15 independent approval and runtime policy integration are required before G1/G2 acceptance. OPEN-01 and OPEN-15 must be independently reviewed before corresponding cryptographic and physical-PRF release gates.
+**V02-B — Review-gated Key-Slot Cryptography Candidate**, following merged V02-A [PR #9](https://github.com/BetrayedByEthanol/Pw_Manager/pull/9). [Prototype contract](architecture/v02b-keyslot-candidate.md) describes bounded, internal-only synthetic wrapping and tests. OPEN-01/15 independent approval, final wire format and real hardware/daemon integration remain required before G1/G2 acceptance or any credential use.
