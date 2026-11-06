@@ -1,6 +1,6 @@
 # Vaulty OPEN-01 — independent cryptographic review request
 
-**Review status: REQUESTED / NOT COMPLETED.** The reference transcript is an *unapproved candidate*, not production code. Review is requested before enabling it in the vault engine, advertising key commitment, or declaring G1 complete.
+**Review status: REQUESTED / NOT COMPLETED.** See the [V02-A threat and key-slot review](../../docs/architecture/v02a-crypto-keyslot-review.md) for the merged PR #8 gap analysis, R1/Option A and OPEN-02 bootstrap matrices, proposed envelope fields and failure cases. The reference transcript below is an *unapproved candidate*, not production code. Review is requested before enabling it in the vault engine, advertising key commitment, or declaring G1 complete.
 
 ## Scope and reviewer deliverables
 
@@ -9,6 +9,8 @@ Please independently assess (a) factor-combining security and authentication-fac
 Return a concrete attack analysis, required protocol changes, test-vector corrections and an explicit approval/rejection with threat-model caveats. Matching reference vectors is **not** evidence of cryptographic security.
 
 ## Candidate derivation — precise bytes
+
+**Historical probe framing, not the frozen VLY2 slot transcript:** This formulation does not distinguish every administrative recovery route by a dedicated `route_kind`, does not include authenticated PRF salt/credential/RP/UV or production Argon2id parameters, and has no demonstrated committing-AEAD security. Those omissions and the old 48-byte V02 envelope assumption must be addressed before V02-B. Existing vector parity must not be promoted to independent approval.
 
 All text context is UTF-8. `frame(x)=u16be(len(x)) || x`; maximum frame size 65535. Context strings are nonempty and <=255 UTF-8 bytes. Context field order is fixed.
 
@@ -58,6 +60,18 @@ The graph reads only authenticated policy snapshots, distinguishes VMK outer acc
 - `fixtures/routes.json`, `fixtures/conformance.json` plus invalid fixtures: shared OPEN-18 policy cases.
 - `route_graph.py`, `rust/src/lib.rs`: read-only route and material-fanout evaluators.
 - `test_probes.py`, `rust/tests/conformance.rs`: negative tests, binding tests and parity tests.
+
+## Specific V02-A adversarial review questions
+
+1. Can two differently derived candidate keys plausibly authenticate the same envelope under the proposed slot AEAD/commitment? What exact attacker model and cryptographic proof or accepted construction is required?
+2. Does the combiner remain safe with user-chosen weak passwords, independently random recovery codes, repeatable PRFs, correlated or attacker-controlled inputs, and multiple code+factor routes? Are route type/domain labels unambiguous?
+3. Which authenticated fields are public pre-load, which are verified only after VMK load, and how are target/slot identity, owner registry and revocation proven before permitting a normal read?
+4. How must password KDF parameter bounds, salts, algorithm versions, nonce lifecycle and parser limits be encoded to resist resource exhaustion and silent downgrade?
+5. How are matching FIDO2 credential/RP/PRF result, UP/UV and per-operation freshness established? Can representative hardware support entry-salted versus bounded batch-scoped operations?
+6. Can password-only recovery restore **both** VMK and the original pre-load seed without the forgotten password? Can either hardware administrative recovery path replace factors without turning VMK access into an Isolated DEK bypass?
+7. What changes to VLY2 wire format and migration strategy are required before producing `VERIFIED` slots, including future compatibility with v0.4.5 Option A code prompts?
+
+The reviewer should return reproducible attack examples where possible, independent vector changes, a revised wire/transcript proposal and an explicit scope-limited verdict for **each** of OPEN-01 and OPEN-15; no cross-review status is implied.
 
 ## Review gates to resolve before shipping
 
