@@ -26,6 +26,7 @@ FILE_ALLOWLIST = (
     "src/v02/v02c_tests.rs",
     "src/v02/v02d_tests.rs",
     "tools/v02_verifier/Cargo.toml",
+    "tools/v02_verifier/Cargo.lock",
     "tools/v02_verifier/reference_v02c.py",
     "tools/v02_verifier/review_bundle.py",
     "tools/v02_verifier/test_review_bundle.py",
