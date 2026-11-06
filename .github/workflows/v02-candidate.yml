@@ -30,6 +30,15 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
+      # Temporary one-off step to obtain a standalone verifier Cargo.lock
+      # for committing to the repository. Removed after the lock is recorded.
+      - name: Bootstrap verifier lock artifact for V02-D
+        run: |
+          cargo generate-lockfile --manifest-path tools/v02_verifier/Cargo.toml
+          echo V02D_LOCK_BEGIN
+          base64 -w0 tools/v02_verifier/Cargo.lock
+          echo
+          echo V02D_LOCK_END
       - name: Candidate format compilation and negative tests
         run: |
           cargo check --manifest-path tools/v02_verifier/Cargo.toml --all-targets
