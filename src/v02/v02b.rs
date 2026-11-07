@@ -350,6 +350,10 @@ mod conformance;
 mod review_gaps;
 
 #[cfg(test)]
+#[path = "v02e_tests.rs"]
+mod preapproval;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     fn params() -> PasswordParameters {
