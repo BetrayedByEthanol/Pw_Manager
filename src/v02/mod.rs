@@ -10,6 +10,10 @@
 //! cannot be obtained from the VMK.
 mod codec;
 mod model;
+// Proposed future-version metadata binding is exercised only by synthetic
+// tests. Never reinterpret VLY2 entry AEAD associated data (F-9).
+#[cfg(test)]
+mod entry_binding_candidate;
 // Candidate-only key-slot KDF/AEAD prototype. Never activates VLY2 slots or
 // exposes unreviewed factor input as a production unlock API (OPEN-01/15).
 mod v02b;
