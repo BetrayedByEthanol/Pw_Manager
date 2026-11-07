@@ -27,7 +27,7 @@
 | **FR-AUTH-04** | Bounded retry UX (not offline brute-force protection) | V03/V07A | Planned |
 | **FR-DEV-01** | Distinct trusted authenticator and client inventory | V06/V07 | Planned |
 | **FR-GEN-01** | CSPRNG password generator; selectable policy without modulo bias | V01/V08B | Prototype unit-tested; main disabled |
-| **FR-CRY-01** | Argon2id/HKDF/AEAD/nonce and reviewed key commitment | V02/V02-A/V02-B/V02-C | V02-B test-only candidate merged; V02-C adds [cross-library KATs/mutation evidence](../security/V02C-cryptographic-conformance.md). **No independent commitment approval, real factor provenance, final wire protocol or OPEN-01/15 signoff** |
+| **FR-CRY-01** | Argon2id/HKDF/AEAD/nonce and reviewed key commitment | V02/V02-A/V02-B/V02-C/V02-D | V02-B/C test-only candidate and conformance merged; V02-D [external review handoff](../security/V02D-independent-review-handoff.md) pins sources and tracks twelve gaps. **No independent commitment approval, real factor provenance, final wire or OPEN-01/15 signoff** |
 | **FR-SEC-01** | Secret lifetimes; masked VERS/virtual adapter while LOADED | V03/V05 | Planned |
 | **FR-PKY-01** | Software / hardware passkeys with RP-bound assertions | V08C | Deferred, separately gated |
 | **FR-HOT-01** | Register and manage global shortcut activation | V08A | Prototype code; disabled |
@@ -89,6 +89,10 @@ The [V02-B private key-slot prototype](../architecture/v02b-keyslot-candidate.md
 
 The [V02-C evidence packet](../security/V02C-cryptographic-conformance.md) adds six deterministic Python/libsodium versus Rust key-slot tests, independent-library Argon2id KAT, factor/descriptor/nonce/ciphertext/HMAC mutation coverage, and an unexecuted FIDO2 hardware test matrix. This is **cross-library consistency**, not independent security review or real physical verification. FR-CRY-01 and FR-AUTH-02 remain incomplete; G1/G2/OPEN-01/15 remain blocked.
 
+## V02-D external review preparation (not approval)
+
+The [V02-D external crypto/security handoff](../security/V02D-independent-review-handoff.md) maps remaining gaps to OPEN-01/15 review versus V03/V04/V06 implementation. Deterministic file-hash inventory and synthetic route/factor/domain regression tests improve the provenance and safety checks of the inactive candidate. Neither real hardware behavior nor cryptographic key commitment has been independently assessed; FR-CRY-01, FR-REC-01/02 and FR-AUTH-02 stay incomplete.
+
 ## Source-feature preservation
 
 The immutable historical baseline contains **exactly 67** O-ID occurrences across ten groups: Product (14), Start (4), CLI (14), Vault (12), Crypto (10), Fido (2), Socket (6), Hotkey (1), IO–File (1), Recovery (3). Duplicate occurrences are intentional. Every original O-ID points to one of the 34 preexisting FR-IDs; the 4 new FRs do not alter that history.
@@ -103,4 +107,4 @@ No original feature intent is silently removed. Existing `O-01`…`O-67` mapping
 4. Report separately: design approved, implementation merged, tests verified, security review approved and production release gate.
 5. Never mark a feature complete merely because reference route graphs, placeholder structs, mock native-host results or synthetic crypto vectors exist.
 
-**Current work:** V02-C synthetic cryptographic conformance and security-review handoff after merged [V02-B PR #10](https://github.com/BetrayedByEthanol/Pw_Manager/pull/10). OPEN-01/15 independent approval and actual runtime integration remain blockers. See [implementation roadmap](implementation.md).
+**Current work:** V02-D independent review readiness after merged [V02-C PR #11](https://github.com/BetrayedByEthanol/Pw_Manager/pull/11). OPEN-01/15 approval and trusted runtime integration remain blockers. See [implementation roadmap](implementation.md).

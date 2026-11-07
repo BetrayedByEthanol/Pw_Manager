@@ -100,8 +100,8 @@ The numbering remains authoritative for traceability; this crosswalk does **not*
 
 | ID | Status | What must be settled before enabling |
 | --- | --- | --- |
-| **OPEN-01** | **BLOCKED — independent cryptographic review** | [V02-B internal candidate](../architecture/v02b-keyslot-candidate.md) and [V02-C cross-library KATs/mutation matrix](../security/V02C-cryptographic-conformance.md) provide reproducibility evidence only. No qualified independent multi-key/key-commitment analysis, external approved vectors or final protocol |
-| **OPEN-15** | **BLOCKED — independent security/device review** | [V02-C physical-device test matrix](../security/V02C-cryptographic-conformance.md) is **unexecuted**. V02-B declares but cannot prove credential/RP/salt/UP/UV, per-read fresh assertion, batching and fanout. Device trials and independent review remain required |
+| **OPEN-01** | **BLOCKED — independent cryptographic review** | [V02-D reviewer handoff](../security/V02D-independent-review-handoff.md) pins the source, KATs, combined-factor questions and candidate HMAC; VD-01/03/06/10/12 remain review blockers. **No named external reviewer, proof/verdict, independent approved vectors or final wire protocol** |
+| **OPEN-15** | **BLOCKED — independent security/device review** | [V02-D physical device matrix](../security/V02D-independent-review-handoff.md#4-open-15-independent-fido2-prfuv-device-review-plan-not-executed) P01–P09 remains **unexecuted**. Arbitrary synthetic bytes can unwrap the candidate; signed assertions, RP/salt/UP/UV, freshness and fanout demand hardware trials and independent approval |
 | OPEN-ENC | **OPEN implementation/security review** | Exact authenticated single-file envelope, header leakage/padding, KDF cost caps, full input fuzzing and key/nonce binding |
 | OPEN-ROLLBACK | **OPEN if claiming stronger guarantees** | Independent trusted anti-rollback anchor if protection from malicious historical-file replacement is required; S4 otherwise only warns about accidental divergences |
 | OPEN-IPC | **OPEN independent protocol review** | Authenticated E2E pairing, key pinning/rotation, replay resistance and trusted local approval UI |

@@ -1,7 +1,7 @@
 # Vaulty Documentation Index
 
 **Canonical design target:** **v0.4.5**, 6 November 2026.  
-**Implementation reference:** GitHub `main` `0249bb6` ([V02-B PR #10 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/10), internal candidate only) after V02/V02-A. V02-C adds test-only conformance evidence; independent approval is not obtained.  
+**Implementation reference:** GitHub `main` `961cde0` ([V02-C PR #11 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/11), synthetic conformance only); [V02-D PR #12](https://github.com/BetrayedByEthanol/Pw_Manager/pull/12) is in review. Independent crypto/device approval is not obtained.  
 **Safety status:** Prototype foundation builds and tests; **not safe for real credentials and not security-certified**.
 
 Start here rather than relying on previous chats or the historical README feature checklist.
@@ -14,7 +14,8 @@ Start here rather than relying on previous chats or the historical README featur
 | [V02 candidate vault format v0](architecture/v02-format-candidate.md) | Merged experimental binary schema, independent keys, AEAD, strict parsing and explicit OPEN-01/15 limitations | **Candidate only; not approved runtime or frozen wire format** |
 | [V02-A cryptographic protocol and key-slot review](architecture/v02a-crypto-keyslot-review.md) | Merged protocol gaps, transcript questions, recovery/PRF threat matrix and independent reviewer exit criteria | **Merged design; not approved cryptography** |
 | [V02-B candidate key-slot cryptography](architecture/v02b-keyslot-candidate.md) | Merged private Argon2id/HKDF/AEAD/HMAC prototype and negative tests | **Merged, NOT activated or approved** |
-| [V02-C cryptographic conformance and security verification](security/V02C-cryptographic-conformance.md) | Frozen cross-library KATs, adversarial byte/descriptor tests and independent review handoff | **Review candidate, NOT external approval or real hardware evidence** |
+| [V02-C cryptographic conformance and security verification](security/V02C-cryptographic-conformance.md) | Merged frozen cross-library KATs, adversarial byte/descriptor tests and independent review handoff | **Merged, NOT external approval or real hardware evidence** |
+| [V02-D independent cryptographic review handoff](security/V02D-independent-review-handoff.md) | Exact source-hash manifest, 12 security gaps, recovery/hardware route tests and reviewer/device verdict templates | **Review candidate; OPEN-01/15 still BLOCKED** |
 | [Architecture v0.4.5](architecture/v0.4.5.md) | System components, single-file structure, trust boundaries, key flows and operation sequences | **Target design** |
 | [Implementation roadmap](roadmap/implementation.md) | V01-A through V09, V04M workstream, dependencies and release gates | **Work plan** |
 | [Feature roadmap](roadmap/features.md) | All 38 normalized requirements, four N-features and links to the 67 historical source items | **Feature ledger** |
@@ -50,4 +51,4 @@ Each PR affecting keys, policy, recovery, storage, migration or client behavior 
 
 ## Recommended immediate milestone
 
-**V02-C — Cryptographic Conformance & Security Verification**, following merged V02-B [PR #10](https://github.com/BetrayedByEthanol/Pw_Manager/pull/10). [Verification packet](security/V02C-cryptographic-conformance.md) captures cross-library KATs, adversarial tests and external reviewer criteria; it cannot substitute for OPEN-01/15 expert approval or real hardware evidence. No production key-slot activation or credential use is authorized.
+**V02-D — Independent Cryptographic Review Readiness & Security Gap Closure**, following merged [V02-C PR #11](https://github.com/BetrayedByEthanol/Pw_Manager/pull/11). [Reviewer packet](security/V02D-independent-review-handoff.md) pins the candidate source/fixtures and separates external expert/device blockers from implementation gaps. Neither review nor hardware evidence has yet been obtained; production key slots remain disabled.
