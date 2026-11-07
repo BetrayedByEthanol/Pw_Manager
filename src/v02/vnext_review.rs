@@ -498,12 +498,12 @@ mod tests {
     #[test]
     fn mutations_of_secret_authorizing_metadata_bind_vnext_aad(){
         use crate::v02::model::{EntryRecord,Slot};
-        let id=id(3);
-        let e=EntryRecord{id,revision:1,mode:EntryMode::DefaultPhysical,
+        let entry_id=id(3);
+        let e=EntryRecord{id:entry_id,revision:1,mode:EntryMode::DefaultPhysical,
             tier:EntryTier::Isolated,recovery:RecoveryPolicy::StrictNone,tombstone:false,
             title:"synthetic title".into(),username:"synthetic username".into(),
             origin:"https://example.test".into(),nonce:[9;24],ciphertext:vec![0;48],
-            dek_slots:vec![Slot::pending(SlotTarget::EntryDek,id,
+            dek_slots:vec![Slot::pending(SlotTarget::EntryDek,entry_id,
                 FactorPolicy::DefaultPhysical)]};
         let a=crate::v02::entry_binding_candidate::entry_aad_vnext(id(1),&e).unwrap();
         let mut changed=e.clone();changed.origin="https://attacker.invalid".into();
