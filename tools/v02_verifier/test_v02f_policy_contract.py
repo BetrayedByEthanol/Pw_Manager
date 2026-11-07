@@ -57,7 +57,8 @@ class V02FPolicyBoundaryTests(unittest.TestCase):
         for constraint in (
             "NO NEW OWNER APPROVAL OR PRODUCTION CRYPTOGRAPHY",
             "NO new owner approval",
-            "unpreselected per-entry",
+            "per-entry explicit selection",
+            "no preselected weak route",
             "no silently chosen STRICT_NONE",
             "NFC",
             "UTF-8",
