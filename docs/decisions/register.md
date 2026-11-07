@@ -41,6 +41,19 @@ Established v0.4.5 decisions retain identifiers **D-01 through D-32**. D-19 and 
 | DEC-N-03 | N-03 manual distinct-vault merge P2 | **APPROVED feature** | FR-MERGE-01; explicit policy/conflict UI, no trust transplant |
 | DEC-N-04 | N-04 automatic sync-conflict merge P3 | **DEFERRED** | FR-SYNC-01; not part of manual merge MVP |
 
+## A1. V02-F policy proposals (NOT owner approvals)
+
+The [V02-F recovery assurance and cryptographic policy contract](../security/V02F-recovery-assurance-and-cryptographic-policy.md) specifies owner/expert decision questions and testable design requirements without superseding approved R1, S2, S3, D-12/D-26, Option A, D-30 or the frozen V02-B/C transcript. **Merging V02-F does not approve a new recovery option, password encoding, KDF default, hardware UV level, PRF salt design, or final wire version.**
+
+| Proposal ID | Status | Scope and decision owner |
+| --- | --- | --- |
+| PROP-REC-CONSENT | **PROVISIONAL — owner selection outstanding** | Explicit, unpreselected per-entry consent for a weaker Standard recovery path; include inherited ancestors, affected roots, downgrade and irrecoverability warnings; no implicit new slot or silent STRICT_NONE |
+| PROP-ASSURANCE-REPORT | **REQUIRED by existing D-12/D-26; design proposal only** | Separate VMK metadata / VERS and seed ancestry / entry DEK normal and recovery reports; weakest configured vs usable path; verified coverage and historic-copy inventory |
+| PROP-KDF-BENCH | **PROVISIONAL — benchmark/expert** | Compare 64 MiB/3 passes at 1 vs 4 lanes and published baseline; per-user-operation aggregate work/memory/concurrency cap; no production profile chosen |
+| PROP-PASSWORD-NFC | **PROVISIONAL — owner/expert** | New-wire NFC→UTF-8, explicit encoding version, no trimming/casefold/truncation; old raw-byte vectors and old file formats unchanged |
+| PROP-CODE-SCOPE | **PROPOSED for V02-G/OPEN-01/15** | Entry/group/vault ownership and recovery key-domain separation; no raw code accepted as an unrelated code-scope root |
+| PROP-VNEXT-WIRE | **REVIEW REQUIRED** | Exact strict descriptor, password/KDF/PRF context, DEK-bound fill origin and explicit migration; no VLY2 reinterpretation |
+
 ## B. Recovery provisioning matrix (Option A)
 
 | Operation | Recovery code prompt | Other prerequisite |
@@ -102,7 +115,9 @@ The numbering remains authoritative for traceability; this crosswalk does **not*
 | --- | --- | --- |
 | **OPEN-01** | **BLOCKED — independent cryptographic review** | [V02-E AI-assisted findings triage](../security/V02E-review-findings-and-preapproval-hardening.md) does not satisfy independent review. V02-B HMAC/combiner commitment, approved KDF budget and a versioned wire protocol still require a named qualified reviewer and exact scoped verdict; no cryptographic approval inferred from the scratch report |
 | **OPEN-15** | **BLOCKED — independent security/device review** | [V02-E review](../security/V02E-review-findings-and-preapproval-hardening.md) documents free PRF salt and UV=false as unresolved; [V02-D physical device matrix](../security/V02D-independent-review-handoff.md#4-open-15-independent-fido2-prfuv-device-review-plan-not-executed) P01–P09 unexecuted. No enrolled verified PRF, independent device verdict or approved default UV/scoping rules |
-| OPEN-REC-CONSENT | **OPEN — owner decision required before provisioning** | F-1: whether a Standard hardware/custom-password entry may opt in to a recovery route that drops an ordinary entry factor. Proposal: explicit per-entry informed consent, weakest-route disclosure, **no implicit slot**, and no silent STRICT_NONE default. [V02-E findings](../security/V02E-review-findings-and-preapproval-hardening.md); not an approved change to D-12 or S2 |
+| OPEN-REC-CONSENT | **OPEN — owner decision required before provisioning** | F-1: propose explicit **unpreselected per-entry opt-in** when any complete recovery route weakens a Standard entry's normal assurance; full ancestry/affected entries and warning/receipt. Do not silently create weak routes **or** default to STRICT_NONE. [V02-F proposed contract](../security/V02F-recovery-assurance-and-cryptographic-policy.md); not approved or implemented, no S2/R1 change |
+| OPEN-KDF-PROFILE | **OPEN — owner target plus OPEN-01** | Argon2id production floor/ceiling, lanes, per-ceremony memory/CPU/concurrency budget, hostile-header resource gating and cross-platform benchmarks; 8 MiB fixture is **not** a default, 64 MiB/3-pass comparison **not** a decision. [V02-F benchmark plan](../security/V02F-recovery-assurance-and-cryptographic-policy.md#3-kdfpassword-policy-benchmark-plan-f-2) |
+| OPEN-PASSWORD-ENC | **OPEN — owner interoperability decision plus OPEN-01** | Propose versioned `UTF8_NFC_v1` input bytes, no silent whitespace/case/compatibility changes and explicit old-version migration; no new source-level password conversion selected. [V02-F proposal](../security/V02F-recovery-assurance-and-cryptographic-policy.md#password-representation-proposed-utf8_nfc_v1-not-frozen) |
 | OPEN-ENC | **OPEN implementation/security review** | Exact authenticated single-file envelope, header leakage/padding, KDF cost caps, full input fuzzing and key/nonce binding |
 | OPEN-ROLLBACK | **OPEN if claiming stronger guarantees** | Independent trusted anti-rollback anchor if protection from malicious historical-file replacement is required; S4 otherwise only warns about accidental divergences |
 | OPEN-IPC | **OPEN independent protocol review** | Authenticated E2E pairing, key pinning/rotation, replay resistance and trusted local approval UI |
