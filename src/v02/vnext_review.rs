@@ -345,6 +345,10 @@ impl<'a> Reader<'a>{
 }
 
 #[cfg(test)]
+#[path = "v02h_tests.rs"]
+mod adversarial_cross_language;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     fn id(n:u8)->Uuid{Uuid::from_bytes([n;16])}
