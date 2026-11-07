@@ -10,6 +10,10 @@
 //! cannot be obtained from the VMK.
 mod codec;
 mod model;
+// Proposed future-version metadata binding is exercised only by synthetic
+// tests. Never reinterpret VLY2 entry AEAD associated data (F-9).
+#[cfg(test)]
+mod entry_binding_candidate;
 // Candidate-only key-slot KDF/AEAD prototype. Never activates VLY2 slots or
 // exposes unreviewed factor input as a production unlock API (OPEN-01/15).
 mod v02b;
@@ -150,6 +154,24 @@ pub(super) fn validate_entry_transition(
         }
         if next_entry != existing && next_entry.revision <= existing.revision {
             return Err(V02Error::Invalid("modified entry without revision bump"));
+        }
+        // VLY2 does not bind origin/username/title in the entry's own AAD
+        // (F-9). At least require a new DEK-authenticated payload whenever
+        // those fields change on the normal successor/commit path. This
+        // prevents an otherwise-successful metadata-only redirect and avoids
+        // persisting an entry whose revision changed but ciphertext is stale.
+        // It is NOT a substitute for binding metadata in a new wire version:
+        // low-level seal_file and a compromised VMK remain outside this check.
+        if !next_entry.tombstone
+            && (next_entry.origin != existing.origin
+                || next_entry.username != existing.username
+                || next_entry.title != existing.title)
+            && (next_entry.nonce == existing.nonce
+                || next_entry.ciphertext == existing.ciphertext)
+        {
+            return Err(V02Error::Invalid(
+                "entry metadata change requires fresh DEK ciphertext and nonce"
+            ));
         }
     }
     for item in &next.entries {

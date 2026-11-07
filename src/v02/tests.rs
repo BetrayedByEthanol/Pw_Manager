@@ -162,6 +162,63 @@ fn isolated_and_hardware_policy_restrictions_are_structural() {
 }
 
 #[test]
+fn entry_metadata_redirect_requires_fresh_dek_ciphertext_in_successor_and_commit() {
+    // F-9 near-term regression for VLY2: metadata-only edits cannot
+    // silently redirect a stored credential via the normal write path.
+    let (header, body, vmk, _, dek) = specimen();
+    let initial = seal_file(&header, &body, &vmk).unwrap();
+    for field in 0..3 {
+        let result = prepare_successor(&initial, &vmk, |b| {
+            let entry = &mut b.entries[0];
+            entry.revision += 1;
+            match field {
+                0 => entry.origin = "https://evil.example".into(),
+                1 => entry.username = "changed-user".into(),
+                _ => entry.title = "changed-title".into(),
+            }
+            Ok(())
+        });
+        assert!(matches!(result, Err(V02Error::Invalid(
+            "entry metadata change requires fresh DEK ciphertext and nonce"
+        ))), "unreencrypted metadata edit accepted: {field}");
+    }
+
+    // Low-level seal_file remains a candidate primitive and can construct a
+    // fully VMK-authenticated but DEK-invalid candidate. The final disk
+    // commit MUST reject that candidate as well as prepare_successor.
+    let mut changed_header=header.clone();
+    changed_header.generation += 1;
+    changed_header.predecessor_hash=*blake3::hash(&initial).as_bytes();
+    changed_header.commit_id=Uuid::new_v4();
+    let mut changed=body.clone();
+    changed.generation=changed_header.generation;
+    changed.predecessor_hash=changed_header.predecessor_hash;
+    changed.commit_id=changed_header.commit_id;
+    changed.entries[0].revision += 1;
+    changed.entries[0].origin="https://evil.example".into();
+    let bypass=seal_file(&changed_header,&changed,&vmk).unwrap();
+    let (dir,path)=temp_file("origin-redirect");
+    fs::write(&path,&initial).unwrap();
+    assert!(storage::commit_candidate(&path,&initial,&bypass,&vmk).is_err());
+    assert_eq!(fs::read(&path).unwrap(),initial);
+    fs::remove_dir_all(dir).unwrap();
+
+    // A legitimate metadata change remains possible when the caller has
+    // the DEK and re-encrypts the payload at the new revision.
+    let valid=prepare_successor(&initial,&vmk,|b|{
+        let e=&mut b.entries[0];
+        e.revision += 1;
+        e.origin="https://updated.example".into();
+        seal_entry(header.vault_id,e,&dek,b"SYNTHETIC_TEST_SECRET_ONLY")?;
+        Ok(())
+    }).unwrap();
+    let opened=open_file(&valid,&vmk).unwrap();
+    assert_eq!(opened.body.entries[0].origin,"https://updated.example");
+    assert_eq!(open_entry(header.vault_id,&opened.body.entries[0],&dek,header.mode)
+        .unwrap().as_slice(),b"SYNTHETIC_TEST_SECRET_ONLY");
+}
+
+#[test]
 fn successor_binds_predecessor_and_demands_revisioned_tombstone() {
     let (header, body, vmk, _, _) = specimen();
     let original = seal_file(&header, &body, &vmk).unwrap();

@@ -1,6 +1,6 @@
 # Vaulty — Design Decisions and Open Review Register
 
-**Snapshot:** 2026-11-06 | **Target:** v0.4.5. Decisions here describe **approved product policy**, not implementation status.  
+**Snapshot:** 2026-11-07 | **Target:** v0.4.5. Decisions here describe **approved product policy**, not implementation status.  
 **Canonical spec:** [v0.4.5](../specification/v0.4.5.md) | **Current evidence:** [acceptance register](../roadmap/acceptance-register.md)
 
 **Status meanings:** APPROVED (owner-selected target), PROVISIONAL (direction allowed for review but not security approval), OPEN (needs a protocol decision/review), DEFERRED (explicitly outside current release), SUPERSEDED (historical only).
@@ -100,8 +100,9 @@ The numbering remains authoritative for traceability; this crosswalk does **not*
 
 | ID | Status | What must be settled before enabling |
 | --- | --- | --- |
-| **OPEN-01** | **BLOCKED — independent cryptographic review** | [V02-D reviewer handoff](../security/V02D-independent-review-handoff.md) pins the source, KATs, combined-factor questions and candidate HMAC; VD-01/03/06/10/12 remain review blockers. **No named external reviewer, proof/verdict, independent approved vectors or final wire protocol** |
-| **OPEN-15** | **BLOCKED — independent security/device review** | [V02-D physical device matrix](../security/V02D-independent-review-handoff.md#4-open-15-independent-fido2-prfuv-device-review-plan-not-executed) P01–P09 remains **unexecuted**. Arbitrary synthetic bytes can unwrap the candidate; signed assertions, RP/salt/UP/UV, freshness and fanout demand hardware trials and independent approval |
+| **OPEN-01** | **BLOCKED — independent cryptographic review** | [V02-E AI-assisted findings triage](../security/V02E-review-findings-and-preapproval-hardening.md) does not satisfy independent review. V02-B HMAC/combiner commitment, approved KDF budget and a versioned wire protocol still require a named qualified reviewer and exact scoped verdict; no cryptographic approval inferred from the scratch report |
+| **OPEN-15** | **BLOCKED — independent security/device review** | [V02-E review](../security/V02E-review-findings-and-preapproval-hardening.md) documents free PRF salt and UV=false as unresolved; [V02-D physical device matrix](../security/V02D-independent-review-handoff.md#4-open-15-independent-fido2-prfuv-device-review-plan-not-executed) P01–P09 unexecuted. No enrolled verified PRF, independent device verdict or approved default UV/scoping rules |
+| OPEN-REC-CONSENT | **OPEN — owner decision required before provisioning** | F-1: whether a Standard hardware/custom-password entry may opt in to a recovery route that drops an ordinary entry factor. Proposal: explicit per-entry informed consent, weakest-route disclosure, **no implicit slot**, and no silent STRICT_NONE default. [V02-E findings](../security/V02E-review-findings-and-preapproval-hardening.md); not an approved change to D-12 or S2 |
 | OPEN-ENC | **OPEN implementation/security review** | Exact authenticated single-file envelope, header leakage/padding, KDF cost caps, full input fuzzing and key/nonce binding |
 | OPEN-ROLLBACK | **OPEN if claiming stronger guarantees** | Independent trusted anti-rollback anchor if protection from malicious historical-file replacement is required; S4 otherwise only warns about accidental divergences |
 | OPEN-IPC | **OPEN independent protocol review** | Authenticated E2E pairing, key pinning/rotation, replay resistance and trusted local approval UI |

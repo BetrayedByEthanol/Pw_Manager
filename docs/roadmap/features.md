@@ -27,7 +27,7 @@
 | **FR-AUTH-04** | Bounded retry UX (not offline brute-force protection) | V03/V07A | Planned |
 | **FR-DEV-01** | Distinct trusted authenticator and client inventory | V06/V07 | Planned |
 | **FR-GEN-01** | CSPRNG password generator; selectable policy without modulo bias | V01/V08B | Prototype unit-tested; main disabled |
-| **FR-CRY-01** | Argon2id/HKDF/AEAD/nonce and reviewed key commitment | V02/V02-A/V02-B/V02-C/V02-D | V02-B/C test-only candidate and conformance merged; V02-D [external review handoff](../security/V02D-independent-review-handoff.md) pins sources and tracks twelve gaps. **No independent commitment approval, real factor provenance, final wire or OPEN-01/15 signoff** |
+| **FR-CRY-01** | Argon2id/HKDF/AEAD/nonce and reviewed key commitment | V02/V02-A/V02-B/V02-C/V02-D/V02-E | V02-B–D test/review candidates merged; V02-E [F-1–F-9 triage and partial hardening](../security/V02E-review-findings-and-preapproval-hardening.md) adds structural route parity, bounded combiner scratch, metadata transition guards and test-only future AAD. **Not a reviewed committing AEAD, hardware verification or final wire format; OPEN-01/15 blocked** |
 | **FR-SEC-01** | Secret lifetimes; masked VERS/virtual adapter while LOADED | V03/V05 | Planned |
 | **FR-PKY-01** | Software / hardware passkeys with RP-bound assertions | V08C | Deferred, separately gated |
 | **FR-HOT-01** | Register and manage global shortcut activation | V08A | Prototype code; disabled |
@@ -93,6 +93,10 @@ The [V02-C evidence packet](../security/V02C-cryptographic-conformance.md) adds 
 
 The [V02-D external crypto/security handoff](../security/V02D-independent-review-handoff.md) maps remaining gaps to OPEN-01/15 review versus V03/V04/V06 implementation. Deterministic file-hash inventory and synthetic route/factor/domain regression tests improve the provenance and safety checks of the inactive candidate. Neither real hardware behavior nor cryptographic key commitment has been independently assessed; FR-CRY-01, FR-REC-01/02 and FR-AUTH-02 stay incomplete.
 
+## V02-E review response (partial candidate hardening only)
+
+The [V02-E review findings ledger](../security/V02E-review-findings-and-preapproval-hardening.md) separates structural fixes F-5 and partial F-8/F-9 mitigations from unresolved weaker-recovery consent (F-1), production Argon2id calibration (F-2), PRF scope/salt/UV (F-3/F-4), new wire format (F-6) and hardware factor provenance (F-7). The vNext entry metadata AAD is **test-only** and does not re-interpret existing VLY2. FR-CRY-01, FR-REC-01/02 and FR-AUTH-02 remain incomplete and no production credential access is enabled.
+
 ## Source-feature preservation
 
 The immutable historical baseline contains **exactly 67** O-ID occurrences across ten groups: Product (14), Start (4), CLI (14), Vault (12), Crypto (10), Fido (2), Socket (6), Hotkey (1), IO–File (1), Recovery (3). Duplicate occurrences are intentional. Every original O-ID points to one of the 34 preexisting FR-IDs; the 4 new FRs do not alter that history.
@@ -107,4 +111,4 @@ No original feature intent is silently removed. Existing `O-01`…`O-67` mapping
 4. Report separately: design approved, implementation merged, tests verified, security review approved and production release gate.
 5. Never mark a feature complete merely because reference route graphs, placeholder structs, mock native-host results or synthetic crypto vectors exist.
 
-**Current work:** V02-D independent review readiness after merged [V02-C PR #11](https://github.com/BetrayedByEthanol/Pw_Manager/pull/11). OPEN-01/15 approval and trusted runtime integration remain blockers. See [implementation roadmap](implementation.md).
+**Current work:** V02-E pre-approval cryptographic hardening after merged [V02-D PR #12](https://github.com/BetrayedByEthanol/Pw_Manager/pull/12); [F-1–F-9 ledger](../security/V02E-review-findings-and-preapproval-hardening.md). OPEN-01/15 and trusted runtime integration remain blocked. See [implementation roadmap](implementation.md).
