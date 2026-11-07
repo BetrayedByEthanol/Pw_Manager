@@ -7,6 +7,9 @@ on:
       - 'src/lib.rs'
       - 'tools/v02_verifier/**'
       - 'docs/security/V02D-independent-review-handoff.md'
+      - 'docs/security/V02F-recovery-assurance-and-cryptographic-policy.md'
+      - 'docs/specification/v0.4.5.md'
+      - 'docs/decisions/register.md'
       - 'tools/security_probes/CRYPTO_REVIEW_REQUEST.md'
       - '.github/workflows/v02-candidate.yml'
   push:
@@ -16,6 +19,9 @@ on:
       - 'src/lib.rs'
       - 'tools/v02_verifier/**'
       - 'docs/security/V02D-independent-review-handoff.md'
+      - 'docs/security/V02F-recovery-assurance-and-cryptographic-policy.md'
+      - 'docs/specification/v0.4.5.md'
+      - 'docs/decisions/register.md'
       - 'tools/security_probes/CRYPTO_REVIEW_REQUEST.md'
       - '.github/workflows/v02-candidate.yml'
 permissions:
@@ -42,6 +48,7 @@ jobs:
       - name: V02-D reviewer source inventory and tamper tests
         run: |
           python3 -m unittest discover -s tools/v02_verifier -p 'test_review_bundle.py' -v
+          python3 -m unittest discover -s tools/v02_verifier -p 'test_v02f_policy_contract.py' -v
           python3 tools/v02_verifier/review_bundle.py --write /tmp/v02d-review-manifest.json
           python3 tools/v02_verifier/review_bundle.py --check /tmp/v02d-review-manifest.json
           sha256sum /tmp/v02d-review-manifest.json

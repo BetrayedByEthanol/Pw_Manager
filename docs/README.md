@@ -1,7 +1,7 @@
 # Vaulty Documentation Index
 
 **Canonical design target:** **v0.4.5**, 6 November 2026.  
-**Implementation reference:** GitHub `main` `08815be` ([V02-D PR #12 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/12), pinned internal review package only). V02-E pre-approval candidate hardening is in review; independent crypto/device approval is not obtained.  
+**Implementation reference:** GitHub `main` `122479b` ([V02-E PR #13 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/13), inactive candidate hardening only). V02-F recovery/KDF policy proposal is in review; no independent crypto/device approval has been obtained.  
 **Safety status:** Prototype foundation builds and tests; **not safe for real credentials and not security-certified**.
 
 Start here rather than relying on previous chats or the historical README feature checklist.
@@ -16,7 +16,8 @@ Start here rather than relying on previous chats or the historical README featur
 | [V02-B candidate key-slot cryptography](architecture/v02b-keyslot-candidate.md) | Merged private Argon2id/HKDF/AEAD/HMAC prototype and negative tests | **Merged, NOT activated or approved** |
 | [V02-C cryptographic conformance and security verification](security/V02C-cryptographic-conformance.md) | Merged frozen cross-library KATs, adversarial byte/descriptor tests and independent review handoff | **Merged, NOT external approval or real hardware evidence** |
 | [V02-D independent cryptographic review handoff](security/V02D-independent-review-handoff.md) | Merged source-hash manifest, 12 security gaps, recovery/hardware route tests and reviewer/device verdict templates | **Merged; OPEN-01/15 still BLOCKED** |
-| [V02-E cryptographic review findings and pre-approval hardening](security/V02E-review-findings-and-preapproval-hardening.md) | AI review F-1–F-9 dispositions, shared route validator, partial memory and origin-integrity hardening, vNext test-only AAD | **Candidate only; no independent approval** |
+| [V02-E cryptographic review findings and pre-approval hardening](security/V02E-review-findings-and-preapproval-hardening.md) | Merged F-1–F-9 dispositions, shared route validator, partial memory and origin-integrity hardening, vNext test-only AAD | **Merged candidate only; no independent approval** |
+| [V02-F recovery assurance and cryptographic policy decisions](security/V02F-recovery-assurance-and-cryptographic-policy.md) | Proposed weaker-recovery informed consent, root-separated assurance, KDF benchmarking/work caps, NFC/UTF-8 encoding, code scopes and V02-G/H review contract | **Proposal; new owner/expert decisions open** |
 | [Architecture v0.4.5](architecture/v0.4.5.md) | System components, single-file structure, trust boundaries, key flows and operation sequences | **Target design** |
 | [Implementation roadmap](roadmap/implementation.md) | V01-A through V09, V04M workstream, dependencies and release gates | **Work plan** |
 | [Feature roadmap](roadmap/features.md) | All 38 normalized requirements, four N-features and links to the 67 historical source items | **Feature ledger** |
@@ -52,4 +53,4 @@ Each PR affecting keys, policy, recovery, storage, migration or client behavior 
 
 ## Recommended immediate milestone
 
-**V02-E — Cryptographic Review Findings & Pre-Approval Hardening**, following merged [V02-D PR #12](https://github.com/BetrayedByEthanol/Pw_Manager/pull/12). [Findings ledger](security/V02E-review-findings-and-preapproval-hardening.md) preserves unresolved recovery/KDF/UV/PRF decisions, hardens candidate routes and metadata write paths, and keeps the vNext AAD strictly test-only. OPEN-01/15 remain blocked; real credentials must not be used.
+**V02-F — Recovery Assurance & Cryptographic Policy Decisions**, following merged [V02-E PR #13](https://github.com/BetrayedByEthanol/Pw_Manager/pull/13). [Policy contract](security/V02F-recovery-assurance-and-cryptographic-policy.md) records inherited recovery and weak-route consent questions, a measurable Argon2id benchmark plan and proposed versioned password encoding, while keeping R1/S2/Option A and OPEN-01/15 release gates intact. Next protocol design: V02-G; real credentials must not be used.

@@ -27,7 +27,7 @@
 | **FR-AUTH-04** | Bounded retry UX (not offline brute-force protection) | V03/V07A | Planned |
 | **FR-DEV-01** | Distinct trusted authenticator and client inventory | V06/V07 | Planned |
 | **FR-GEN-01** | CSPRNG password generator; selectable policy without modulo bias | V01/V08B | Prototype unit-tested; main disabled |
-| **FR-CRY-01** | Argon2id/HKDF/AEAD/nonce and reviewed key commitment | V02/V02-A/V02-B/V02-C/V02-D/V02-E | V02-B–D test/review candidates merged; V02-E [F-1–F-9 triage and partial hardening](../security/V02E-review-findings-and-preapproval-hardening.md) adds structural route parity, bounded combiner scratch, metadata transition guards and test-only future AAD. **Not a reviewed committing AEAD, hardware verification or final wire format; OPEN-01/15 blocked** |
+| **FR-CRY-01** | Argon2id/HKDF/AEAD/nonce and reviewed key commitment | V02/V02-A/V02-B/V02-C/V02-D/V02-E/V02-F/V02-G/V02-H | V02-B–E experimental code, conformance and hardening merged. V02-F [policy packet](../security/V02F-recovery-assurance-and-cryptographic-policy.md) proposes calibrated KDF workload, versioned password bytes and new vNext review contract; V02-G/H protocol/vectors pending. **No independent commitment approval, final wire or OPEN-01/15 clearance** |
 | **FR-SEC-01** | Secret lifetimes; masked VERS/virtual adapter while LOADED | V03/V05 | Planned |
 | **FR-PKY-01** | Software / hardware passkeys with RP-bound assertions | V08C | Deferred, separately gated |
 | **FR-HOT-01** | Register and manage global shortcut activation | V08A | Prototype code; disabled |
@@ -40,8 +40,8 @@
 | **FR-IPC-03** | User-initiated fill with origin/frame and E2E binding | V08B | Extension prototype; no E2E |
 | **FR-IPC-04** | Save/register through relay and durable receipt | V08B/V08C | Native mock returns false success |
 | **FR-STO-01** | Atomic authenticated file writes + previous generation + ancestry | V02 | V02 candidate writer/ancestry merged in PR #8; race-free storage, last-seen-head and production durability not done |
-| **FR-REC-01** | Provisioned VMK/VERS recovery; code-only vault recovery restricted to password-only mode | V04 | Planned; Option A approved |
-| **FR-REC-02** | Lost hardware recovery and code-dependent new-device slots | V04/V06 | Planned; Option A approved |
+| **FR-REC-01** | Provisioned VMK/VERS recovery; code-only vault recovery restricted to password-only mode | V02-F/V04 | V02-F [assurance and code-scope proposal](../security/V02F-recovery-assurance-and-cryptographic-policy.md) distinguishes VMK, original virtual seed, VERS and entry DEKs; R1/Option A remain approved and **not implemented** |
+| **FR-REC-02** | Lost hardware recovery and code-dependent new-device slots | V02-F/V04/V06 | V02-F recovery-coverage/consent contract proposed; Option A/new-token PRF unchanged and **not implemented**; OPEN-15 and owner F-1 decision pending |
 | **FR-REC-03** | Backup authenticator and verified rewrap coverage | V06 | Planned |
 | **FR-MIG-01** | N-01: verified legacy format migration (P0) | V04M-1 | Planned |
 | **FR-XFER-01** | N-02: vault-to-vault copy/move (P1) | V04M-2 | Planned |
@@ -111,4 +111,8 @@ No original feature intent is silently removed. Existing `O-01`…`O-67` mapping
 4. Report separately: design approved, implementation merged, tests verified, security review approved and production release gate.
 5. Never mark a feature complete merely because reference route graphs, placeholder structs, mock native-host results or synthetic crypto vectors exist.
 
-**Current work:** V02-E pre-approval cryptographic hardening after merged [V02-D PR #12](https://github.com/BetrayedByEthanol/Pw_Manager/pull/12); [F-1–F-9 ledger](../security/V02E-review-findings-and-preapproval-hardening.md). OPEN-01/15 and trusted runtime integration remain blocked. See [implementation roadmap](implementation.md).
+## V02-F recovery and KDF policy proposals (no new owner approval)
+
+The [V02-F design contract](../security/V02F-recovery-assurance-and-cryptographic-policy.md) defines an effective normal/recovery assurance report, explicit consent question for weaker Standard recovery, Argon2id benchmark/work-budget criteria, NFC/UTF-8 encoding proposal, recovery-code scope ownership, and strict versioned wire requirements for V02-G/H. These are **proposals**: no new production KDF parameters, password bytes, device UV rules or runtime recovery slots are approved or implemented. FR-CRY-01, FR-REC-01/02 and FR-AUTH-02 remain incomplete.
+
+**Current work:** V02-F policy review after merged [V02-E PR #13](https://github.com/BetrayedByEthanol/Pw_Manager/pull/13). Owner F-1/KDF/password encoding decisions and independent OPEN-01/15 review remain blocked before activation. See [implementation roadmap](implementation.md).
