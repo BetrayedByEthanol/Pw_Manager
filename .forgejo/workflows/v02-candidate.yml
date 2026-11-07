@@ -24,6 +24,10 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends python3 libsodium23 libargon2-1
           python3 tools/v02_verifier/reference_v02c.py --verify
+      - name: V02-H independent V3RV vectors and adversarial model (NOT authentication)
+        run: |
+          python3 tools/v02_verifier/reference_v02h.py --verify
+          python3 -m unittest discover -s tools/v02_verifier -p 'test_v02h_adversarial.py' -v
       - name: V02-D reviewer source inventory and tamper tests
         run: |
           python3 -m unittest discover -s tools/v02_verifier -p 'test_review_bundle.py' -v

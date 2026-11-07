@@ -9,6 +9,7 @@ on:
       - 'docs/security/V02D-independent-review-handoff.md'
       - 'docs/security/V02F-recovery-assurance-and-cryptographic-policy.md'
       - 'docs/architecture/v02g-vnext-cryptographic-protocol-review.md'
+      - 'docs/security/V02H-adversarial-conformance-and-review-submission.md'
       - 'docs/specification/v0.4.5.md'
       - 'docs/decisions/register.md'
       - 'tools/security_probes/CRYPTO_REVIEW_REQUEST.md'
@@ -22,6 +23,7 @@ on:
       - 'docs/security/V02D-independent-review-handoff.md'
       - 'docs/security/V02F-recovery-assurance-and-cryptographic-policy.md'
       - 'docs/architecture/v02g-vnext-cryptographic-protocol-review.md'
+      - 'docs/security/V02H-adversarial-conformance-and-review-submission.md'
       - 'docs/specification/v0.4.5.md'
       - 'docs/decisions/register.md'
       - 'tools/security_probes/CRYPTO_REVIEW_REQUEST.md'
@@ -38,6 +40,10 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
+      - name: V02-H independent reference vectors, hostile routes and resource budgets
+        run: |
+          python3 tools/v02_verifier/reference_v02h.py --verify
+          python3 -m unittest discover -s tools/v02_verifier -p 'test_v02h_adversarial.py' -v
       - name: Candidate format compilation and negative tests
         run: |
           cargo check --manifest-path tools/v02_verifier/Cargo.toml --locked --all-targets
