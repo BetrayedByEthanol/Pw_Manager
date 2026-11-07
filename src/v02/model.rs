@@ -154,6 +154,46 @@ impl FactorPolicy {
             Self::DefaultPhysical | Self::CustomPhysical)
     }
 }
+/// Candidate-only route policy shared by the VLY2 model validator and the
+/// private V02-B Descriptor. This checks structural eligibility, NOT actual
+/// factor possession, recovery-code ownership or an approved/verified slot.
+/// Especially: a Standard recovery alternative is allowed by policy here,
+/// but requires a separate explicit owner approval before provisioning (V04).
+pub(super) fn route_is_allowed(
+    vault_mode: VaultMode, target: SlotTarget, route: FactorPolicy,
+    entry: Option<(EntryMode, EntryTier, RecoveryPolicy)>,
+) -> bool {
+    use FactorPolicy as F;
+    match target {
+        SlotTarget::Vmk | SlotTarget::Vers | SlotTarget::ProviderSeed => {
+            if entry.is_some() { return false; }
+            match vault_mode {
+                VaultMode::PasswordVirtual =>
+                    matches!(route, F::VaultPasswordVirtual | F::CodeOnly),
+                VaultMode::PasswordPhysical =>
+                    matches!(route, F::VaultPasswordPhysical | F::CodePassword | F::CodePhysical),
+            }
+        }
+        SlotTarget::EntryDek => {
+            let Some((mode, tier, recovery)) = entry else { return false; };
+            if tier == EntryTier::Isolated && !mode.physical() { return false; }
+            if route.is_recovery() {
+                if recovery == RecoveryPolicy::StrictNone { return false; }
+                let permitted = match vault_mode {
+                    VaultMode::PasswordVirtual =>
+                        matches!(route, F::CodeOnly | F::CodePhysical),
+                    VaultMode::PasswordPhysical =>
+                        matches!(route, F::CodePassword | F::CodePhysical),
+                };
+                permitted && (tier != EntryTier::Isolated || route == F::CodePhysical)
+            } else {
+                route == mode.normal_factor()
+                    && (tier != EntryTier::Isolated || route.physical())
+            }
+        }
+    }
+}
+
 impl TryFrom<u8> for FactorPolicy {
     type Error = V02Error;
     fn try_from(n: u8) -> Result<Self, Self::Error> {
@@ -197,6 +237,13 @@ impl Slot {
         if self.id.is_nil() { return Err(V02Error::Invalid("nil slot id")); }
         if (self.target == SlotTarget::EntryDek) != !self.target_id.is_nil() {
             return Err(V02Error::Invalid("key slot target id mismatch"));
+        }
+        // Entry-DEK eligibility requires the enclosing EntryRecord policy;
+        // all other target/route pairs are complete at slot scope.
+        if self.target != SlotTarget::EntryDek
+            && !route_is_allowed(vault_mode, self.target, self.factors, None)
+        {
+            return Err(V02Error::Invalid("invalid key slot target/factor route"));
         }
         if vault_mode == VaultMode::PasswordPhysical && self.factors == FactorPolicy::CodeOnly {
             return Err(V02Error::Invalid("code-only hardware vault route forbidden"));
@@ -258,14 +305,9 @@ impl PublicHeader {
             if slot.target != SlotTarget::Vmk || !ids.insert(slot.id) {
                 return Err(V02Error::Invalid("invalid VMK header slots"));
             }
-            let allowed = match self.mode {
-                VaultMode::PasswordVirtual => matches!(slot.factors,
-                    FactorPolicy::VaultPasswordVirtual | FactorPolicy::CodeOnly),
-                VaultMode::PasswordPhysical => matches!(slot.factors,
-                    FactorPolicy::VaultPasswordPhysical |
-                    FactorPolicy::CodePassword | FactorPolicy::CodePhysical),
-            };
-            if !allowed { return Err(V02Error::Invalid("invalid vault-level route")); }
+            if !route_is_allowed(self.mode, SlotTarget::Vmk, slot.factors, None) {
+                return Err(V02Error::Invalid("invalid vault-level route"));
+            }
         }
         // The specification requires both hardware administrative recovery
         // ceremonies to be provisionable. Descriptors may remain PENDING,
@@ -285,14 +327,9 @@ impl PublicHeader {
             if slot.target != SlotTarget::ProviderSeed || !ids.insert(slot.id) {
                 return Err(V02Error::Invalid("invalid public bootstrap slot"));
             }
-            let allowed = match self.mode {
-                VaultMode::PasswordVirtual => matches!(slot.factors,
-                    FactorPolicy::VaultPasswordVirtual | FactorPolicy::CodeOnly),
-                VaultMode::PasswordPhysical => matches!(slot.factors,
-                    FactorPolicy::VaultPasswordPhysical |
-                    FactorPolicy::CodePassword | FactorPolicy::CodePhysical),
-            };
-            if !allowed { return Err(V02Error::Invalid("invalid bootstrap factor policy")); }
+            if !route_is_allowed(self.mode, SlotTarget::ProviderSeed, slot.factors, None) {
+                return Err(V02Error::Invalid("invalid bootstrap factor policy"));
+            }
         }
         if self.mode == VaultMode::PasswordVirtual {
             let has_seed = |factor: FactorPolicy| self.bootstrap_slots.iter()
@@ -351,14 +388,11 @@ impl EntryRecord {
                 || !ids.insert(slot.id) {
                 return Err(V02Error::Invalid("entry slot scope/duplicate"));
             }
-            if self.tier == EntryTier::Isolated && !slot.factors.physical() {
-                return Err(V02Error::Invalid("ISOLATED software-only DEK route"));
-            }
-            if self.recovery == RecoveryPolicy::StrictNone && slot.factors.is_recovery() {
-                return Err(V02Error::Invalid("STRICT_NONE recovery route"));
-            }
-            if !slot.factors.is_recovery() && slot.factors != self.mode.normal_factor() {
-                return Err(V02Error::Invalid("normal factor inconsistent with entry mode"));
+            if !route_is_allowed(
+                vault_mode, SlotTarget::EntryDek, slot.factors,
+                Some((self.mode, self.tier, self.recovery)),
+            ) {
+                return Err(V02Error::Invalid("invalid entry normal/recovery factor route"));
             }
         }
         Ok(())
@@ -406,6 +440,16 @@ impl VaultBody {
         if self.vers_slots.iter().any(|s| s.target != SlotTarget::Vers)
             || self.provider_seed_slots.iter().any(|s| s.target != SlotTarget::ProviderSeed) {
             return Err(V02Error::Invalid("VERS/provider slot scope"));
+        }
+        // Structural route enforcement is identical for header/bootstrap and
+        // VMK-encrypted VERS/provider-seed descriptors. A sealed VLY2 Slot is
+        // still only a candidate descriptor; no trust or factor is inferred.
+        if self.vers_slots.iter().any(|s| !route_is_allowed(header.mode,
+                SlotTarget::Vers, s.factors, None))
+            || self.provider_seed_slots.iter().any(|s| !route_is_allowed(
+                header.mode, SlotTarget::ProviderSeed, s.factors, None))
+        {
+            return Err(V02Error::Invalid("invalid VERS/provider factor route"));
         }
         let mut entries = HashSet::new();
         for item in &self.entries {
