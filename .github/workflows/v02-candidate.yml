@@ -38,6 +38,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
+      - name: V02-H generate independent reference vectors for freeze
+        run: python3 tools/v02_verifier/reference_v02h.py --print-fixtures
       - name: Candidate format compilation and negative tests
         run: |
           cargo check --manifest-path tools/v02_verifier/Cargo.toml --locked --all-targets
