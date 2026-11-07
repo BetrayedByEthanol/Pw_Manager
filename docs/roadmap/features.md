@@ -27,7 +27,7 @@
 | **FR-AUTH-04** | Bounded retry UX (not offline brute-force protection) | V03/V07A | Planned |
 | **FR-DEV-01** | Distinct trusted authenticator and client inventory | V06/V07 | Planned |
 | **FR-GEN-01** | CSPRNG password generator; selectable policy without modulo bias | V01/V08B | Prototype unit-tested; main disabled |
-| **FR-CRY-01** | Argon2id/HKDF/AEAD/nonce and reviewed key commitment | V02/V02-A/V02-B/V02-C/V02-D/V02-E/V02-F/V02-G/V02-H | V02-B–E experimental code, conformance and hardening merged. V02-F [policy packet](../security/V02F-recovery-assurance-and-cryptographic-policy.md) proposes calibrated KDF workload, versioned password bytes and new vNext review contract; V02-G/H protocol/vectors pending. **No independent commitment approval, final wire or OPEN-01/15 clearance** |
+| **FR-CRY-01** | Argon2id/HKDF/AEAD/nonce and reviewed key commitment | V02/V02-A/V02-B/V02-C/V02-D/V02-E/V02-F/V02-G/V02-H | V02-B–E experimental code, conformance and hardening merged. V02-F [policy packet](../security/V02F-recovery-assurance-and-cryptographic-policy.md) proposes calibrated KDF workload, versioned password bytes and new vNext review contract; V02-G [review-only versioned wire and transcript proposal](../architecture/v02g-vnext-cryptographic-protocol-review.md) with test-compiled strict parser; V02-H independent vectors and attack corpus pending. **No approved commitment, authenticated runtime wire or OPEN-01/15 clearance** |
 | **FR-SEC-01** | Secret lifetimes; masked VERS/virtual adapter while LOADED | V03/V05 | Planned |
 | **FR-PKY-01** | Software / hardware passkeys with RP-bound assertions | V08C | Deferred, separately gated |
 | **FR-HOT-01** | Register and manage global shortcut activation | V08A | Prototype code; disabled |
@@ -115,4 +115,8 @@ No original feature intent is silently removed. Existing `O-01`…`O-67` mapping
 
 The [V02-F design contract](../security/V02F-recovery-assurance-and-cryptographic-policy.md) defines an effective normal/recovery assurance report, explicit consent question for weaker Standard recovery, Argon2id benchmark/work-budget criteria, NFC/UTF-8 encoding proposal, recovery-code scope ownership, and strict versioned wire requirements for V02-G/H. These are **proposals**: no new production KDF parameters, password bytes, device UV rules or runtime recovery slots are approved or implemented. FR-CRY-01, FR-REC-01/02 and FR-AUTH-02 remain incomplete.
 
-**Current work:** V02-F policy review after merged [V02-E PR #13](https://github.com/BetrayedByEthanol/Pw_Manager/pull/13). Owner F-1/KDF/password encoding decisions and independent OPEN-01/15 review remain blocked before activation. See [implementation roadmap](implementation.md).
+## V02-G cryptographic protocol wire review (inactive)
+
+The [V02-G vNext review proposal](../architecture/v02g-vnext-cryptographic-protocol-review.md) and test-only `src/v02/vnext_review.rs` define a distinct V3RV versioned slot descriptor, strict canonical parsing and review-only context/commitment bytes. No authenticated key slot, real hardware factor, production normalization/KDF parameters, code-only DEK consent, multi-key commitment proof or vNext migration is delivered. `VLY2` and all frozen V02-C vectors remain unchanged; FR-CRY-01/FR-REC-01/02 and FR-AUTH-02 remain incomplete.
+
+**Current work:** V02-G vNext review candidate after merged [V02-F PR #14](https://github.com/BetrayedByEthanol/Pw_Manager/pull/14). Owner F-1/KDF/password encoding choices and independent OPEN-01/15 remain BLOCKED. See [implementation roadmap](implementation.md).

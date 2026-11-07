@@ -93,6 +93,12 @@ The [V02-F recovery-assurance and cryptographic policy contract](../../docs/secu
 
 For OPEN-01, request a scoped verdict on: the precise factor-combiner and key-commitment notion, whether cross-route recovery code and password bytes are correctly domain-separated, which KDF floors and pre-auth *aggregate work* constraints are defensible, Unicode input byte-to-KDF interoperability, and strict vNext slot/entry metadata authentication with migration. For OPEN-15, request real enrolled device PRF-salt/scope/UV evidence, physical per-read assertion freshness and shared-root fanout. The two expert reviews can proceed on drafts while V02-G/H add independent vectors; **neither can be replaced by a green CI gate**.
 
+## V02-G test-only versioned slot wire and transcript (NOT authenticated)
+
+[Exact review-only `V3RV` frame/descriptor layout and OPEN-01 questions](../../docs/architecture/v02g-vnext-cryptographic-protocol-review.md) now has a `#[cfg(test)]` Rust strict decoder/encoder in `src/v02/vnext_review.rs`, pinned in the reviewer inventory. It encodes route/target/scope/Argon2/physical-provider context with big-endian lengths and isolated candidate magic. The codec is **not** a key-slot implementation; ciphertext, 32-byte proposed commitment and claimed physical PRF are **opaque, unauthenticated attacker input**. It cannot create READY, unlock VMK/VERS/DEKs or migrate VLY2. The proposed typed-factor HKDF and post-AEAD HMAC remain **an unimplemented and unapproved hypothesis**, not multi-key commitment proof.
+
+Reviewer: challenge target/owner scoping, cross-slot/cross-vault and group/entry ancestry, corruption/failure oracle, production Argon2 budgets and Unicode byte encodings, per-entry DEK-bound origin authenticity, and whether the chosen commitment design should be replaced entirely. V02-H must provide independent byte/crypto vectors after any design revisions. OPEN-15 must separately test actual registered FIDO2 PRF/UP/UV/salt/freshness and batch behavior; neither descriptor flags nor an LLM code review close either gate.
+
 ## Review gates to resolve before shipping
 
 1. Formal/independent analysis of the combiner and committing construction, including password-derived input, arbitrary PRF output correlations and domain separation.

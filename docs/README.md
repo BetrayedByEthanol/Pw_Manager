@@ -1,7 +1,7 @@
 # Vaulty Documentation Index
 
 **Canonical design target:** **v0.4.5**, 6 November 2026.  
-**Implementation reference:** GitHub `main` `122479b` ([V02-E PR #13 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/13), inactive candidate hardening only). V02-F recovery/KDF policy proposal is in review; no independent crypto/device approval has been obtained.  
+**Implementation reference:** GitHub `main` `5b6b554` ([V02-F PR #14 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/14), design proposals only). V02-G is review-only candidate wire, never a production vault format; OPEN-01/15 not approved.  
 **Safety status:** Prototype foundation builds and tests; **not safe for real credentials and not security-certified**.
 
 Start here rather than relying on previous chats or the historical README feature checklist.
@@ -17,7 +17,8 @@ Start here rather than relying on previous chats or the historical README featur
 | [V02-C cryptographic conformance and security verification](security/V02C-cryptographic-conformance.md) | Merged frozen cross-library KATs, adversarial byte/descriptor tests and independent review handoff | **Merged, NOT external approval or real hardware evidence** |
 | [V02-D independent cryptographic review handoff](security/V02D-independent-review-handoff.md) | Merged source-hash manifest, 12 security gaps, recovery/hardware route tests and reviewer/device verdict templates | **Merged; OPEN-01/15 still BLOCKED** |
 | [V02-E cryptographic review findings and pre-approval hardening](security/V02E-review-findings-and-preapproval-hardening.md) | Merged F-1–F-9 dispositions, shared route validator, partial memory and origin-integrity hardening, vNext test-only AAD | **Merged candidate only; no independent approval** |
-| [V02-F recovery assurance and cryptographic policy decisions](security/V02F-recovery-assurance-and-cryptographic-policy.md) | Proposed weaker-recovery informed consent, root-separated assurance, KDF benchmarking/work caps, NFC/UTF-8 encoding, code scopes and V02-G/H review contract | **Proposal; new owner/expert decisions open** |
+| [V02-F recovery assurance and cryptographic policy decisions](security/V02F-recovery-assurance-and-cryptographic-policy.md) | Merged proposals for weaker-recovery informed consent, root-separated assurance, KDF benchmarking/work caps, NFC/UTF-8 encoding and code scopes | **Merged proposal; new owner/expert decisions open** |
+| [V02-G cryptographic vNext review candidate](architecture/v02g-vnext-cryptographic-protocol-review.md) | Exact V3RV review-only frame/descriptor, untrusted strict codec, tentative typed-factor transcript and OPEN-01/15 attack questions | **Test-only proposal; no authenticated keys/approved wire** |
 | [Architecture v0.4.5](architecture/v0.4.5.md) | System components, single-file structure, trust boundaries, key flows and operation sequences | **Target design** |
 | [Implementation roadmap](roadmap/implementation.md) | V01-A through V09, V04M workstream, dependencies and release gates | **Work plan** |
 | [Feature roadmap](roadmap/features.md) | All 38 normalized requirements, four N-features and links to the 67 historical source items | **Feature ledger** |
@@ -53,4 +54,4 @@ Each PR affecting keys, policy, recovery, storage, migration or client behavior 
 
 ## Recommended immediate milestone
 
-**V02-F — Recovery Assurance & Cryptographic Policy Decisions**, following merged [V02-E PR #13](https://github.com/BetrayedByEthanol/Pw_Manager/pull/13). [Policy contract](security/V02F-recovery-assurance-and-cryptographic-policy.md) records inherited recovery and weak-route consent questions, a measurable Argon2id benchmark plan and proposed versioned password encoding, while keeping R1/S2/Option A and OPEN-01/15 release gates intact. Next protocol design: V02-G; real credentials must not be used.
+**V02-G — Cryptographic Protocol vNext Review Candidate**, following merged [V02-F PR #14](https://github.com/BetrayedByEthanol/Pw_Manager/pull/14). [Proposed V3RV frame](architecture/v02g-vnext-cryptographic-protocol-review.md) supplies strict review-only bytes and negative tests without activating cryptography. Next evidence stage V02-H adds independent vectors and attacks; independent OPEN-01/15 verdicts and new owner decisions still required.
