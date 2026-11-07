@@ -9,7 +9,7 @@
 //! cryptographic proof of a committing-AEAD construction.
 #![allow(dead_code)]
 
-use super::{EntryMode, EntryTier, FactorPolicy, RecoveryPolicy, SlotTarget, V02Error, VaultMode};
+use super::{model::route_is_allowed, EntryMode, EntryTier, FactorPolicy, RecoveryPolicy, SlotTarget, V02Error, VaultMode};
 use argon2::{Algorithm, Argon2, Params, Version};
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
@@ -137,56 +137,13 @@ impl Descriptor {
         if self.vault_mode == VaultMode::PasswordPhysical && self.route == F::CodeOnly {
             return Err(V02Error::Invalid("hardware-vault code-only route forbidden"));
         }
-        match self.target {
-            SlotTarget::Vmk | SlotTarget::Vers | SlotTarget::ProviderSeed => {
-                if self.entry.is_some() {
-                    return Err(V02Error::Invalid("entry policy on non-entry target"));
-                }
-                let permitted = match self.vault_mode {
-                    VaultMode::PasswordVirtual =>
-                        matches!(self.route, F::VaultPasswordVirtual | F::CodeOnly),
-                    VaultMode::PasswordPhysical =>
-                        matches!(self.route, F::VaultPasswordPhysical | F::CodePassword | F::CodePhysical),
-                };
-                if !permitted {
-                    return Err(V02Error::Invalid("candidate root recovery route"));
-                }
-            }
-            SlotTarget::EntryDek => {
-                let e = self.entry.ok_or(V02Error::Invalid("missing entry policy"))?;
-                let normal = match e.mode {
-                    EntryMode::DefaultVirtual => F::DefaultVirtual,
-                    EntryMode::DefaultPhysical => F::DefaultPhysical,
-                    EntryMode::CustomVirtual => F::CustomVirtual,
-                    EntryMode::CustomPhysical => F::CustomPhysical,
-                };
-                if !self.is_recovery() && self.route != normal {
-                    return Err(V02Error::Invalid("entry normal route mismatch"));
-                }
-                if self.is_recovery() && e.recovery == RecoveryPolicy::StrictNone {
-                    return Err(V02Error::Invalid("STRICT_NONE forbids recovery"));
-                }
-                if e.tier == EntryTier::Isolated {
-                    if !matches!(e.mode, EntryMode::DefaultPhysical | EntryMode::CustomPhysical)
-                        || !matches!(self.route, F::DefaultPhysical | F::CustomPhysical | F::CodePhysical) {
-                        return Err(V02Error::Invalid("ISOLATED needs hardware on all DEK routes"));
-                    }
-                }
-                if self.is_recovery() {
-                    let allowed = match self.vault_mode {
-                        // Password-only metadata uses code-only recovery; an
-                        // ISOLATED entry in that same vault may still have a
-                        // separately provisioned code+physical DEK route.
-                        VaultMode::PasswordVirtual =>
-                            matches!(self.route, F::CodeOnly | F::CodePhysical),
-                        VaultMode::PasswordPhysical =>
-                            matches!(self.route, F::CodePassword | F::CodePhysical),
-                    };
-                    if !allowed {
-                        return Err(V02Error::Invalid("unapproved entry recovery route"));
-                    }
-                }
-            }
+        // Shared with the VLY2 model validator (F-5). No structural
+        // policy check authenticates a factor, scope ownership or an owner-
+        // approved weaker recovery route; those remain V03/V04/V06 work.
+        if !route_is_allowed(self.vault_mode, self.target, self.route,
+            self.entry.map(|e| (e.mode, e.tier, e.recovery)))
+        {
+            return Err(V02Error::Invalid("candidate key-slot route/policy"));
         }
         let physical = matches!(self.route, F::VaultPasswordPhysical | F::CodePhysical
             | F::DefaultPhysical | F::CustomPhysical);
@@ -281,22 +238,26 @@ fn schedule(
     desc: &Descriptor, factors: Components<'_>,
 ) -> Result<(Zeroizing<[u8;32]>, Zeroizing<[u8;32]>, Vec<u8>), V02Error> {
     let transcript = desc.transcript()?;
-    let mut ikm = Zeroizing::new(Vec::with_capacity(100));
-    ikm.extend_from_slice(DOMAIN);
+    // A fixed-size, zeroized scratch buffer avoids heap capacity residue
+    // and reallocation during the combiner. HKDF/HMAC/Argon2 internals have
+    // separate, still-unreviewed secret-lifetime considerations (F-8).
+    let mut ikm = Zeroizing::new([0u8; 128]);
+    let mut used = DOMAIN.len();
+    ikm[..used].copy_from_slice(DOMAIN);
     match (desc.single_component(), factors) {
         (true, Components::Single(value)) => {
-            ikm.push(1);
-            ikm.extend_from_slice(value);
+            ikm[used] = 1; used += 1;
+            ikm[used..used + 32].copy_from_slice(value); used += 32;
         }
         (false, Components::Combined { first, second }) => {
-            ikm.push(2);
-            ikm.extend_from_slice(first);
-            ikm.extend_from_slice(second);
+            ikm[used] = 2; used += 1;
+            ikm[used..used + 32].copy_from_slice(first); used += 32;
+            ikm[used..used + 32].copy_from_slice(second); used += 32;
         }
         _ => return Err(V02Error::Invalid("candidate factor recipe mismatch")),
     }
     let salt = Sha256::digest(&transcript);
-    let hk = Hkdf::<Sha256>::new(Some(&salt), &ikm);
+    let hk = Hkdf::<Sha256>::new(Some(&salt), &ikm[..used]);
     let mut wrap = Zeroizing::new([0u8;32]);
     let mut commitment = Zeroizing::new([0u8;32]);
     hk.expand(b"Vaulty/V02-B/review-only/wrap-key", &mut *wrap)
