@@ -1,6 +1,6 @@
 # Vaulty — Acceptance, Evidence and Security Gap Register
 
-**Snapshot date:** 2026-11-07 | **Repository evidence baseline:** `main` merge commit `961cde0eba27a35edf84f20310c09f15ef576f7a` (V02-C PR #11 merged, cross-library candidate conformance). V02-D is review-preparation, **not independent security approval**.  
+**Snapshot date:** 2026-11-07 | **Repository evidence baseline:** `main` merge commit `08815be06fa0bb45386c1c791b14463e29ac0672` (V02-D PR #12 merged, source-pinned internal review handoff only). V02-E is candidate code-hardening and AI-review triage, **not independent security approval**.  
 **Purpose:** provide a reviewable distinction between **design approved**, **source merged**, **CI passed**, **security behavior verified** and **release certified**. None is interchangeable. See [implementation roadmap](implementation.md).
 
 ## 1. Recorded merged evidence
@@ -25,7 +25,8 @@
 
 | EV-013 | [Merged V02-C PR #11](https://github.com/BetrayedByEthanol/Pw_Manager/pull/11); [final V02 CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42309791103); [final product CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42309791121); [security probes](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42309791147); [conformance packet](../security/V02C-cryptographic-conformance.md) | **Merged synthetic conformance** at `961cde0`: all final-head workflows passed at `40b54ad`; 31 focused Rust tests, six Python/libsodium KATs and libargon2 KAT; one valid Codex P2 inner AEAD check fixed/resolved; final-head Codex reported no major issues. | No OPEN-01/15 independent approval, multi-key commitment proof, FIDO2 evidence, active slot, reviewed wire or release acceptance. |
 
-| EV-014 | [V02-D PR #12](https://github.com/BetrayedByEthanol/Pw_Manager/pull/12); [focused V02-D GitHub CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42313641055); [handoff](../security/V02D-independent-review-handoff.md); [inventory](../../tools/v02_verifier/review_bundle.py) | **Unmerged review candidate:** 35/35 Rust tests, six Git-blob/dirty-tree/false-approval manifest tests, six Python/libsodium vectors and mandatory libargon2 KAT PASS. Exactly 24 source/dependency/fixture/doc paths in a commit-bound SHA256 inventory; GitHub uploaded a manifest artifact. Codex P2 for committed-blob integrity and absent verifier Cargo.lock fixed and both threads resolved; GitHub/Forgejo now enforce locked verifier builds. Full product and final-head review are separately tracked. | Neither a signed external review nor cryptographic proof, hardware measurements, Forgejo runner certification, or G1/G2/G3 approval. |
+| EV-014 | [Merged V02-D PR #12](https://github.com/BetrayedByEthanol/Pw_Manager/pull/12); [final V02 CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42313851246); [final product CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42313851198); [final security probes](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42313851212); [handoff](../security/V02D-independent-review-handoff.md) | **Merged** at `08815be`: all final-head workflows PASS, 35/35 Rust tests, six inventory integrity tests, six libsodium KATs and libargon2 check; both Codex P2 source/lockfile provenance issues resolved; final-head Codex no major issues. Standalone verifier Cargo.lock and committed-Git-blob manifest checks included. | Neither named independent review nor key-commitment proof, real FIDO2 evidence, verified slot or G1/G2/G3 release acceptance. |
+| EV-015 | [V02-E findings ledger](../security/V02E-review-findings-and-preapproval-hardening.md); model, V02-B, successor and test-only vNext entry AAD sources | **Unmerged implementation candidate:** shared structural route checks, metadata-transition anti-redirect check, fixed zeroizing IKM, route parity tests and vNext-only metadata AAD tampering. AI-assisted report F-1–F-9 classified; new branch CI/review pending. | No production KDF default, recovery consent, approved PRF salt/UV, wire format, independently proven commitment or OPEN-01/15 clearance. |
 
 Evidence links are immutable run/PR references where possible. New status claims require their own evidence and must not overwrite an older evidence record's scope.
 
@@ -147,7 +148,19 @@ No A02A row certifies a security property. Code, test and runtime status are unc
 | A02D-04 | Hardware trust gap is explicitly demonstrated | Synthetic caller-provided PRF bytes can unwrap candidate with no real assertion; recorded as **unresolved** OPEN-15 | Real credential/RP/UP/UV binding, freshness, device negative evidence and independent reviewer verdict |
 | A02D-05 | Reviewer-ready questions and acceptance receipts | [V02-D handoff](../security/V02D-independent-review-handoff.md) with 12-gap ownership and blank OPEN-01/15 verdict/evidence templates | Named qualified reviewers and signed/recorded actual results |
 
-V02-D may merge as **review-preparation only**, leaving G1/G2/G3 **BLOCKED**.
+V02-D **merged as review-preparation only**, leaving G1/G2/G3 **BLOCKED**.
+
+## 2h. V02-E review response and hardening (candidate; no cryptographic approval)
+
+| ID | Acceptance criterion | Current implementation evidence | Still required |
+| --- | --- | --- | --- |
+| A02E-01 | Model and descriptor agree on normal and recovery route eligibility | `model::route_is_allowed` shared by VLY2 and V02-B; exhaustive vault/target/route/entry/tier/recovery permutation test, including Isolated and STRICT_NONE | Actual factor provenance, owner-approved per-entry recovery consent and full ancestor graph |
+| A02E-02 | Review-only combiner avoids heap scratch IKM | `Zeroizing<[u8;128]>` fixed combiner input; frozen V02-C vectors unchanged | HKDF/HMAC/Argon2 internal scratch and OS-lifetime audit; OPEN-01 |
+| A02E-03 | VMK-only metadata edit cannot silently redirect via normal revisioned successor/commit | Reject origin/user/title change without new nonce and ciphertext; test legitimate DEK re-encryption and direct sealed bypass rejection at disk commit | DEK-authenticated metadata under **new wire version**, secure browser origin/frame authorization, malicious raw VMK writer threat |
+| A02E-04 | Proposed entry-metadata binding isolated from VLY2 | `entry_binding_candidate` built `#[cfg(test)]`, vNext domain length-frames origin/user/title and tests tampering | Independent protocol review and explicit versioned re-encrypt migration |
+| A02E-05 | Review findings do not rewrite approved security policy | [F-1–F-9 disposition](../security/V02E-review-findings-and-preapproval-hardening.md), Standard code-only DEK still structurally representable; no implicit recovery slots | Owner opt-in decision, KDF calibration, real hardware UV/salt, final format and external verdict |
+
+**V02-E tests are synthetic security regression evidence, not OPEN-01/15 or G1–G3 sign-off.**
 
 ## 3. Security findings register
 
@@ -161,7 +174,7 @@ V02-D may merge as **review-preparation only**, leaving G1/G2/G3 **BLOCKED**.
 | SEC-06 | P1 | Hardware PRF salt/UV/freshness/fanout not approved or enforced at runtime | OPEN-15 + V02-A/V03/V06 | Blocked; V02-A review questions documented, real device evidence needed |
 | SEC-07 | P2 | Native-host Rust behavior tests absent on old main | V01-A | First PR #7 CI: six host unit tests; child-process tests pending |
 | SEC-08 | P2 | Filesystem crash/fault and malicious path risks | V01-A/V02 | PR #7 deterministic negative tests; TOCTOU/openat guarantee remains V02 |
-| SEC-09 | P2 | Secret copies not consistently scoped to failure-path RAII zeroization | V02/V03 | Open |
+| SEC-09 | P2 | Secret copies not consistently scoped to failure-path RAII zeroization | V02/V03 | Partial V02-E candidate: fixed zeroizing combiner IKM; crypto-library internal scratch and failure/timeout paths remain open |
 | SEC-10 | P1 | Trusted E2E extension→daemon pairing and runtime capabilities unimplemented | V07 | Open |
 | SEC-11 | P2 | Browser extension requests broad sites access; no real user-gesture authorization E2E proven | V07/V08B | Open |
 | SEC-12 | P2 | Authentic file rollback may bypass local record; S4 only detection of accidental rollback | V02/V04M | Design limitation accepted, implementation missing |
