@@ -8,6 +8,8 @@ on:
       - 'tools/v02_verifier/**'
       - 'docs/security/V02D-independent-review-handoff.md'
       - 'docs/security/V02F-recovery-assurance-and-cryptographic-policy.md'
+      - 'docs/specification/v0.4.5.md'
+      - 'docs/decisions/register.md'
       - 'tools/security_probes/CRYPTO_REVIEW_REQUEST.md'
       - '.github/workflows/v02-candidate.yml'
   push:
@@ -18,6 +20,8 @@ on:
       - 'tools/v02_verifier/**'
       - 'docs/security/V02D-independent-review-handoff.md'
       - 'docs/security/V02F-recovery-assurance-and-cryptographic-policy.md'
+      - 'docs/specification/v0.4.5.md'
+      - 'docs/decisions/register.md'
       - 'tools/security_probes/CRYPTO_REVIEW_REQUEST.md'
       - '.github/workflows/v02-candidate.yml'
 permissions:
