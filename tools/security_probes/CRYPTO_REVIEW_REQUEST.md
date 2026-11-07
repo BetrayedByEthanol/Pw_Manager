@@ -99,6 +99,12 @@ For OPEN-01, request a scoped verdict on: the precise factor-combiner and key-co
 
 Reviewer: challenge target/owner scoping, cross-slot/cross-vault and group/entry ancestry, corruption/failure oracle, production Argon2 budgets and Unicode byte encodings, per-entry DEK-bound origin authenticity, and whether the chosen commitment design should be replaced entirely. V02-H must provide independent byte/crypto vectors after any design revisions. OPEN-15 must separately test actual registered FIDO2 PRF/UP/UV/salt/freshness and batch behavior; neither descriptor flags nor an LLM code review close either gate.
 
+## V02-H pinned wire/conformance and adversarial attack packet (NO external sign-off)
+
+The [V02-H reviewer handoff](../../docs/security/V02H-adversarial-conformance-and-review-submission.md) supplies five committed, independently implemented Python/Rust V3RV **wire/context** vectors; deterministic malformed-input and random-bit mutation suites; a separately authored *reference-only* recovery/ancestor graph and hostile KDF-selection cost model; immutable Git-blob source inventory and H-T01–H-T09 cryptographer questions. The newer vector suite does **not** contain independently implemented vNext authenticated slot ciphertext/committing-key vectors, because V02-G only parses opaque ciphertext and unverified commitment fields. Historical V02-C crypto KATs remain valid solely for the older V02-B experimental schedule. **Do not sign off** OPEN-01 based on parser interoperability or a MAC field's existence.
+
+The external reviewer should provide their name, expertise, exact reviewed commit/file hashes, chosen multi-key commitment definition, factor/domain analysis, hostile work-budget parameters, necessary wire/KDF/Unicode revisions and evidence-backed APPROVE/REJECT/CONDITIONAL verdict. OPEN-15 remains a separate **unexecuted** physical enrolled FIDO2 PRF/UV/UP/salt/batch test. No real credential handling, READY slots or approved vNext wire is enabled.
+
 ## Review gates to resolve before shipping
 
 1. Formal/independent analysis of the combiner and committing construction, including password-derived input, arbitrary PRF output correlations and domain separation.
