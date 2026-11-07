@@ -10,6 +10,10 @@
 //! cannot be obtained from the VMK.
 mod codec;
 mod model;
+// V02-G review-only V3RV wire/transcript draft. Test-compiled exclusively;
+// never available to production unlock, serialization or migration.
+#[cfg(test)]
+mod vnext_review;
 // Proposed future-version metadata binding is exercised only by synthetic
 // tests. Never reinterpret VLY2 entry AEAD associated data (F-9).
 #[cfg(test)]
