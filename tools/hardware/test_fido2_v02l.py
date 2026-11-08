@@ -97,9 +97,9 @@ class NativeNegativeHarnessTests(unittest.TestCase):
             self.assertFalse(interactive)
             self.assertNotIn(b"\x63" * 32, data)
             parsed = data.decode().splitlines()
-            # -V must get the exact *encoded* CBOR field returned by -G.
-            self.assertEqual(parsed[2], CLI_CBOR_AUTHDATA_B64 if
-                             parsed[2] == CLI_CBOR_AUTHDATA_B64 else parsed[2])
+            # The positive control must preserve the exact CBOR line.
+            if parsed == self.expected:
+                self.assertEqual(parsed[2], CLI_CBOR_AUTHDATA_B64)
             is_wrong_public = "other-test-public.pem" in " ".join(args)
             if parsed == self.expected and not is_wrong_public:
                 return b""
