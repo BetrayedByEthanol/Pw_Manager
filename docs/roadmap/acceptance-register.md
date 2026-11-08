@@ -209,6 +209,8 @@ V02-H can be merged as **internal review preparation only**, never as proof of v
 | EV-022 | [Merged V02-K PR #20](https://github.com/BetrayedByEthanol/Pw_Manager/pull/20); [Rust operator binary](../../tools/v02_verifier/src/bin/vaulty_v02k.rs); [regressions](../../tools/v02_verifier/src/bin/vaulty_v02k/tests.rs); [operator instructions](../security/V02K-physical-fido2-verification-and-evidence.md) | **Merged** at `f65615e8` (head `935ee1b0`): standalone Rust redacted receipt orchestrator and 11 offline regression tests, existing V02-J lab functions unchanged; no real keys operated in CI. | Independent OPEN-15 hardware proof, complete I-P matrix, OPEN-01 and owner security policies remain blocked. |
 | EV-023 | [Operator-submitted redacted V02-K evidence](../security/V02K-local-hardware-evidence-received-2026-11-08.md); [verbatim JSON](../security/evidence/v02k-local-native-ctap-2026-11-08.json) | **RECEIVED 2026-11-08 (local self-report):** source commit `f65615e8` matches merged `main`; primary and backup reported as separate **YubiKey 5 NFC USB-A, firmware 5.7.4**; `LOCAL_OBSERVATIONS_CAPTURED` with both `OBSERVED`; I-P01/02/03/04/06 `PARTIAL`, I-P05/07/08/09 `NOT_EXECUTED`. Native signed-assertion and PRF stability/isolation observations are tool-generated claims, not independently reproduced; device identities/firmware unverified. | **OPEN-15 BLOCKED:** no externally verified attestation/signed-negative evidence or browser parity; no trusted Vaulty READY, OPEN-01 and G1–G3 blocked. |
 
+| EV-024 | [V02-L-A/B negative verifier and physical failure-runbook candidate](../security/V02L-native-fido2-negative-and-failure-verification.md); [Python lab implementation](../../tools/hardware/fido2_v02l.py); [offline regression tests](../../tools/hardware/test_fido2_v02l.py) | **PR CANDIDATE — not operator-executed:** synthetic signed-assertion mutations and negative verifier boundary tests; opt-in wrong-device test with before/after positive controls; missing-device precheck only. Neither actual PIN failure, signed missing-UV token output, browser WebAuthn, nor application replay/revocation/fallback are verified. | External OPEN-15/01, hardware operator results and V03/V06 runtime still required; G1–G3 BLOCKED. |
+
 ## 2l. Round-two findings acceptance, scoped to source review only
 
 [**Full F-1–F-9 and W1 disposition**](../security/V02H-round-two-review-disposition.md) is part of the security findings register. It records **ACCEPTED FOR FOLLOW-UP**, not a cryptographic, device or owner decision. **Q1:** weaker Standard-entry recovery is structurally permitted but requires a separate explicit owner decision/consent; code-only VMK recovery alone does not unlock all entries, and ISOLATED remains hardware-mandatory. **Q2:** neither V02-B HMAC/P6 nor V3RV frozen wire/context vectors prove multi-key commitment, partitioning-oracle security or authenticated vNext operations. OPEN-01/15 and G1–G3 remain **BLOCKED**.
@@ -264,6 +266,18 @@ V02-H can be merged as **internal review preparation only**, never as proof of v
 | A02K-04 | Owner-facing run command and redaction guidance | [V02-K source-pinned runbook](../security/V02K-physical-fido2-verification-and-evidence.md) specifies clone/checkout, cargo `--locked`, `fido2-token -L`, primary/backup device opt-in, share only `evidence-v02k.json` | CI cannot and does not produce physical token evidence |
 
 **V02-K is merged; EV-023 operator observations received.** This does not upgrade the full I-P01–I-P09 matrix, prove physically distinct tokens or close OPEN-15. Mocked CI and local JSON receipt checks cannot approve hardware assurance.
+
+## 2p. V02-L-A/B native negative verification — review-only
+
+| ID | Acceptance target | Test-only evidence | Remaining |
+| --- | --- | --- | --- |
+| A02L-01 | Fail closed on modified signed native assertions | Local -V positive control followed by wrong challenge/RP/authenticator-data/signature/public-key negatives; offline mocks test expected exit and unexpected verifier acceptance | Hardware execution and independent signed transcript review; no daemon replay cache |
+| A02L-02 | Require signed UP/UV and RP match | Pre-signature parsing of authenticator data minimum/flags/RP hash AND libfido2 -V -h -p -v verification on accepted control | No real signed UV-absent token, no full attestation/browser-origin proof |
+| A02L-03 | Reject unauthorized credential on other token with controls | Physical probe first verifies control role, requests target credential, verifies control again; errors classified UNCLASSIFIED, not PASS | Operator must test actual tokens; separate physical-device identity not cryptographically proved |
+| A02L-04 | Remain safe for PIN/timeout/removal | Never submit bad PIN, exhaust retries, reset or force token removal; absent-path precheck no device calls; CI mocks timeouts/tool errors as INDETERMINATE | Actual hardware PIN/UV/cancel/unplug & daemon fail-closed behavior later |
+| A02L-05 | Source-pinned redacted reporting, blocked gates | 0600 receipts with only case statuses, clean Git SHA; no PIN/PRF/RP/credential/HID/claim of READY/APPROVED; offline test & review inventory | Independent OPEN-15/01 and G1–G3 BLOCKED |
+
+**V02-L-A/B status is candidate source and offline evidence only.** EV-023 pertains to the earlier V02-K hardware run, not V02-L. V02-L physical results must be submitted separately before they can be marked locally observed. WebAuthn PRF I-P05 and passkey implementation are out of scope.
 
 ## 3. Security findings register
 
