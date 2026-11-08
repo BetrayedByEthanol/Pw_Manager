@@ -53,6 +53,7 @@ FILE_ALLOWLIST = (
     "docs/security/V02H-adversarial-conformance-and-review-submission.md",
     "docs/security/V02H-round-two-review-disposition.md",
     "docs/decisions/register.md",
+    "docs/roadmap/acceptance-register.md",
     ".github/workflows/v02-candidate.yml",
     ".forgejo/workflows/v02-candidate.yml",
 )
