@@ -46,7 +46,7 @@ fn loaded_fixture() -> (Session, [Uuid; 5], Instant) {
     let now = Instant::now();
     let (file, opened, ids) = file_and_opened();
     let mut session = Session::new(limits());
-    assert!(!session.inspect_public_file(&file).unwrap().authenticated);
+    assert!(!session.inspect_public_file(&file).unwrap().is_authenticated());
     session.load_synthetic(opened, [9; 32], [7; 32], now).unwrap();
     session.synthetic_monitor_registered();
     (session, ids, now)
@@ -74,7 +74,7 @@ fn public_only_open_rejects_malformed_and_never_claims_authentication() {
         Err(SessionError::PublicHeaderRejected));
     assert_eq!(session.phase(), Phase::Closed);
     let summary = session.inspect_public_file(&file).unwrap();
-    assert!(!summary.authenticated);
+    assert!(!summary.is_authenticated());
     assert!(!summary.vault_id.is_nil());
     assert_eq!(summary.generation, 1);
     assert_eq!(session.phase(), Phase::Open);
@@ -85,7 +85,7 @@ fn public_only_open_rejects_malformed_and_never_claims_authentication() {
     session.lock(LockReason::Owner);
     assert_eq!(session.phase(), Phase::Locked);
     assert_eq!(session.last_lock_reason(), Some(LockReason::Owner));
-    assert_eq!(session.inspect_public_file(&file).unwrap().authenticated, false);
+    assert_eq!(session.inspect_public_file(&file).unwrap().is_authenticated(), false);
     assert_eq!(session.phase(), Phase::Open);
 }
 
@@ -273,6 +273,7 @@ fn no_session_operation_releases_a_secret_or_changes_vault() {
         Err(SessionError::UnsupportedAuthorization));
     session.close();
     assert_eq!(session.phase(), Phase::Closed);
+    assert_eq!(session.last_lock_reason(), None);
     assert_eq!(session.begin_write(Duration::from_secs(10), 2),
         Err(SessionError::WrongPhase));
 }
