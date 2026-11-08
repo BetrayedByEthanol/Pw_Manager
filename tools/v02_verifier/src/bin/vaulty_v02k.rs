@@ -138,12 +138,29 @@ fn make_private_dir(path: &Path) -> Result<()> {
     }
     Ok(())
 }
+fn ensure_ancestor_dir(path: &Path) -> Result<()> {
+    if path.is_symlink() { return Err("symlinked output ancestor"); }
+    if !path.exists() {
+        DirBuilder::new().mode(0o700).create(path)
+            .map_err(|_|"cannot create output parent")?;
+    }
+    let m=fs::symlink_metadata(path).map_err(|_|"cannot inspect output parent")?;
+    if !m.is_dir() || m.permissions().mode() & 0o022 != 0 {
+        return Err("writable or non-directory output parent");
+    }
+    Ok(())
+}
 fn new_output() -> Result<PathBuf> {
     let home=PathBuf::from(env::var_os("HOME").ok_or("missing HOME")?);
-    if !home.is_absolute() || !home.is_dir() { return Err("invalid HOME"); }
+    if !home.is_absolute() || !home.is_dir() || home.is_symlink() {
+        return Err("invalid HOME");
+    }
     let local=home.join(".local"); let state=local.join("state");
     let base=state.join("vaulty-v02k");
-    for p in [&local,&state,&base] { make_private_dir(p)?; }
+    // Existing ~/.local and ~/.local/state are often mode 0755 and need not
+    // be changed. The evidence directory itself must be mode 0700.
+    for p in [&local,&state] { ensure_ancestor_dir(p)?; }
+    make_private_dir(&base)?;
     let millis=SystemTime::now().duration_since(UNIX_EPOCH)
         .map_err(|_|"invalid local clock")?.as_millis();
     let dest=base.join(format!("run-{millis}-{}",std::process::id()));
