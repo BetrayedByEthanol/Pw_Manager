@@ -73,8 +73,8 @@ impl std::error::Error for SessionError {}
 /// renew ONLY the idle deadline; the maximum loaded lifetime never slides.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionLimits {
-    pub inactivity: Duration,
-    pub absolute: Duration,
+    inactivity: Duration,
+    absolute: Duration,
 }
 impl SessionLimits {
     pub fn new(inactivity: Duration, absolute: Duration) -> Result<Self, SessionError> {
@@ -106,7 +106,12 @@ pub struct ReadIntent {
     pub provider: ProviderRequirement,
     pub tier: EntryTier,
     /// Always false in V03 v0. No spoofed "authorized" result is possible.
-    pub authorized: bool,
+    authorized: bool,
+}
+impl ReadIntent {
+    /// An intent is never a factor proof; only a future trusted daemon may
+    /// issue an actual secret-release capability after approved review.
+    pub fn is_authorized(&self) -> bool { self.authorized }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WriteIntent {
@@ -116,7 +121,10 @@ pub struct WriteIntent {
     pub base_generation: u64,
     pub max_changes: u16,
     /// Explicit: no change set or owner approval was accepted.
-    pub authorized: bool,
+    authorized: bool,
+}
+impl WriteIntent {
+    pub fn is_authorized(&self) -> bool { self.authorized }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PublicSummary {
