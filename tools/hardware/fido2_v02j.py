@@ -337,7 +337,7 @@ def _measure(session: dict, role: str, entry: str, device: str,
             key_path = _private_input(directory, "public.pem",
                                       cred["public_key_pem"].encode("ascii"))
             fields = _lines(generated, 5)
-            verify = ("\\n".join(fields[:4]) + "\\n").encode("ascii")
+            verify = ("\n".join(fields[:4]) + "\n").encode("ascii")
             opts = ["-V", "-h", "-p"] + (["-v"] if assurance == "uv" else [])
             _run([_tool("fido2-assert"), *opts, str(key_path), "es256"],
                  data=verify)
