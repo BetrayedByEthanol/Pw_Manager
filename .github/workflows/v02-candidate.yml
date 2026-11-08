@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'src/v02/**'
+      - 'src/v03*'
+      - 'docs/architecture/V03-session-and-authenticator-foundation.md'
       - 'src/lib.rs'
       - 'tools/v02_verifier/**'
       - 'docs/security/V02D-independent-review-handoff.md'
@@ -25,6 +27,8 @@ on:
     branches: [main, feat/v02-canonical-format-foundation-v0]
     paths:
       - 'src/v02/**'
+      - 'src/v03*'
+      - 'docs/architecture/V03-session-and-authenticator-foundation.md'
       - 'src/lib.rs'
       - 'tools/v02_verifier/**'
       - 'docs/security/V02D-independent-review-handoff.md'

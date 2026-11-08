@@ -40,6 +40,14 @@ pub struct Opened {
     pub header: PublicHeader,
     pub body: VaultBody, // authenticated metadata and still-encrypted entry payloads
 }
+/// Parse bounded *public* framing without authenticating the VMK/body.
+/// No caller may interpret this result as a trusted slot or unlock decision.
+/// V03 can enter OPEN based on it; only a later trusted V02 authenticated
+/// decrypt + independent rollback/factor check may enter LOADED.
+pub fn read_public_header(file: &[u8]) -> Result<PublicHeader, V02Error> {
+    codec::parse_header(file).map(|parsed| parsed.header)
+}
+
 /// AEAD associated data binds vault and entry IDs, revision and all policy
 /// selectors. Changing policy without reencrypting under the entry's DEK
 /// fails authentication, even if an outer VMK is available.
