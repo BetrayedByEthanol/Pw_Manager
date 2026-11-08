@@ -1,6 +1,6 @@
 # Vaulty — Acceptance, Evidence and Security Gap Register
 
-**Snapshot date:** 2026-11-08 | **Repository evidence baseline:** `main` merge commit `a3f177722d0105de167b848d78df807ee108803a` ([round-two findings PR #17 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/17), issues only). [V02-I hardware assurance and PRF isolation](../security/V02I-fido2-prf-isolation-and-hardware-assurance.md) is a test-only policy proposal, **not real-device or OPEN-01/15 approval**.  
+**Snapshot date:** 2026-11-08 | **Repository evidence baseline:** `main` merge `54a20268ceff1e764f229a069e1b65651672bf11` ([V02-I PR #18 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/18), synthetic public PRF-input/assurance proposal only). [V02-J local hardware foundation](../security/V02J-isolated-fido2-hardware-verification.md) is **operator-only and NOT run against physical FIDO2 here**; OPEN-01/OPEN-15/G1–G3 BLOCKED.  
 **Purpose:** provide a reviewable distinction between **design approved**, **source merged**, **CI passed**, **security behavior verified** and **release certified**. None is interchangeable. See [implementation roadmap](implementation.md).
 
 ## 1. Recorded merged evidence
@@ -204,7 +204,8 @@ No A02F criterion is production cryptographic approval; V02-F can merge as a **r
 
 V02-H can be merged as **internal review preparation only**, never as proof of vNext cryptographic security. The [review packet](../security/V02H-adversarial-conformance-and-review-submission.md) names the missing crypto cases explicitly.
 
-| EV-020 | [V02-I PR #18](https://github.com/BetrayedByEthanol/Pw_Manager/pull/18); [focused V02 CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42494634215); [V01 product safety CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42494634268); [security probes](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42494634182); [proposed hardware policy](../security/V02I-fido2-prf-isolation-and-hardware-assurance.md) | **Unmerged candidate tested at `d2847017`:** 57/57 Rust tests (8 new review-only PRF context cases), six frozen Python/Rust public PRF inputs/CTAP salts, five Python PRF reference tests, five V02-I approval/coverage checks, five V02-H wire vectors, six existing V02-C cryptographic KATs, libargon2, six manifest and prior policy/round-two tests. Source-pinned **44-file inventory** and all three GitHub workflows PASS; Codex reviewed that head without major issues. **No hardware access or production key slots.** | Owner OPEN-HW-ASSURANCE and OPEN-PRF-SALT, independent OPEN-01/15, actual registered device assertion/PRF proof, authorized authenticated vNext, full ancestor/READY and G1–G3 remain **BLOCKED**. |
+| EV-020 | [Merged V02-I PR #18](https://github.com/BetrayedByEthanol/Pw_Manager/pull/18); [final-head V02 CI](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42495002180); [final-head product safety](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42495002213); [security probes](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42495002195); [proposed hardware policy](../security/V02I-fido2-prf-isolation-and-hardware-assurance.md) | **Merged** at `54a20268` (head `0e3db649`): 57 Rust tests, six frozen Python/Rust public-input/CTAP salt vectors, five Python PRF tests, five policy checks, 44-file source inventory, all three final-head GitHub workflows PASS and Codex no major issues. **No actual hardware or approved policy.** | Owner OPEN-HW-ASSURANCE/OPEN-PRF-SALT and independent OPEN-01/15, authenticated vNext, verified device and G1–G3 remain **BLOCKED**. |
+| EV-021 | [V02-J operator-only hardware verification foundation](../security/V02J-isolated-fido2-hardware-verification.md); [isolated libfido2 harness](../../tools/hardware/fido2_v02j.py) | **Unmerged candidate, synthetic CI only:** explicit Linux `--hardware-test` gating; synthetic test RP/entry/primary+backup registration; native signed UP/UV/extension check and two-read PRF comparison; no-secret private observation receipts; mocked negative tests. **Zero physical devices tested by this PR.** | Real I-P01–I-P09 execution, signed hardware reviewer OPEN-15 verdict, browser WebAuthn comparison, trusted registry/READY, authenticated vNext crypto, owner UV/PRF decisions and G1–G3. |
 
 ## 2l. Round-two findings acceptance, scoped to source review only
 
@@ -238,6 +239,18 @@ V02-H can be merged as **internal review preparation only**, never as proof of v
 | A02I-05 | Hardware evidence and release boundaries stay open | Unexecuted I-P01–I-P09 OPEN-15 matrix, separately listed OPEN-PRF-SALT and UV/UP owner question, source-pinned reviewer inventory | No hardware operation, no authenticated vNext seal/open, no G1/G2/G3 release gate |
 
 **V02-I can merge only as an unapproved policy and synthetic input-validation milestone.** It does not close OPEN-15, OPEN-01, SEC-06, SEC-17, recovery completeness, or any runtime safety gate.
+
+## 2n. V02-J isolated FIDO2 hardware verification foundation (NO device evidence)
+
+| ID | Internal foundation acceptance | Evidence and execution boundary | Not established |
+| --- | --- | --- | --- |
+| A02J-01 | Explicit device/terminal/CI opt-in; synthetic test credentials only | `tools/hardware/fido2_v02j.py` refuses CI, unselected devices, non-tty, repository session paths and symlinks; exact `--hardware-test` gate | Device availability, trusted RP/registry, hardware token proof or production unlock |
+| A02J-02 | Signed assertion verification must precede trusting PRF observations | libfido2 `-G -h -p -v` signed native challenge + separate `-V -h -p -v`, saved test-only public key and challenge/RP binding; offline mocks, not live device | Actual attestation-chain verification, local PIN/biometric behavior, browser origin control or OPEN-15 |
+| A02J-03 | Two token/entry PRFs never exposed in receipts | Primary+backup credentials are independently created, separate V02-I entry/slot/credential salts, repeated signed assertions compared only in memory; receipt excludes output/challenge/ID, `entry_route_ready=false`; Python full zeroization **not guaranteed** | Real hardware equality/isolation; independent physical devices; production key wipe/provenance |
+| A02J-04 | I-P01–I-P09 gaps are not silently green | [Local operator runbook and I-P mapping](../security/V02J-isolated-fido2-hardware-verification.md#3-hardware-matrix-mapping-no-automatic-approvals), tests only in GitHub/Forgejo without devices, `full_i_p01_to_i_p09_matrix=NOT_EXECUTED`; no browser/atomic rewrap | Actual real-device reviewer results, signed negative/replay and browser/native parity, V04/V06 runtime |
+| A02J-05 | Source inventory and release gates remain honest | Static policy tests plus explicit external reviewer scope; `OPEN-HW-ASSURANCE`/`OPEN-PRF-SALT` unresolved; OPEN-01/15 and G1–G3 remain BLOCKED | Approved UV/UP policy, PRF salt protocol, key commitment or production authentication |
+
+**V02-J may merge as a local lab test harness only.** No suite runs a physical key in CI; local observations need independent qualified review and all incomplete I-P tests before OPEN-15 could close.
 
 ## 3. Security findings register
 
