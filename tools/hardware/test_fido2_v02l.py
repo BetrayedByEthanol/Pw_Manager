@@ -312,6 +312,7 @@ class NativeNegativeHarnessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="vaulty-v02l-existing-") as folder:
             receipt = Path(folder) / "taken.json"
             receipt.write_text("operator-evidence-must-survive", encoding="utf-8")
+            receipt.chmod(0o600)  # Existing receipts must pass the private-mode gate.
             args = l.parse(["unavailable", "--device", "/dev/hidraw999999",
                             "--receipt", str(receipt), "--hardware-test"])
             with patch.object(l, "_live_gate"), patch.object(l, "_source_head", return_value="a"*40), \
