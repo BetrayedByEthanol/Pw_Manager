@@ -89,4 +89,6 @@ A V02-H PR may merge as an **internal adversarial conformance and submission pac
 
 **Remain blocked after merge:** OPEN-01, OPEN-15, OPEN-REC-CONSENT, OPEN-KDF-PROFILE, OPEN-PASSWORD-ENC, OPEN-VNEXT-WIRE, G1/G2/G3, full authenticated V3RV cryptographic conformance, pre-auth resource limits, real hardware and recoverability, trusted daemon/browser, key lifetime/fuzz property coverage, and final authorized VLY2→new-format migration.
 
-**Next recommended action:** deliver the pinned packet to a qualified independent cryptographer **early**, while separately planning real FIDO2 tests. Treat their attack findings as inputs to an explicit revised protocol and new frozen cryptographic test vectors, never as implicit acceptance. 
+**Next recommended action:** deliver the pinned packet to a qualified independent cryptographer **early**, while separately planning real FIDO2 tests. Treat their attack findings as inputs to an explicit revised protocol and new frozen cryptographic test vectors, never as implicit acceptance.
+
+**Round-two follow-up (2026-11-08):** [F-1–F-9 and W1 findings](V02H-round-two-review-disposition.md) were accepted into the security register **with two qualifications**: weaker Standard recovery remains an explicit owner-controlled option, and P6/HMAC or V3RV wire tests do not prove multi-key commitment or final protocol security. OPEN-01/15 and G1–G3 remain BLOCKED. 
