@@ -98,7 +98,7 @@ class IsolatedHardwareHarnessTests(unittest.TestCase):
             good.replace(harness._b64(challenge).encode(), harness._b64(bytes(32)).encode()),
             good + b"extra\n",
             good.replace(harness._b64(bytes([9])*32).encode(), harness._b64(b"too-short").encode()),
-            good.replace(b"signature", b"!!!"),
+            good.replace(harness._b64(b"signature").encode(), b"!!!"),
         ):
             with self.subTest(mutated_len=len(mutated)):
                 with self.assertRaises(harness.ProbeError):
@@ -135,7 +135,7 @@ class IsolatedHardwareHarnessTests(unittest.TestCase):
             if "-G" in args:
                 lines = data.decode("ascii").splitlines()
                 return "\n".join([lines[0], lines[1], harness._b64(b"authenticator-data"),
-                                   harness._b64(b"signature"), harness._b64(secret)]) .encode() + b"\n"
+                                   harness._b64(b"signature"), harness._b64(secret)]).encode() + b"\n"
             if "-V" in args:
                 self.assertIn("-p", args)
                 self.assertIn("-v", args)
