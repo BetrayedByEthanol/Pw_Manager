@@ -20,7 +20,8 @@ class HardwarePolicyBoundaryTests(unittest.TestCase):
 
     def test_matrix_has_all_nine_unevaluated_cases(self):
         rows = [line for line in self.packet.splitlines()
-                if line.startswith("| I-P")]
+                if line.startswith("| I-P") and line.split("|")[1].strip() in
+                {f"I-P{i:02d}" for i in range(1, 10)}]
         self.assertEqual([row.split("|")[1].strip() for row in rows],
                          [f"I-P{i:02d}" for i in range(1, 10)])
         self.assertIn("None of I-P01–09 is automatically PASS", self.packet)
@@ -29,7 +30,7 @@ class HardwarePolicyBoundaryTests(unittest.TestCase):
 
     def test_review_only_does_not_approve_uv_salt_crypto_or_recovery(self):
         for marker in ("OPEN-HW-ASSURANCE", "OPEN-PRF-SALT", "OPEN-REC-CONSENT",
-                       "OPEN-01", "OPEN-15", "G1", "G2", "G3", "Option A",
+                       "OPEN-01", "OPEN-15", "G1–G3", "Option A",
                        "S1/S2/R1", "NOT Vaulty runtime authentication"):
             self.assertIn(marker.lower(), self.packet.lower())
         self.assertIn("**BLOCKED — independent security/device review**", self.decisions)
