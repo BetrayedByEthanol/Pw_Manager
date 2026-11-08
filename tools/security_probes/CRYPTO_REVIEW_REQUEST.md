@@ -105,6 +105,10 @@ The [V02-H reviewer handoff](../../docs/security/V02H-adversarial-conformance-an
 
 The external reviewer should provide their name, expertise, exact reviewed commit/file hashes, chosen multi-key commitment definition, factor/domain analysis, hostile work-budget parameters, necessary wire/KDF/Unicode revisions and evidence-backed APPROVE/REJECT/CONDITIONAL verdict. OPEN-15 remains a separate **unexecuted** physical enrolled FIDO2 PRF/UV/UP/salt/batch test. No real credential handling, READY slots or approved vNext wire is enabled.
 
+## Round-two AI-assisted findings accepted for tracking (Nov 8, 2026)
+
+See the [source-commit-bound F-1–F-9 / W1 disposition](../../docs/security/V02H-round-two-review-disposition.md) and [security/acceptance register](../../docs/roadmap/acceptance-register.md). **Qualification 1:** a separately provisioned weaker Standard recovery route is an **owner choice requiring explicit informed consent** before sealing, not automatically a forbidden path or an approved downgrade. **Qualification 2:** V02-B HMAC-before-AEAD and scratch probe P6 are **not** formal multi-key commitment or partitioning-oracle proofs; V3RV's Python/Rust wire vectors are **not** vNext authenticated cryptographic vectors. The AI source review is issue intake, **not** a named independent OPEN-01/15 verdict. The new review must independently assess PRF salt sharing/UV, factor provenance, Argon2 aggregate work, authenticated ancestry, DEK metadata, and final committing vNext seal/open, while real-device OPEN-15 remains separately blocked.
+
 ## Review gates to resolve before shipping
 
 1. Formal/independent analysis of the combiner and committing construction, including password-derived input, arbitrary PRF output correlations and domain separation.
