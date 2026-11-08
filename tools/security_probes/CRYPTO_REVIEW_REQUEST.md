@@ -127,6 +127,8 @@ See the [source-commit-bound F-1–F-9 / W1 disposition](../../docs/security/V02
 
 [V02-L-A/B review-only packet](../../docs/security/V02L-native-fido2-negative-and-failure-verification.md) introduces a test-only native libfido2 signed-positive / modified-challenge, RP, authenticator-data, signature and wrong-public-key verifier matrix, plus controlled wrong-credential-on-other-device probes and an absent-HID-path precheck. Synthetic tests check missing UP/UV flags and timeouts. No real signed UV-absent assertion, wrong PIN attempts, actual nonce/replay-cache, trusted registry/revocation, hardware attestation, browser WebAuthn PRF or daemon fail-closed evidence is claimed. Require full local redacted reports, independent signed transcripts, and eventual integrated runtime tests before any OPEN-15 or release acceptance; OPEN-01/G1–G3 remain BLOCKED.
 
+**V02-L representation correction:** libfido2 `fido2-assert -G` third line is a CBOR-encoded byte string; its decoded raw WebAuthn RP hash/flags are checked only after canonical wrapper decoding. The original CBOR bytes remain intact for `-V`. [CLI-format synthetic fixture](../../tools/hardware/fixtures/v02l_libfido2_cbor_authdata.txt) is source-pinned. This corrects the P1 real-token parsing blocker but is not itself live hardware evidence or independent verification.
+
 ## Review gates to resolve before shipping
 
 1. Formal/independent analysis of the combiner and committing construction, including password-derived input, arbitrary PRF output correlations and domain separation.
