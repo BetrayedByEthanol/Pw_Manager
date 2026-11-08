@@ -42,6 +42,7 @@ FILE_ALLOWLIST = (
     "tools/hardware/fido2_v02j.py",
     "tools/hardware/fido2_v02l.py",
     "tools/hardware/test_fido2_v02l.py",
+    "tools/hardware/fixtures/v02l_libfido2_cbor_authdata.txt",
     "docs/security/V02L-native-fido2-negative-and-failure-verification.md",
     "tools/hardware/test_fido2_v02j.py",
     "tools/hardware/test_v02j_policy_contract.py",
