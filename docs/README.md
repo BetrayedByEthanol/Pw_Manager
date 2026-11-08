@@ -1,7 +1,7 @@
 # Vaulty Documentation Index
 
 **Canonical design target:** **v0.4.5**, 6 November 2026.  
-**Implementation reference:** GitHub `main` `9d854a6` ([V02-H PR #16 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/16), untrusted wire-only adversarial evidence). Round-two findings are registered with owner-consent and no-crypto-proof qualifications. OPEN-01/15 and release gates remain blocked.  
+**Implementation reference:** GitHub `main` `a3f1777` ([round-two findings PR #17 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/17), issue intake only). V02-I is a review-only hardware PRF salt/assurance proposal; OPEN-01/15 and G1–G3 remain blocked.  
 **Safety status:** Prototype foundation builds and tests; **not safe for real credentials and not security-certified**.
 
 Start here rather than relying on previous chats or the historical README feature checklist.
@@ -20,7 +20,8 @@ Start here rather than relying on previous chats or the historical README featur
 | [V02-F recovery assurance and cryptographic policy decisions](security/V02F-recovery-assurance-and-cryptographic-policy.md) | Merged proposals for weaker-recovery informed consent, root-separated assurance, KDF benchmarking/work caps, NFC/UTF-8 encoding and code scopes | **Merged proposal; new owner/expert decisions open** |
 | [V02-G cryptographic vNext review candidate](architecture/v02g-vnext-cryptographic-protocol-review.md) | Merged V3RV review-only frame/descriptor, strict test codec and proposed typed-factor transcript | **Merged test-only; no authenticated keys/approved wire** |
 | [V02-H adversarial conformance and external review submission](security/V02H-adversarial-conformance-and-review-submission.md) | Merged two-language V3RV wire/context vectors, mutation/ancestry/KDF reference cases, source-pinned unsigned expert packet | **Merged internal evidence; OPEN-01/15 blocked** |
-| [Round-two V02-H security-review findings](security/V02H-round-two-review-disposition.md) | F-1–F-9/W1 accepted for follow-up; owner controls weaker Standard recovery and P6/HMAC/V3RV are not security proof | **Security issues registered, NOT product/crypto approval** |
+| [Round-two V02-H security-review findings](security/V02H-round-two-review-disposition.md) | F-1–F-9/W1 accepted for follow-up; owner controls weaker Standard recovery and P6/HMAC/V3RV are not security proof | **Merged issue register, NOT approval** |
+| [V02-I FIDO2 PRF isolation & hardware assurance](security/V02I-fido2-prf-isolation-and-hardware-assurance.md) | Proposed entry-specific PRF salt/input, six Python/Rust public-byte vectors, two-token/Isolated entry coverage, UV versus touch-only and unexecuted real-device matrix | **Review-only; NO physical factor, owner approval or OPEN-15 verdict** |
 | [Architecture v0.4.5](architecture/v0.4.5.md) | System components, single-file structure, trust boundaries, key flows and operation sequences | **Target design** |
 | [Implementation roadmap](roadmap/implementation.md) | V01-A through V09, V04M workstream, dependencies and release gates | **Work plan** |
 | [Feature roadmap](roadmap/features.md) | All 38 normalized requirements, four N-features and links to the 67 historical source items | **Feature ledger** |
