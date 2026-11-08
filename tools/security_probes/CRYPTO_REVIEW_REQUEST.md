@@ -123,6 +123,10 @@ See the [source-commit-bound F-1–F-9 / W1 disposition](../../docs/security/V02
 
 **EV-023 operator hardware intake (2026-11-08):** [redacted report, provenance and I-P matrix](../../docs/security/V02K-local-hardware-evidence-received-2026-11-08.md). Owner reports two distinct YubiKey 5 NFC USB-A devices, both firmware 5.7.4, with `primary=OBSERVED` and `backup=OBSERVED` on V02-K merged source `f65615e8`. The claim is **not independently confirmed**; redaction intentionally omits credentials/challenges/PRF values and prevents external signature re-verification. I-P01/02/03/04/06 remain PARTIAL, I-P05/07/08/09 NOT_EXECUTED, OPEN-15 BLOCKED. Independent reviewer must validate hardware/firmware provenance, UV/UP flags, wrong RP/credential/replay/UV negatives and WebAuthn/native same-credential PRF compatibility before any signoff.
 
+## V02-L-A/B native verifier negatives and failure probe (NO LOCAL HARDWARE RESULT YET)
+
+[V02-L-A/B review-only packet](../../docs/security/V02L-native-fido2-negative-and-failure-verification.md) introduces a test-only native libfido2 signed-positive / modified-challenge, RP, authenticator-data, signature and wrong-public-key verifier matrix, plus controlled wrong-credential-on-other-device probes and an absent-HID-path precheck. Synthetic tests check missing UP/UV flags and timeouts. No real signed UV-absent assertion, wrong PIN attempts, actual nonce/replay-cache, trusted registry/revocation, hardware attestation, browser WebAuthn PRF or daemon fail-closed evidence is claimed. Require full local redacted reports, independent signed transcripts, and eventual integrated runtime tests before any OPEN-15 or release acceptance; OPEN-01/G1–G3 remain BLOCKED.
+
 ## Review gates to resolve before shipping
 
 1. Formal/independent analysis of the combiner and committing construction, including password-derived input, arbitrary PRF output correlations and domain separation.
