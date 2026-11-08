@@ -22,7 +22,7 @@
 | **FR-ENT-06** | Remove entry, indexes, slots + tombstones | V05 | Planned |
 | **FR-ENT-07** | Verify default entry via masked VERS + selected provider; no VMK read | V03/V05 | Planned |
 | **FR-AUTH-01** | Password + virtual vs physical FIDO2 normal modes; weakest-route display | V03 | Planned |
-| **FR-AUTH-02** | FIDO2 enrollment / use / verification / revocation | V03/V06 | Legacy partial; no policy engine |
+| **FR-AUTH-02** | FIDO2 enrollment / use / verification / revocation | V02-I/V03/V06 | [V02-I proposed per-entry PRF salts, per-key coverage and UV/UP policy](../security/V02I-fido2-prf-isolation-and-hardware-assurance.md) with public-input synthetic vectors; **no device, trusted factor or runtime enrollment**; OPEN-15 blocked |
 | **FR-AUTH-03** | Master password change by reviewed slot rewrap | V04/V06 | Fail-closed stub |
 | **FR-AUTH-04** | Bounded retry UX (not offline brute-force protection) | V03/V07A | Planned |
 | **FR-DEV-01** | Distinct trusted authenticator and client inventory | V06/V07 | Planned |
@@ -41,7 +41,7 @@
 | **FR-IPC-04** | Save/register through relay and durable receipt | V08B/V08C | Native mock returns false success |
 | **FR-STO-01** | Atomic authenticated file writes + previous generation + ancestry | V02 | V02 candidate writer/ancestry merged in PR #8; race-free storage, last-seen-head and production durability not done |
 | **FR-REC-01** | Provisioned VMK/VERS recovery; code-only vault recovery restricted to password-only mode | V02-F/V04 | V02-F [assurance and code-scope proposal](../security/V02F-recovery-assurance-and-cryptographic-policy.md) distinguishes VMK, original virtual seed, VERS and entry DEKs; R1/Option A remain approved and **not implemented** |
-| **FR-REC-02** | Lost hardware recovery and code-dependent new-device slots | V02-F/V04/V06 | V02-F recovery-coverage/consent contract proposed; Option A/new-token PRF unchanged and **not implemented**; OPEN-15 and owner F-1 decision pending |
+| **FR-REC-02** | Lost hardware recovery and code-dependent new-device slots | V02-F/V02-I/V04/V06 | [V02-I](../security/V02I-fido2-prf-isolation-and-hardware-assurance.md) requires independently provisioned slots for main/backup credentials; an absent key remains PENDING for that entry; Option A, OPEN-15 and recovery consent gates remain **not implemented** |
 | **FR-REC-03** | Backup authenticator and verified rewrap coverage | V06 | Planned |
 | **FR-MIG-01** | N-01: verified legacy format migration (P0) | V04M-1 | Planned |
 | **FR-XFER-01** | N-02: vault-to-vault copy/move (P1) | V04M-2 | Planned |
@@ -123,4 +123,8 @@ The [V02-G vNext review proposal](../architecture/v02g-vnext-cryptographic-proto
 
 The [V02-H packet](../security/V02H-adversarial-conformance-and-review-submission.md) supplies independently authored Python/Rust implementations for the **untrusted V3RV wire and context**, five frozen byte/digest examples, hostile truncation/mutation and source/ancestor/KDF budget reference cases. **It does not add new vNext key-derivation, AEAD/MAC validation or multi-key committing proof**: the six older V02-C synthetic cryptographic KATs remain attached to V02-B. FR-CRY-01/FR-REC-01/02 and FR-AUTH-02 remain incomplete, OPEN-01/15 and G1–G3 blocked.
 
-**Current work:** V02-H reviewer submission preparation following merged [V02-G PR #15](https://github.com/BetrayedByEthanol/Pw_Manager/pull/15). External reviewers must still supply named scoped verdicts and owner F-1/KDF/encoding choices remain open. See [implementation roadmap](implementation.md).
+## V02-I FIDO2 PRF isolation and two-key assurance (review-only)
+
+[V02-I design/test packet](../security/V02I-fido2-prf-isolation-and-hardware-assurance.md) proposes versioned per-entry/slot/credential PRF input and different browser WebAuthn `prf` vs native CTAP `hmac-secret` handling, UV-required and optional weaker UP-only profiles, and entry-specific primary/backup hardware coverage. Six frozen Python/Rust vectors contain **public input bytes and hashes, not physical PRF secrets**. No registered physical device, authenticated factor, approved UV/salt/PRF schedule, vNext key slot or READ/WRITE operation is delivered. FR-CRY-01, FR-AUTH-02, FR-REC-02 remain incomplete.
+
+**Current work:** V02-I candidate after merged [round-two findings PR #17](https://github.com/BetrayedByEthanol/Pw_Manager/pull/17). Independent OPEN-01/15, production Argon2/password encoding and owner assurance decisions remain BLOCKED. See [implementation roadmap](implementation.md).
