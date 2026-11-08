@@ -1,6 +1,6 @@
 # Vaulty — Design Decisions and Open Review Register
 
-**Snapshot:** 2026-11-07 | **Target:** v0.4.5. Decisions here describe **approved product policy**, not implementation status.  
+**Snapshot:** 2026-11-08 | **Target:** v0.4.5. Decisions here describe **approved product policy**, not implementation status. Round-two findings are accepted for follow-up, **not** approved changes.  
 **Canonical spec:** [v0.4.5](../specification/v0.4.5.md) | **Current evidence:** [acceptance register](../roadmap/acceptance-register.md)
 
 **Status meanings:** APPROVED (owner-selected target), PROVISIONAL (direction allowed for review but not security approval), OPEN (needs a protocol decision/review), DEFERRED (explicitly outside current release), SUPERSEDED (historical only).
@@ -126,6 +126,14 @@ The numbering remains authoritative for traceability; this crosswalk does **not*
 | OPEN-TYPING | **DEFERRED** | X11 default disabled, Wayland support conditional, Windows desktop focus checks; no universal secure typing promise |
 
 Further historical open questions OPEN-02 through OPEN-14 are documented in [the v0.3 archive](../specification/history/v0.3-design-reference.md#19-open-decisions-and-required-design-reviews). They must be reconciled with v0.4.5 decisions before implementing those functions, rather than silently treated as settled.
+
+## C1. Round-two security-review acceptance — qualifications, NOT decisions
+
+The [round-two V02-H findings disposition](../security/V02H-round-two-review-disposition.md), based on merged `9d854a6`, accepts F-1–F-9 and W1/probe observations into the [security findings register](../roadmap/acceptance-register.md#2l-round-two-findings-acceptance-scoped-to-source-review-only). **This is engineering issue intake, not an APPROVED owner policy, independent OPEN-01 cryptographic verdict, OPEN-15 hardware verdict or READY authorization.**
+
+- **Q1 / F-1:** A weaker, separately provisioned recovery route for a **Standard** entry is an owner-controlled alternative requiring explicit informed consent **before** provisioning; it is not automatically prohibited or approved. Preserve R1/S2/Option A, no implicit weak route and no silent `STRICT_NONE`. `OPEN-REC-CONSENT` remains **OPEN**.
+- **Q2 / P6 / V3RV:** Existing V02-B HMAC verification before AEAD and P6's narrow forgery rejection do **not** prove multi-key commitment or justify an unconditional `2^-256` bound. V3RV wire/context interoperability does **not** test vNext key derivation, AEAD authentication or commitment (no vNext seal/open). `OPEN-01` remains **BLOCKED**.
+- **Implementation/review follow-ups:** F-2/KDF and password bytes; F-3 scoped PRF salt; F-4 separate UP/UV assurance profiles; F-5 structural parity **closed only at that level**; F-6 authenticated vNext wire; F-7 verified hardware factor provenance; F-8 lifetime/zeroization audit; F-9 DEK-bound origin/username/title; W1 cross-slot ancestor/owner/nonce-per-key constraints, code entropy, historical rollback and versioning. See disposition table; all existing blocked gate states persist.
 
 ## D. Decision changes
 
