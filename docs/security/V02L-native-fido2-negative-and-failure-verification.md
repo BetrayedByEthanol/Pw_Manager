@@ -11,6 +11,20 @@
 
 See tools/hardware/fido2_v02l.py and tools/hardware/test_fido2_v02l.py. Existing V02-J functions perform the native operation. No VMK, VERS, DEK, Vaulty entry route or production authenticator is created.
 
+## libfido2 CBOR representation (Codex P1 correction)
+
+`fido2-assert -G` encodes its third output line as **base64 of a CBOR
+byte string**, not base64 of raw authenticator-data bytes. A standard
+37-byte WebAuthn authenticator-data payload is therefore represented as
+`58 25` followed by the 37 raw bytes. V02-L decodes **exactly one
+definite, minimal CBOR byte string**, rejects trailing/truncated/noncanonical
+wrappers, and checks the RP hash and UP/UV flag positions on the **decoded
+payload**. It continues to pass the **original CBOR-encoded base64 third
+line unchanged** to `fido2-assert -V` for cryptographic verification.
+See [synthetic genuine-CLI-format fixture](../../tools/hardware/fixtures/v02l_libfido2_cbor_authdata.txt)
+and the regression tests. The fixture has only synthetic RP/flags/counter,
+not a real signature or token output.
+
 ## Safety and evidence
 
 1. Explicit --hardware-test, non-root Linux interactive terminal, CI refusal, selected direct character-device /dev/hidrawN, clean Git source and exact operator TEST confirmation. No automatic device selection.
