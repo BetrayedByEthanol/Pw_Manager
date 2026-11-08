@@ -1,0 +1,27 @@
+{
+  "schema": "vaulty-v02k-redacted-evidence-v1",
+  "source_git_commit": "f65615e8317797a51f355c8f76ba4f29b982140a",
+  "review_only": true,
+  "status": "LOCAL_OBSERVATIONS_CAPTURED",
+  "local_self_report_only": true,
+  "primary": "OBSERVED",
+  "backup": "OBSERVED",
+  "full_i_p01_to_i_p09_matrix": "NOT_COMPLETE",
+  "matrix": {
+    "I-P01": "PARTIAL",
+    "I-P02": "PARTIAL",
+    "I-P03": "PARTIAL",
+    "I-P04": "PARTIAL",
+    "I-P05": "NOT_EXECUTED",
+    "I-P06": "PARTIAL",
+    "I-P07": "NOT_EXECUTED",
+    "I-P08": "NOT_EXECUTED",
+    "I-P09": "NOT_EXECUTED"
+  },
+  "webauthn_browser_tested": false,
+  "attestation_chain_trusted": false,
+  "entry_route_ready": false,
+  "open_15": "BLOCKED",
+  "open_01": "BLOCKED",
+  "release_gates": "G1-G3 BLOCKED"
+}
