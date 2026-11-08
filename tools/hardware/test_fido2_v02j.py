@@ -181,6 +181,49 @@ class IsolatedHardwareHarnessTests(unittest.TestCase):
             with self.assertRaises(harness.ProbeError):
                 harness._safe_path(dest)
 
+    def test_symlinked_ancestor_and_insecure_shared_directory_are_refused(self):
+        with tempfile.TemporaryDirectory(prefix="vaulty-v02j-path-") as root:
+            base = Path(root)
+            alias = base / "link"
+            alias.symlink_to(Path(__file__).resolve().parents[2], target_is_directory=True)
+            with self.assertRaisesRegex(harness.ProbeError, "outside the repository|symlink"):
+                harness._safe_path(alias / "fake-session.json")
+            bad = base / "shared"
+            bad.mkdir()
+            bad.chmod(0o777)
+            try:
+                with self.assertRaisesRegex(harness.ProbeError, "writable|mode 0700"):
+                    harness._safe_path(bad / "session.json")
+            finally:
+                bad.chmod(0o700)
+
+    def test_no_follow_descriptor_blocks_symlink_even_if_path_check_is_bypassed(self):
+        with tempfile.TemporaryDirectory(prefix="vaulty-v02j-nofollow-") as d:
+            original = Path(d) / "real.json"
+            harness._private_write(original, self.session, new=True)
+            alias = Path(d) / "swap.json"
+            alias.symlink_to(original)
+            with patch.object(harness, "_safe_path", side_effect=lambda p: p):
+                with self.assertRaisesRegex(harness.ProbeError, "cannot read"):
+                    harness._read_session(alias)
+
+    def test_failure_during_public_verifier_setup_wipes_received_prf(self):
+        secret = bytearray([0x5A]*32)
+        # Inject only the post-acquisition failure: verified results cannot
+        # escape or remain live when the local verification setup breaks.
+        real_private = harness._private_input
+        def side_effect(directory, name, value):
+            if name == "public.pem":
+                raise OSError("simulated temporary verifier failure")
+            return real_private(directory, name, value)
+        with patch.object(harness, "_tool", side_effect=lambda n: n), \\
+             patch.object(harness, "_run", return_value=b"synthetic-public-response"), \\
+             patch.object(harness, "_assertion_result", return_value=secret), \\
+             patch.object(harness, "_private_input", side_effect=side_effect):
+            with self.assertRaises(OSError):
+                harness._measure(self.session, "primary", "alpha", "/dev/hidraw1", "uv")
+        self.assertEqual(secret, bytearray(32))
+
     def test_register_requires_distinct_test_credential_and_uses_verify(self):
         src = self.session
         src["credentials"] = {}
