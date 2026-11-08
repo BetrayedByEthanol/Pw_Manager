@@ -279,6 +279,32 @@ V02-H can be merged as **internal review preparation only**, never as proof of v
 
 **V02-L-A/B status is candidate source and offline evidence only.** EV-023 pertains to the earlier V02-K hardware run, not V02-L. V02-L physical results must be submitted separately before they can be marked locally observed. WebAuthn PRF I-P05 and passkey implementation are out of scope.
 
+### V02-L operator feedback follow-up — TTY and safe failure classification
+
+**Codex P2 on session preflight — ACCEPTED/FIXED IN PR CANDIDATE:** the earlier `check-session`
+accepted the outer V02-J schema and two credential descriptors but did not
+validate the `vault_id`, entry/slot UUIDs and PRF context fields needed by
+`j._context()`. The amended offline preflight derives all four UV normal
+contexts (primary/backup × alpha/beta) and rejects missing or malformed
+fields, duplicate synthetic IDs/credentials, and malformed RP before reporting
+`session_valid=true`. The same check guards live verifier/wrong-device
+execution before operator prompts. A focused no-hardware regression creates
+malformed retained private sessions and verifies blocked exit/status;
+**this does not certify physical keys or runtime routes**.
+
+**Source correction candidate (not new hardware evidence):** local user execution on
+Pop!_OS reached `fido2-token -L` with both HID paths and returned
+an `absent-precheck.json` with `LOCAL_ABSENCE_PRECHECK_OBSERVED`.
+The user's offline suite had **one false negative** because the
+non-TTY test actually ran inside an interactive terminal; remaining 32
+tests passed. Generic blocked/cancelled reports did not identify whether
+`$SESSION` or a receipt filename was valid. Fix the TTY regression
+using explicit mocking, provide an offline `check-session`, print only
+fixed-class diagnostics, and preserve no-overwrite receipts. The local
+live verifier/wrong-device stages are **not accepted as tested** from
+these generic failures; I-P04/I-P06 remain PARTIAL, OPEN-15/01 and
+G1–G3 BLOCKED.
+
 ## 3. Security findings register
 
 | Finding | Severity if enabled | Finding evidence | Fix workstream | Status |

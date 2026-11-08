@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import base64
+import contextlib
+import io
 import json
 import os
 from pathlib import Path
@@ -230,8 +232,19 @@ class NativeNegativeHarnessTests(unittest.TestCase):
         with patch("os.geteuid", return_value=0):
             with self.assertRaisesRegex(j.ProbeError, "root"):
                 l._live_gate("/dev/hidraw999", require_device=True)
+        # Interactive operator terminals are supported; mock the missing
+        # terminal explicitly so this test behaves identically under CI and
+        # while the developer runs unittest from their real Pop!_OS console.
         with patch("os.geteuid", return_value=1000), patch.dict(os.environ,
-             {"CI": "", "GITHUB_ACTIONS": "", "FORGEJO_ACTIONS": ""}):
+             {"CI": "", "GITHUB_ACTIONS": "", "FORGEJO_ACTIONS": ""}), \
+             patch.object(l.sys, "stdin") as fake_stdin, \
+             patch.object(l.sys, "stdout") as fake_stdout:
+            fake_stdin.isatty.return_value = False
+            fake_stdout.isatty.return_value = True
+            with self.assertRaisesRegex(j.ProbeError, "console"):
+                l._live_gate("/dev/hidraw999", require_device=False)
+            fake_stdin.isatty.return_value = True
+            fake_stdout.isatty.return_value = False
             with self.assertRaisesRegex(j.ProbeError, "console"):
                 l._live_gate("/dev/hidraw999", require_device=False)
 
@@ -248,6 +261,140 @@ class NativeNegativeHarnessTests(unittest.TestCase):
             data = json.loads((Path(d)/"receipt.json").read_text())
             self.assertEqual(data["cases"]["missing_path_precheck"], "LOCAL_PRECHECK_REJECTED")
             self.assertFalse(data["entry_route_ready"])
+
+    def test_check_session_is_offline_and_only_prints_boolean_status(self):
+        buf = io.StringIO()
+        with patch.object(l, "_session", return_value=self.session), \
+             patch.object(j, "_run", side_effect=AssertionError("hardware access")), \
+             contextlib.redirect_stdout(buf):
+            code = l.main(["check-session", "--session", "/private/secret-session.json"])
+        self.assertEqual(code, 0)
+        report = json.loads(buf.getvalue())
+        self.assertTrue(report["session_valid"])
+        self.assertTrue(report["primary_test_credential_present"])
+        self.assertTrue(report["backup_test_credential_present"])
+        self.assertFalse(report["hardware_tests_executed"])
+        self.assertNotIn("secret-session", buf.getvalue())
+        self.assertNotIn("credential_id_b64", buf.getvalue())
+        self.assertNotIn("public_key_pem", buf.getvalue())
+
+    def test_check_session_requires_all_native_prf_contexts(self):
+        # Model the exact failure in the review: V02-J's outer session loader
+        # accepts a document without vault_id, yet live _context rejects it.
+        # Each variant is checked via a real private test-session file, without
+        # contacting hardware or printing its synthetic credential fields.
+        mutations = {
+            "missing_vault": lambda v: v.pop("vault_id"),
+            "bad_vault_uuid": lambda v: v.__setitem__("vault_id", "not-a-uuid"),
+            "missing_entry_id": lambda v: v["entries"]["alpha"].pop("id"),
+            "malformed_entry_id": lambda v: v["entries"]["beta"].__setitem__("id", 42),
+            "missing_primary_slot": lambda v: v["entries"]["alpha"]["slots"].pop("primary"),
+            "missing_backup_slot": lambda v: v["entries"]["beta"]["slots"].pop("backup"),
+            "malformed_slot_uuid": lambda v: v["entries"]["beta"]["slots"].__setitem__("backup", "bad"),
+            "bad_entry_shape": lambda v: v["entries"].__setitem__("alpha", "not-an-entry"),
+            "malformed_slot_map": lambda v: v["entries"]["beta"].__setitem__("slots", []),
+            "missing_rp": lambda v: v.pop("rp_id"),
+            "invalid_rp": lambda v: v.__setitem__("rp_id", "bad..localhost"),
+            "wrong_credential_rp": lambda v: v["credentials"]["backup"].__setitem__(
+                "rp_id", "wrong.localhost"),
+            "duplicate_credential_id": lambda v: v["credentials"]["backup"].__setitem__(
+                "credential_id_b64", v["credentials"]["primary"]["credential_id_b64"]),
+            "duplicate_test_public_key": lambda v: v["credentials"]["backup"].__setitem__(
+                "public_key_pem", v["credentials"]["primary"]["public_key_pem"]),
+            "duplicate_slot_uuid": lambda v: v["entries"]["beta"]["slots"].__setitem__(
+                "backup", v["entries"]["alpha"]["slots"]["backup"]),
+        }
+        with tempfile.TemporaryDirectory(prefix="vaulty-v02l-context-check-") as folder:
+            path = Path(folder) / "session.json"
+            for name, mutate in mutations.items():
+                with self.subTest(case=name):
+                    variant = j.copy.deepcopy(self.session)
+                    mutate(variant)
+                    j._private_write(path, variant, new=not path.exists())
+                    stdout = io.StringIO()
+                    stderr = io.StringIO()
+                    with patch.object(j, "_run", side_effect=AssertionError("device accessed")), \
+                         contextlib.redirect_stdout(stdout), \
+                         contextlib.redirect_stderr(stderr):
+                        status = l.main(["check-session", "--session", str(path)])
+                    self.assertEqual(status, 2)
+                    self.assertEqual(stdout.getvalue(), "")
+                    self.assertIn("SESSION_INVALID", stderr.getvalue())
+                    for forbidden in (str(path), "test-credential-", "BEGIN PUBLIC KEY", "vaulty-test.localhost"):
+                        self.assertNotIn(forbidden, stdout.getvalue() + stderr.getvalue())
+
+            # Restore a structurally complete retained session; both
+            # alpha/beta and primary/backup native UV contexts must work.
+            j._private_write(path, self.session)
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with patch.object(j, "_run", side_effect=AssertionError("device accessed")), \
+                 contextlib.redirect_stdout(stdout), \
+                 contextlib.redirect_stderr(stderr):
+                code = l.main(["check-session", "--session", str(path)])
+            self.assertEqual(code, 0)
+            self.assertTrue(json.loads(stdout.getvalue())["session_valid"])
+            self.assertEqual(stderr.getvalue(), "")
+
+    def test_live_verifier_rejects_malformed_prf_context_before_device_or_receipt(self):
+        malformed = j.copy.deepcopy(self.session)
+        del malformed["vault_id"]
+        with tempfile.TemporaryDirectory(prefix="vaulty-v02l-context-live-") as folder:
+            receipt = Path(folder) / "receipt.json"
+            args = l.parse(["verifier", "--session", str(Path(folder)/"session.json"),
+                            "--role", "primary", "--device", "/dev/hidraw7",
+                            "--receipt", str(receipt), "--hardware-test"])
+            with patch.object(l, "_live_gate"), patch.object(l, "_source_head", return_value="a"*40), \
+                 patch.object(l, "_session", return_value=malformed), \
+                 patch.object(l, "_confirm", side_effect=AssertionError("operator prompted")), \
+                 patch.object(j, "_run", side_effect=AssertionError("hardware accessed")):
+                with self.assertRaisesRegex(j.ProbeError, "invalid retained session PRF context"):
+                    l.run_live(args)
+            self.assertFalse(receipt.exists())
+
+    def test_operator_diagnostics_never_leak_exception_paths_or_secrets(self):
+        secret_path = "/home/test/private/run-secret/session.json"
+        for exc, code in (
+            (FileExistsError(secret_path), "RECEIPT_EXISTS"),
+            (PermissionError(secret_path), "PRIVATE_PATH_PERMISSIONS"),
+            (j.ProbeError("cannot read private test session"), "SESSION_INVALID"),
+            (j.ProbeError("clean Git checkout required for source-pinned evidence"), "GIT_NOT_CLEAN"),
+            (j.ProbeError("Linux interactive operator console required"), "TTY_REQUIRED"),
+            (j.ProbeError("FIDO2 tool reported failure (PIN/touch/device or invalid assertion)"),
+             "FIDO2_VERIFICATION_FAILED"),
+            (RuntimeError(secret_path), "UNCLASSIFIED_FAILURE"),
+        ):
+            with self.subTest(code=code):
+                message = l._safe_failure(exc)
+                self.assertIn(code, message)
+                self.assertNotIn(secret_path, message)
+                self.assertNotIn("PIN/touch/device", message)
+
+        output = io.StringIO()
+        with patch.object(l, "run_live", side_effect=FileExistsError(secret_path)), \
+             contextlib.redirect_stderr(output):
+            outcome = l.main(["verifier", "--session", secret_path,
+                              "--role", "primary", "--device", "/dev/hidraw7",
+                              "--receipt", secret_path, "--hardware-test"])
+        self.assertEqual(outcome, 2)
+        self.assertIn("RECEIPT_EXISTS", output.getvalue())
+        self.assertNotIn(secret_path, output.getvalue())
+
+    def test_existing_receipt_refusal_survives_even_with_interactive_terminal(self):
+        # Existing evidence must never be overwritten. The safe diagnostic
+        # distinguishes this from a FIDO2/authenticator failure.
+        with tempfile.TemporaryDirectory(prefix="vaulty-v02l-existing-") as folder:
+            receipt = Path(folder) / "taken.json"
+            receipt.write_text("operator-evidence-must-survive", encoding="utf-8")
+            receipt.chmod(0o600)  # Existing receipts must pass the private-mode gate.
+            args = l.parse(["unavailable", "--device", "/dev/hidraw999999",
+                            "--receipt", str(receipt), "--hardware-test"])
+            with patch.object(l, "_live_gate"), patch.object(l, "_source_head", return_value="a"*40), \
+                 patch.object(l, "_confirm"), patch.object(j, "_run",
+                 side_effect=AssertionError("hardware access")):
+                with self.assertRaises(FileExistsError) as caught:
+                    l.run_live(args)
+            self.assertIn("RECEIPT_EXISTS", l._safe_failure(caught.exception))
+            self.assertEqual(receipt.read_text(), "operator-evidence-must-survive")
 
     def test_clean_git_source_required_and_dirty_rejected(self):
         class P:

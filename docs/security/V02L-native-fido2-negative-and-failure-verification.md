@@ -34,6 +34,57 @@ not a real signature or token output.
 5. A previously valid assertion might pass a stateless signature verification if replayed unchanged. The harness only tests a *wrong/fresh challenge*; full runtime replay tracking, registry/revocation and no-fallback controls do not exist in V03/V06 yet. Hardware missing-UV/UP assertion, wrong PIN, retry exhaustion, PIN reset, malicious browser origin and physically forced disconnect are NOT exercised.
 6. EV-023 recorded two *operator-reported* YubiKey 5 NFC USB-A devices, firmware 5.7.4. This tool cannot independently establish device uniqueness, manufacturer attestation-chain trust, firmware or token-side UV behavior.
 
+## Operator troubleshooting and safe preflight (V02-L correction)
+
+The offline unit test for the TTY gate now **mocks an absent terminal** and
+does not depend on whether the developer runs unittest from an interactive
+Pop!_OS shell or headless CI. A normal terminal is *required* by live tests.
+
+The V02-L runner reports only **fixed error categories**, never raw exception
+strings, paths, keys, PIN input or libfido2 tool output. Categories include
+`SESSION_INVALID`, `TEST_CREDENTIAL_INVALID`, `GIT_NOT_CLEAN`,
+`TTY_REQUIRED`, `DEVICE_GATE`, `PRIVATE_PATH_PERMISSIONS`,
+`RECEIPT_EXISTS` and `FIDO2_VERIFICATION_FAILED`. No category by itself
+proves that a token rejected a particular factor; use the redacted receipt
+status to assess partial observations.
+
+Before any live test, explicitly select the existing private V02-K session.
+**Do not simply reuse the literal `run-REPLACE-ME` placeholder or an empty
+`$SESSION` value.** Run these local-only commands:
+
+~~~sh
+# List locally; DO NOT paste these private paths or session contents in chat.
+find "$HOME/.local/state/vaulty-v02k" -mindepth 2 -maxdepth 2 \
+  -type f -name session.json -print
+# Then manually point SESSION to the correct private run directory:
+SESSION="$HOME/.local/state/vaulty-v02k/run-ACTUAL-VALUE/session.json"
+test -n "$SESSION" && test -f "$SESSION" || {
+  echo "SESSION must point at the retained private V02-K session.json" >&2
+  exit 2
+}
+python3 -B -I tools/hardware/fido2_v02l.py check-session --session "$SESSION"
+git status --short
+~~~
+
+The `check-session` command is **offline**, validates both synthetic
+credential roles, the test RP, vault UUID, both entry UUIDs, all four role-specific
+slot UUIDs and derived native UV PRF contexts (alpha/beta × primary/backup),
+rejects malformed/duplicate IDs and credentials, and returns only a boolean/summary object. It never
+operates a token or discloses RP, credential ID, public key or file path.
+
+Every `--receipt` filename must be *new*. If
+`absent-precheck.json` already exists with
+`LOCAL_ABSENCE_PRECHECK_OBSERVED`, **preserve it**; do not rerun the
+same output path. Choose a different filename for any new attempt.
+
+For `wrong-device --role primary --control-role backup`, connect the
+**backup** device: the before/after controls must use the
+`backup` credential on that backup device. The primary credential is
+the intentionally unauthorized target. HID numbering changes across
+reconnections; always recheck `fido2-token -L`. Using the primary
+device for the backup controls will make the test fail or become
+inconclusive before meaningful negative evidence is recorded.
+
 ## Local runbook — operator's Linux computer only
 
 Use a clean clone of the V02-L PR branch. Keep the private V02-K session from the previous successful run. Do not share its path/content or any token serial/PIN. Replace all example HID paths after running fido2-token -L. A backup swapped into the same port may reuse the HID path.
