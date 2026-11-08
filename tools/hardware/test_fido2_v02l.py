@@ -16,6 +16,12 @@ import fido2_v02j as j
 import fido2_v02l as l
 
 
+# Literal third line of a synthetic fido2-assert -G response. It includes
+# the exact CBOR byte-string wrapper emitted by the real libfido2 CLI.
+FIXTURE = Path(__file__).parent / "fixtures" / "v02l_libfido2_cbor_authdata.txt"
+CLI_CBOR_AUTHDATA_B64 = FIXTURE.read_text(encoding="ascii").splitlines()[-1]
+
+
 class NativeNegativeHarnessTests(unittest.TestCase):
     def setUp(self):
         self.session = j.initialize("vaulty-test.localhost")
@@ -35,16 +41,44 @@ class NativeNegativeHarnessTests(unittest.TestCase):
         return (l.hashlib.sha256(self.session["rp_id"].encode()).digest()
                 + bytes((flags,)) + bytes(4))
 
+    def encoded_authdata(self, flags: int = 0x05) -> bytes:
+        raw = self.authdata(flags)
+        # 37 WebAuthn bytes encoded as CBOR byte string: 0x58 0x25 + payload.
+        return b"\x58\x25" + raw
+
     def test_rp_up_uv_signed_flag_requirements(self):
-        l._require_signed_flags(self.authdata(), self.session["rp_id"])
+        l._require_signed_flags(self.encoded_authdata(), self.session["rp_id"])
         for flags in (0, 1, 4, 2, 0x80):
             with self.subTest(flags=flags), self.assertRaisesRegex(
                     j.ProbeError, "missing UP or UV"):
-                l._require_signed_flags(self.authdata(flags), self.session["rp_id"])
+                l._require_signed_flags(self.encoded_authdata(flags), self.session["rp_id"])
         with self.assertRaisesRegex(j.ProbeError, "RP hash mismatch"):
-            l._require_signed_flags(self.authdata(), "different.localhost")
+            l._require_signed_flags(self.encoded_authdata(), "different.localhost")
         with self.assertRaisesRegex(j.ProbeError, "too short"):
-            l._require_signed_flags(b"\0" * 36, self.session["rp_id"])
+            l._require_signed_flags(b"\x58\x24" + b"\0" * 36, self.session["rp_id"])
+
+    def test_real_cli_format_fixture_and_canonical_cbor_rejection(self):
+        encoded = j._unb64(CLI_CBOR_AUTHDATA_B64)
+        self.assertEqual(len(encoded), 39)
+        self.assertEqual(encoded[:2], b"\x58\x25")
+        self.assertEqual(l._decode_cbor_authenticator_data(encoded), self.authdata())
+        l._require_signed_flags(encoded, self.session["rp_id"])
+
+        malformed = (
+            self.authdata(),                    # CBOR wrapper absent
+            b"\x5f\x58\x25" + self.authdata() + b"\xff",  # indefinite string
+            b"\x58",                           # truncated length
+            b"\x58\x25" + self.authdata()[:-1],    # short payload
+            b"\x58\x25" + self.authdata() + b"\0", # trailing object
+            b"\x59\x00\x25" + self.authdata(),    # noncanonical size
+            b"\x58\x17" + self.authdata()[:23],   # noncanonical size
+            b"\x5a\x00\x00\x00\x25" + self.authdata(), # unsupported size
+            b"\xa1\x00\x01",                 # CBOR map, not a bytestring
+        )
+        for payload in malformed:
+            with self.subTest(prefix=payload[:4].hex()):
+                with self.assertRaises(j.ProbeError):
+                    l._decode_cbor_authenticator_data(payload)
 
     def fake_verifier_run(self, args, *, data=None, timeout=90, interactive=False):
         if "-G" in args:
@@ -53,7 +87,7 @@ class NativeNegativeHarnessTests(unittest.TestCase):
             self.assertTrue(interactive)
             self.assertIn("-v", args)
             self.assertIn("uv=true", args)
-            self.expected = [lines[0], lines[1], j._b64(self.authdata()),
+            self.expected = [lines[0], lines[1], CLI_CBOR_AUTHDATA_B64,
                              j._b64(b"synthetic-signature")]
             return ("\n".join(self.expected + [j._b64(b"\x63" * 32)]) + "\n").encode()
         if "-V" in args:
@@ -63,6 +97,9 @@ class NativeNegativeHarnessTests(unittest.TestCase):
             self.assertFalse(interactive)
             self.assertNotIn(b"\x63" * 32, data)
             parsed = data.decode().splitlines()
+            # -V must get the exact *encoded* CBOR field returned by -G.
+            self.assertEqual(parsed[2], CLI_CBOR_AUTHDATA_B64 if
+                             parsed[2] == CLI_CBOR_AUTHDATA_B64 else parsed[2])
             is_wrong_public = "other-test-public.pem" in " ".join(args)
             if parsed == self.expected and not is_wrong_public:
                 return b""
