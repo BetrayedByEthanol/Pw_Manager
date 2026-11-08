@@ -278,6 +278,79 @@ class NativeNegativeHarnessTests(unittest.TestCase):
         self.assertNotIn("credential_id_b64", buf.getvalue())
         self.assertNotIn("public_key_pem", buf.getvalue())
 
+    def test_check_session_requires_all_native_prf_contexts(self):
+        # Model the exact failure in the review: V02-J's outer session loader
+        # accepts a document without vault_id, yet live _context rejects it.
+        # Each variant is checked via a real private test-session file, without
+        # contacting hardware or printing its synthetic credential fields.
+        mutations = {
+            "missing_vault": lambda v: v.pop("vault_id"),
+            "bad_vault_uuid": lambda v: v.__setitem__("vault_id", "not-a-uuid"),
+            "missing_entry_id": lambda v: v["entries"]["alpha"].pop("id"),
+            "malformed_entry_id": lambda v: v["entries"]["beta"].__setitem__("id", 42),
+            "missing_primary_slot": lambda v: v["entries"]["alpha"]["slots"].pop("primary"),
+            "missing_backup_slot": lambda v: v["entries"]["beta"]["slots"].pop("backup"),
+            "malformed_slot_uuid": lambda v: v["entries"]["beta"]["slots"].__setitem__("backup", "bad"),
+            "bad_entry_shape": lambda v: v["entries"].__setitem__("alpha", "not-an-entry"),
+            "malformed_slot_map": lambda v: v["entries"]["beta"].__setitem__("slots", []),
+            "missing_rp": lambda v: v.pop("rp_id"),
+            "invalid_rp": lambda v: v.__setitem__("rp_id", "bad..localhost"),
+            "wrong_credential_rp": lambda v: v["credentials"]["backup"].__setitem__(
+                "rp_id", "wrong.localhost"),
+            "duplicate_credential_id": lambda v: v["credentials"]["backup"].__setitem__(
+                "credential_id_b64", v["credentials"]["primary"]["credential_id_b64"]),
+            "duplicate_test_public_key": lambda v: v["credentials"]["backup"].__setitem__(
+                "public_key_pem", v["credentials"]["primary"]["public_key_pem"]),
+            "duplicate_slot_uuid": lambda v: v["entries"]["beta"]["slots"].__setitem__(
+                "backup", v["entries"]["alpha"]["slots"]["backup"]),
+        }
+        with tempfile.TemporaryDirectory(prefix="vaulty-v02l-context-check-") as folder:
+            path = Path(folder) / "session.json"
+            for name, mutate in mutations.items():
+                with self.subTest(case=name):
+                    variant = j.copy.deepcopy(self.session)
+                    mutate(variant)
+                    j._private_write(path, variant, new=not path.exists())
+                    stdout = io.StringIO()
+                    stderr = io.StringIO()
+                    with patch.object(j, "_run", side_effect=AssertionError("device accessed")), \
+                         contextlib.redirect_stdout(stdout), \
+                         contextlib.redirect_stderr(stderr):
+                        status = l.main(["check-session", "--session", str(path)])
+                    self.assertEqual(status, 2)
+                    self.assertEqual(stdout.getvalue(), "")
+                    self.assertIn("SESSION_INVALID", stderr.getvalue())
+                    for forbidden in (str(path), "test-credential-", "BEGIN PUBLIC KEY", "vaulty-test.localhost"):
+                        self.assertNotIn(forbidden, stdout.getvalue() + stderr.getvalue())
+
+            # Restore a structurally complete retained session; both
+            # alpha/beta and primary/backup native UV contexts must work.
+            j._private_write(path, self.session)
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with patch.object(j, "_run", side_effect=AssertionError("device accessed")), \
+                 contextlib.redirect_stdout(stdout), \
+                 contextlib.redirect_stderr(stderr):
+                code = l.main(["check-session", "--session", str(path)])
+            self.assertEqual(code, 0)
+            self.assertTrue(json.loads(stdout.getvalue())["session_valid"])
+            self.assertEqual(stderr.getvalue(), "")
+
+    def test_live_verifier_rejects_malformed_prf_context_before_device_or_receipt(self):
+        malformed = j.copy.deepcopy(self.session)
+        del malformed["vault_id"]
+        with tempfile.TemporaryDirectory(prefix="vaulty-v02l-context-live-") as folder:
+            receipt = Path(folder) / "receipt.json"
+            args = l.parse(["verifier", "--session", str(Path(folder)/"session.json"),
+                            "--role", "primary", "--device", "/dev/hidraw7",
+                            "--receipt", str(receipt), "--hardware-test"])
+            with patch.object(l, "_live_gate"), patch.object(l, "_source_head", return_value="a"*40), \
+                 patch.object(l, "_session", return_value=malformed), \
+                 patch.object(l, "_confirm", side_effect=AssertionError("operator prompted")), \
+                 patch.object(j, "_run", side_effect=AssertionError("hardware accessed")):
+                with self.assertRaisesRegex(j.ProbeError, "invalid retained session PRF context"):
+                    l.run_live(args)
+            self.assertFalse(receipt.exists())
+
     def test_operator_diagnostics_never_leak_exception_paths_or_secrets(self):
         secret_path = "/home/test/private/run-secret/session.json"
         for exc, code in (
