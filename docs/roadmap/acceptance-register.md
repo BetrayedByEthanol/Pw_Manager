@@ -212,6 +212,28 @@ V02-H can be merged as **internal review preparation only**, never as proof of v
 | EV-024 | [Merged V02-L-A/B PR #22](https://github.com/BetrayedByEthanol/Pw_Manager/pull/22); [merged V02-L diagnostics and PRF context follow-up #23](https://github.com/BetrayedByEthanol/Pw_Manager/pull/23); [runbook](../security/V02L-native-fido2-negative-and-failure-verification.md); [lab code](../../tools/hardware/fido2_v02l.py) | **SOURCE MERGED**, including libfido2 CBOR framing correction, no-secret error reporting, full offline native PRF context checks, and negative verifier/failure harness. Local operator execution is recorded **separately** in EV-025. | No production vault route or device manufacturer attestation; independent OPEN-15/01, V03/V06 runtime; G1–G3 BLOCKED. |
 | EV-025 | [V02-L redacted operator evidence intake](../security/V02L-local-hardware-negative-evidence-received-2026-11-09.md); [primary](../security/evidence/v02l-primary-verifier-local-2026-11-09.json); [backup](../security/evidence/v02l-backup-verifier-local-2026-11-09.json); [wrong-device](../security/evidence/v02l-wrong-device-local-2026-11-09.json) | **RECEIVED 2026-11-09 (local self-report):** three receipts source-pinned to merged `edd3256a`. Each physical-role verifier reports `positive_signed_up_uv=OBSERVED` and five corrupted-input negatives `LOCAL_VERIFIER_REJECTED`. Wrong-device reports `control_before=OBSERVED`, target credential `LOCAL_DEVICE_REJECTION_UNCLASSIFIED`, `control_after=OBSERVED`. Earlier invalid-credential/INCOMPLETE attempts are not counted as accepted negatives. | Not independent token/firmware/device-uniqueness proof, not a classified cause of cross-device rejection, not a signed-UV-absent test, not daemon replay/revocation/fallback, not browser parity or production key slot; I-P03/04/06 **PARTIAL**, OPEN-15/01 and G1–G3 BLOCKED. |
 
+## 2q. V03 session state and authenticator adapter foundation (PR #25 candidate)
+
+**Source stage only — not a release gate or provider implementation.** The code
+in [V03 foundation](../architecture/V03-session-and-authenticator-foundation.md)
+can inspect bounded unauthenticated V02 headers and reports `authenticated=false`.
+A real `LOADED` transition does not exist outside synthetic unit tests; the
+default executable is unchanged and still refuses vault use. No operation
+can return an entry secret, a verified hardware proof or an approved write.
+
+| ID | Foundation acceptance | Candidate evidence | Still blocked |
+| --- | --- | --- | --- |
+| A03-01 | CLOSED/OPEN/LOADED/LOCKED transitions refuse untrusted loads | V02 public-header inspection in normal builds; synthetic authenticated open/LOADED in test-only code; close/lock drop owned metadata/secret shares | Real VMK/bootstrap authorization, trusted head/rollback reconciliation; OPEN-01/15 |
+| A03-02 | VERS masked in LOADED; no VMK/DEK/PRF retained | Two Zeroizing XOR shares, fresh CSPRNG remask before each transient reconstruction (including panic), test-only Zeroizing virtual seed; no persisted key | No full-process-memory guarantee; OS mlock/core dump, transient crypto and real factor boundaries still need review |
+| A03-03 | S1/S2 physical-vs-virtual routing and per-read freshness | Four normal entry modes + ISOLATED normal physical requirement; read intents have new random IDs, `authorized=false`; virtual adapter never claimed second factor; all completions refuse | Trusted FIDO2/authenticator adapters, fresh signature/PRF proof, entry DEK unwrap, recovery/ancestor paths and no fallback runtime |
+| A03-04 | R5 idle/absolute expiry and fail-close on OS events/listener failure | Independent monotonic checks, explicit lock on suspend/hibernate/screen-lock/disconnect, no resume auto-unlock; simulated listener exists **only in tests** | Real Linux/Windows event subscriptions, independent timer, fail-safe listener lifecycle and OS memory policy |
+| A03-05 | R6 bounded write plan cannot retain VMK or commit | Random transaction ID, base vault/commit/generation, 1–300 s TTL and 1–64 cap; no stage/approve/commit APIs | Trusted owner summary/digest and fresh VMK at commit, authenticated conflict checks, atomic writer |
+| A03-06 | CI, evidence and releases remain bounded | Root and isolated-verifier compilation, synthetic Rust tests, source inventory including new files, no new runtime unlock | Qualified OPEN-01/15 reviews; G1–G3 BLOCKED, no READY route |
+
+**Never interpret V03's local READ intent or test-only LOADED as a verified
+authenticator, authorized credential release or runtime production availability.**
+EV-023/EV-025 remain operator local self-reports, not approvals.
+
 ## 2l. Round-two findings acceptance, scoped to source review only
 
 [**Full F-1–F-9 and W1 disposition**](../security/V02H-round-two-review-disposition.md) is part of the security findings register. It records **ACCEPTED FOR FOLLOW-UP**, not a cryptographic, device or owner decision. **Q1:** weaker Standard-entry recovery is structurally permitted but requires a separate explicit owner decision/consent; code-only VMK recovery alone does not unlock all entries, and ISOLATED remains hardware-mandatory. **Q2:** neither V02-B HMAC/P6 nor V3RV frozen wire/context vectors prove multi-key commitment, partitioning-oracle security or authenticated vNext operations. OPEN-01/15 and G1–G3 remain **BLOCKED**.
