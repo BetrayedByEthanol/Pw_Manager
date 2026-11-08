@@ -321,11 +321,51 @@ def _safe_failure(exc: BaseException) -> str:
     return "UNCLASSIFIED_FAILURE: inspect private session/permissions and try a new receipt filename"
 
 
+def _validate_session_context(session: dict) -> None:
+    """Validate every native PRF context used by both V02-L live modes.
+
+    V02-J's session loader checks only the outer shape. A missing vault UUID,
+    malformed entry or absent role-specific slot otherwise passes preflight
+    but fails when _measure() eventually derives its PRF salt. No hardware or
+    private-session contents are printed by this validation.
+    """
+    try:
+        rp = session["rp_id"]
+        if (not isinstance(rp, str) or not j.RP.fullmatch(rp)
+                or len(rp) > 253 or ".." in rp or "." not in rp):
+            raise ValueError("invalid RP")
+        entries = session["entries"]
+        if not isinstance(entries, dict) or set(entries) != set(j.ENTRIES):
+            raise ValueError("invalid entry mapping")
+        credentials = [_credential(session, role) for role in j.ROLES]
+        if (len({cred["credential_id_b64"] for cred in credentials}) != len(j.ROLES)
+                or len({cred["public_key_pem"] for cred in credentials}) != len(j.ROLES)):
+            raise ValueError("duplicate test credential across roles")
+        ids = [session["vault_id"]]
+        for entry in j.ENTRIES:
+            item = entries[entry]
+            if (not isinstance(item, dict) or not isinstance(item.get("slots"), dict)
+                    or set(item["slots"]) != set(j.ROLES)):
+                raise ValueError("missing entry slots")
+            ids.append(item["id"])
+            for role in j.ROLES:
+                ids.append(item["slots"][role])
+                raw, salt = j._context(session, role, entry, purpose=1, assurance=1)
+                if not raw or len(salt) != 32:
+                    raise ValueError("invalid native PRF salt")
+        if len(set(ids)) != len(ids):
+            raise ValueError("duplicate synthetic UUIDs")
+    except (j.ProbeError, KeyError, TypeError, ValueError, AttributeError, UnicodeError):
+        raise j.ProbeError("invalid retained session PRF context") from None
+
+
 def check_session(path: str) -> int:
     """No token access. Print statuses only, never session paths or fields."""
-    session = _session(path)
-    for role in j.ROLES:
-        _credential(session, role)
+    try:
+        session = _session(path)
+        _validate_session_context(session)
+    except (j.ProbeError, KeyError, TypeError, ValueError, AttributeError, UnicodeError):
+        raise j.ProbeError("invalid retained session PRF context") from None
     print(json.dumps({
         "schema": "vaulty-v02l-session-precheck-v1",
         "review_only": True,
@@ -345,7 +385,7 @@ def run_live(args: argparse.Namespace) -> int:
     source = _source_head()
     session = None if args.mode == "unavailable" else _session(args.session)
     if session is not None:
-        _credential(session, args.role)
+        _validate_session_context(session)
     _confirm(args.mode)
     receipt_path = j._safe_path(args.receipt)
     report = _receipt(source, args.mode)
