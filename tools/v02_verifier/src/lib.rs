@@ -2,3 +2,5 @@
 #![forbid(unsafe_code)]
 #[path = "../../../src/v02/mod.rs"]
 pub mod v02;
+#[path = "../../../src/v03.rs"]
+pub mod v03;
