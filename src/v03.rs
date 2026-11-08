@@ -338,7 +338,7 @@ impl Session {
         let operation_id = Uuid::new_v4();
         loaded.pending = Some(Pending::Read {
             id: operation_id,
-            expires: now.checked_add(Duration::from_secs(30))
+            expires: now.checked_add(Duration::from_secs(15))
                 .ok_or(SessionError::InvalidLimits)?,
         });
         loaded.last_activity = now;
