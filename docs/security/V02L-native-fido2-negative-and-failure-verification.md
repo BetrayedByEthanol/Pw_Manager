@@ -67,7 +67,9 @@ git status --short
 ~~~
 
 The `check-session` command is **offline**, validates both synthetic
-credential roles and returns only a boolean/summary object. It never
+credential roles, the test RP, vault UUID, both entry UUIDs, all four role-specific
+slot UUIDs and derived native UV PRF contexts (alpha/beta × primary/backup),
+rejects malformed/duplicate IDs and credentials, and returns only a boolean/summary object. It never
 operates a token or discloses RP, credential ID, public key or file path.
 
 Every `--receipt` filename must be *new*. If
