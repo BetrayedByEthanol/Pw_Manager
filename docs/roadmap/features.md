@@ -22,7 +22,7 @@
 | **FR-ENT-06** | Remove entry, indexes, slots + tombstones | V05 | Planned |
 | **FR-ENT-07** | Verify default entry via masked VERS + selected provider; no VMK read | V03/V05 | Planned |
 | **FR-AUTH-01** | Password + virtual vs physical FIDO2 normal modes; weakest-route display | V03 | Planned |
-| **FR-AUTH-02** | FIDO2 enrollment / use / verification / revocation | V02-I/V02-J/V02-K/V03/V06 | [V02-K Rust CLI](../security/V02K-physical-fido2-verification-and-evidence.md) guides owner through real test-only primary and backup key registration/native signed assertions after cloning; emits only redacted self-reported results. **Not Vaulty runtime enrollment; no tests run on physical hardware here.** OPEN-15 blocked |
+| **FR-AUTH-02** | FIDO2 enrollment / use / verification / revocation | V02-I/V02-J/V02-K/V02-L-A/B/V03/V06 | [V02-K evidence EV-023](../security/V02K-local-hardware-evidence-received-2026-11-08.md) records *local self-reported* primary+backup test observations. [V02-L-A/B candidate](../security/V02L-native-fido2-negative-and-failure-verification.md) adds test-only native verifier negatives and safe failure probes (not executed on hardware in CI/PR). **No runtime trusted enrollment/revocation or valid entry-route READY; OPEN-15 BLOCKED.** |
 | **FR-AUTH-03** | Master password change by reviewed slot rewrap | V04/V06 | Fail-closed stub |
 | **FR-AUTH-04** | Bounded retry UX (not offline brute-force protection) | V03/V07A | Planned |
 | **FR-DEV-01** | Distinct trusted authenticator and client inventory | V06/V07 | Planned |
