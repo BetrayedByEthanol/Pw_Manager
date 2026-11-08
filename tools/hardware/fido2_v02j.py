@@ -21,6 +21,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import secrets
 import shutil
 import subprocess
@@ -47,16 +48,44 @@ class ProbeError(ValueError):
 
 
 def _safe_path(path: str | Path) -> Path:
+    # Refuse any symlink in *all* ancestors, not just the immediate parent,
+    # and reject lexical and resolved repository containment. This function
+    # protects public-but-linkable synthetic credential metadata, not secrets.
     out = Path(path).expanduser().absolute()
     repository = Path(__file__).resolve().parents[2]
-    if out == repository or repository in out.parents:
-        raise ProbeError("session and evidence must live outside the repository")
+    try:
+        resolved = out.resolve(strict=False)
+    except (OSError, RuntimeError):
+        raise ProbeError("cannot safely resolve session/evidence path") from None
+    for candidate in (out, resolved):
+        if candidate == repository or repository in candidate.parents:
+            raise ProbeError("session and evidence must live outside the repository")
     if out.is_symlink():
         raise ProbeError("refusing symlink session/evidence")
-    if out.exists() and (not out.is_file() or (out.stat().st_mode & 0o077)):
-        raise ProbeError("existing file must be regular and private (mode 0600)")
-    if not out.parent.is_dir() or out.parent.is_symlink():
-        raise ProbeError("parent directory must exist and not be a symlink")
+    parent = out.parent
+    if not parent.is_dir():
+        raise ProbeError("private session parent directory must exist")
+    for ancestor in (parent, *parent.parents):
+        if ancestor.is_symlink():
+            raise ProbeError("symlinked directory ancestors are forbidden")
+        try:
+            info = ancestor.stat(follow_symlinks=False)
+        except OSError:
+            raise ProbeError("invalid parent directory") from None
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid not in (0, os.getuid()):
+            raise ProbeError("untrusted parent directory")
+        # /tmp may be root-owned and sticky. Other group/world-writable
+        # ancestors are unsafe even when the final path is private.
+        if info.st_mode & 0o022:
+            if not (info.st_uid == 0 and info.st_mode & stat.S_ISVTX):
+                raise ProbeError("writable ancestor without trusted sticky root owner")
+    info = parent.stat(follow_symlinks=False)
+    if info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise ProbeError("immediate session parent must be owned by user and mode 0700")
+    if out.exists():
+        info = out.stat(follow_symlinks=False)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+            raise ProbeError("existing file must be user-owned regular mode 0600")
     return out
 
 
@@ -84,20 +113,28 @@ def _private_write(path: Path, data: dict, *, new: bool = False) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(tmp, path)
-        os.chmod(path, 0o600)
     finally:
         Path(tmp).unlink(missing_ok=True)
 
 
 def _read_session(path: Path) -> dict:
-    _safe_path(path)
+    path = _safe_path(path)
+    # An attacker cannot replace the final file with a symlink between a
+    # path check and a read: open the descriptor O_NOFOLLOW and fstat it.
     try:
-        if path.stat().st_size > 16384:
-            raise ProbeError("oversized test session")
-        s = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        with os.fdopen(fd, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                    or info.st_mode & 0o077 or info.st_size > 16384):
+                raise ProbeError("unsafe or oversized test session")
+            raw = stream.read(16385)
+            if len(raw) > 16384:
+                raise ProbeError("oversized test session")
+        s = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
         raise ProbeError("cannot read private test session") from None
-    if s.get("schema") != SCHEMA or s.get("review_only") is not True:
+    if not isinstance(s, dict) or s.get("schema") != SCHEMA or s.get("review_only") is not True:
         raise ProbeError("wrong/malformed synthetic test session")
     if set(s.get("entries", {})) != set(ENTRIES) or not isinstance(s.get("credentials"), dict):
         raise ProbeError("invalid session shape")
@@ -289,24 +326,30 @@ def _measure(session: dict, role: str, entry: str, device: str,
         flags += ["-v", "-t", "uv=true"]
     else:
         flags += ["-t", "uv=false", "-t", "pin=false"]
-    with tempfile.TemporaryDirectory(prefix="vaulty-v02j-public-") as directory:
-        request_path = _private_input(directory, "assertion-request.txt", request)
-        generated = _run([_tool("fido2-assert"), "-G", *flags,
-                          "-i", str(request_path), device], interactive=True)
-        secret = _assertion_result(generated, challenge=challenge, rp_id=session["rp_id"])
-        try:
+    secret: bytearray | None = None
+    try:
+        with tempfile.TemporaryDirectory(prefix="vaulty-v02j-public-") as directory:
+            request_path = _private_input(directory, "assertion-request.txt", request)
+            generated = _run([_tool("fido2-assert"), "-G", *flags,
+                              "-i", str(request_path), device], interactive=True)
+            secret = _assertion_result(generated, challenge=challenge,
+                                       rp_id=session["rp_id"])
             key_path = _private_input(directory, "public.pem",
                                       cred["public_key_pem"].encode("ascii"))
             fields = _lines(generated, 5)
-            verify = ("\n".join(fields[:4]) + "\n").encode("ascii")
+            verify = ("\\n".join(fields[:4]) + "\\n").encode("ascii")
             opts = ["-V", "-h", "-p"] + (["-v"] if assurance == "uv" else [])
             _run([_tool("fido2-assert"), *opts, str(key_path), "es256"],
                  data=verify)
-        except BaseException:
+        # Transfer ownership of the mutable value to probe() only after the
+        # verifier returned success AND all temporary-file cleanup finished.
+        result = secret
+        secret = None
+        return result
+    except BaseException:
+        if secret is not None:
             wipe(secret)
-            raise
-    return secret
-
+        raise
 
 def wipe(buffer: bytearray) -> None:
     for i in range(len(buffer)):
