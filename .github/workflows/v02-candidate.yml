@@ -12,6 +12,8 @@ on:
       - 'docs/security/V02H-adversarial-conformance-and-review-submission.md'
       - 'docs/security/V02H-round-two-review-disposition.md'
       - 'docs/security/V02I-fido2-prf-isolation-and-hardware-assurance.md'
+      - 'docs/security/V02J-isolated-fido2-hardware-verification.md'
+      - 'tools/hardware/**'
       - 'docs/roadmap/acceptance-register.md'
       - 'docs/specification/v0.4.5.md'
       - 'docs/decisions/register.md'
@@ -29,6 +31,8 @@ on:
       - 'docs/security/V02H-adversarial-conformance-and-review-submission.md'
       - 'docs/security/V02H-round-two-review-disposition.md'
       - 'docs/security/V02I-fido2-prf-isolation-and-hardware-assurance.md'
+      - 'docs/security/V02J-isolated-fido2-hardware-verification.md'
+      - 'tools/hardware/**'
       - 'docs/roadmap/acceptance-register.md'
       - 'docs/specification/v0.4.5.md'
       - 'docs/decisions/register.md'
@@ -66,6 +70,8 @@ jobs:
           python3 -m unittest discover -s tools/v02_verifier -p 'test_v02_round2_register.py' -v
           python3 tools/v02_verifier/reference_v02i_prf.py --verify
           python3 -m unittest discover -s tools/v02_verifier -p 'test_v02i_policy_contract.py' -v
+          python3 -m unittest discover -s tools/hardware -p 'test_*.py' -v
+          python3 tools/hardware/fido2_v02j.py preflight
           python3 tools/v02_verifier/review_bundle.py --write /tmp/v02d-review-manifest.json
           python3 tools/v02_verifier/review_bundle.py --check /tmp/v02d-review-manifest.json
           sha256sum /tmp/v02d-review-manifest.json
