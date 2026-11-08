@@ -91,7 +91,7 @@ impl LifecycleGuard {
             LogindSafetyEvent::PrepareForSleep(_) =>
                 session.on_lifecycle(LifecycleEvent::Suspend),
             LogindSafetyEvent::PrepareForShutdown(true) =>
-                session.on_lifecycle(LifecycleEvent::Hibernate),
+                session.on_lifecycle(LifecycleEvent::Shutdown),
             LogindSafetyEvent::PrepareForShutdown(false)
             | LogindSafetyEvent::SessionUnlocked
             | LogindSafetyEvent::SessionRemoved
@@ -172,9 +172,7 @@ impl AuthenticatorBoundary {
         &self, session: &mut Session, intent: &ReadIntent,
         adapter: &A, credential_id: Option<Uuid>,
     ) -> Result<(), BoundaryDeny> {
-        if session.require_pending_read(
-            intent.operation_id, intent.entry_id, intent.provider,
-        ).is_err() {
+        if session.require_pending_read(intent).is_err() {
             return Err(BoundaryDeny::StaleOperation);
         }
         let selected = adapter.requirement();
