@@ -312,12 +312,12 @@ def _safe_failure(exc: BaseException) -> str:
             return "ROOT_FORBIDDEN: run as your normal login, not sudo"
         if "console" in reason or "terminal" in reason:
             return "TTY_REQUIRED: use an interactive local terminal"
+        if "FIDO2 tool" in reason or "signed" in reason or "RP" in reason or "authenticator" in reason:
+            return "FIDO2_VERIFICATION_FAILED: no trustworthy negative result recorded"
         if "selected device" in reason or "device" in reason or "/dev/hidraw" in reason:
             return "DEVICE_GATE: recheck fido2-token -L and selected direct HID device"
         if "operator declined" in reason:
             return "OPERATOR_DECLINED: enter TEST only when ready"
-        if "FIDO2 tool" in reason or "signed" in reason or "RP" in reason or "authenticator" in reason:
-            return "FIDO2_VERIFICATION_FAILED: no trustworthy negative result recorded"
     return "UNCLASSIFIED_FAILURE: inspect private session/permissions and try a new receipt filename"
 
 
