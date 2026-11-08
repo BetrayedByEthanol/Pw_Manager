@@ -22,7 +22,7 @@
 | **FR-ENT-06** | Remove entry, indexes, slots + tombstones | V05 | Planned |
 | **FR-ENT-07** | Verify default entry via masked VERS + selected provider; no VMK read | V03/V05 | Planned |
 | **FR-AUTH-01** | Password + virtual vs physical FIDO2 normal modes; weakest-route display | V03 | Planned |
-| **FR-AUTH-02** | FIDO2 enrollment / use / verification / revocation | V02-I/V02-J/V03/V06 | [V02-J](../security/V02J-isolated-fido2-hardware-verification.md) provides an explicit Linux lab-only real-token registration/signed assertion tool and mocked CI tests, with **no local physical execution recorded, no trusted Vaulty factor/runtime credential or OPEN-15 approval**. V02-I salt/UV choices remain proposed |
+| **FR-AUTH-02** | FIDO2 enrollment / use / verification / revocation | V02-I/V02-J/V02-K/V03/V06 | [V02-K Rust CLI](../security/V02K-physical-fido2-verification-and-evidence.md) guides owner through real test-only primary and backup key registration/native signed assertions after cloning; emits only redacted self-reported results. **Not Vaulty runtime enrollment; no tests run on physical hardware here.** OPEN-15 blocked |
 | **FR-AUTH-03** | Master password change by reviewed slot rewrap | V04/V06 | Fail-closed stub |
 | **FR-AUTH-04** | Bounded retry UX (not offline brute-force protection) | V03/V07A | Planned |
 | **FR-DEV-01** | Distinct trusted authenticator and client inventory | V06/V07 | Planned |
@@ -41,7 +41,7 @@
 | **FR-IPC-04** | Save/register through relay and durable receipt | V08B/V08C | Native mock returns false success |
 | **FR-STO-01** | Atomic authenticated file writes + previous generation + ancestry | V02 | V02 candidate writer/ancestry merged in PR #8; race-free storage, last-seen-head and production durability not done |
 | **FR-REC-01** | Provisioned VMK/VERS recovery; code-only vault recovery restricted to password-only mode | V02-F/V04 | V02-F [assurance and code-scope proposal](../security/V02F-recovery-assurance-and-cryptographic-policy.md) distinguishes VMK, original virtual seed, VERS and entry DEKs; R1/Option A remain approved and **not implemented** |
-| **FR-REC-02** | Lost hardware recovery and code-dependent new-device slots | V02-F/V02-I/V02-J/V04/V06 | [V02-J lab harness](../security/V02J-isolated-fido2-hardware-verification.md) can register *test-only* primary/backup credentials independently; **no DEK per-entry backup slot or recovery/replacement works in production**. Absent backup PENDING, Option A and OPEN-15 remain gated |
+| **FR-REC-02** | Lost hardware recovery and code-dependent new-device slots | V02-F/V02-I/V02-J/V02-K/V04/V06 | V02-K compares *test-only* primary and backup hardware observations, but **does not rewrap a DEK or make a backup key READY**. Option A and OPEN-15 still unimplemented in the production vault. |
 | **FR-REC-03** | Backup authenticator and verified rewrap coverage | V06 | Planned |
 | **FR-MIG-01** | N-01: verified legacy format migration (P0) | V04M-1 | Planned |
 | **FR-XFER-01** | N-02: vault-to-vault copy/move (P1) | V04M-2 | Planned |
