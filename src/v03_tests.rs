@@ -104,7 +104,7 @@ fn all_four_entry_modes_choose_only_their_explicit_provider() {
         assert_eq!(intent.first, first);
         assert_eq!(intent.provider, provider);
         assert_eq!(intent.tier, tier);
-        assert!(!intent.authorized);
+        assert!(!intent.is_authorized());
         assert_eq!(session.refuse_unimplemented(intent.operation_id),
             Err(SessionError::UnsupportedAuthorization));
         assert_eq!(session.phase(), Phase::Loaded);
@@ -212,7 +212,7 @@ fn write_intent_is_bounded_by_ttl_cap_and_authenticated_base_but_never_commits()
     assert_eq!(session.begin_write_at(Duration::from_secs(5), 65, started),
         Err(SessionError::InvalidLimits));
     let intent = session.begin_write_at(Duration::from_secs(5), 20, started).unwrap();
-    assert!(!intent.authorized);
+    assert!(!intent.is_authorized());
     assert_eq!(intent.base_generation, 1);
     assert!(!intent.base_vault_id.is_nil());
     assert!(!intent.base_commit_id.is_nil());
