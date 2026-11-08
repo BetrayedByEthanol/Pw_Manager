@@ -28,7 +28,7 @@ class RoundTwoDispositionTests(unittest.TestCase):
         # duplicate F-2 must fail instead of being ignored by substring tests.
         block = self.disposition.split("## Accepted F-1–F-9 dispositions", 1)[1]
         block = block.split("## Additional W1/probe observations", 1)[0]
-        source_ids = re.findall(r"^\\| \\*\\*(F-\\d+) —", block, flags=re.MULTILINE)
+        source_ids = re.findall(r"^\| \*\*(F-\d+) —", block, flags=re.MULTILINE)
         expected_sources = [f"F-{n}" for n in range(1, 10)]
         self.assertEqual(len(source_ids), len(set(source_ids)), "duplicate finding in source")
         self.assertEqual(set(source_ids), set(expected_sources),
@@ -38,7 +38,7 @@ class RoundTwoDispositionTests(unittest.TestCase):
         block = block.split("## 3. Security findings register", 1)[0]
         rows = [tuple(cell.strip() for cell in line.strip("|").split("|"))
                 for line in block.splitlines()
-                if re.match(r"^\\| (?:F-\\d+|W1) /", line)]
+                if re.match(r"^\| (?:F-\d+|W1) /", line)]
         self.assertTrue(all(len(row) == 3 for row in rows),
                         "round-two table has malformed fields")
         actual_ids = [row[0] for row in rows]
@@ -71,7 +71,7 @@ class RoundTwoDispositionTests(unittest.TestCase):
         block = block.split("## 4. Verification gaps", 1)[0]
         rows = [tuple(cell.strip() for cell in line.strip("|").split("|"))
                 for line in block.splitlines()
-                if re.match(r"^\\| SEC-\\d+ \\|", line)]
+                if re.match(r"^\| SEC-\d+ \|", line)]
         ids = [row[0] for row in rows]
         self.assertEqual(len(ids), len(set(ids)), "duplicate SEC identifier")
         self.assertTrue(all(len(row) == 5 for row in rows),
