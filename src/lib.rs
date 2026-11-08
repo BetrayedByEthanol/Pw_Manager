@@ -3,3 +3,5 @@
 //! OPEN-01/OPEN-15 independent reviews and canonical format acceptance pending.
 #![forbid(unsafe_code)]
 pub mod v02;
+// Review-gated model; no production unlock/authenticator adapters activated.
+pub mod v03;
