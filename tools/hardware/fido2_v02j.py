@@ -51,7 +51,7 @@ def _safe_path(path: str | Path) -> Path:
     repository = Path(__file__).resolve().parents[2]
     if out == repository or repository in out.parents:
         raise ProbeError("session and evidence must live outside the repository")
-    if out.exists() and out.is_symlink():
+    if out.is_symlink():
         raise ProbeError("refusing symlink session/evidence")
     if out.exists() and (not out.is_file() or (out.stat().st_mode & 0o077)):
         raise ProbeError("existing file must be regular and private (mode 0600)")
@@ -301,6 +301,8 @@ def probe(session: dict, role: str, entry: str, device: str,
     """Two independent signed assertions with the same UV salt are required.
     A third compares a different entry. Never persist/output PRF values.
     """
+    if compare_entry is not None and (compare_entry == entry or compare_entry not in ENTRIES):
+        raise ProbeError("comparison entry must be a different synthetic entry")
     values: list[bytearray] = []
     try:
         values.append(_measure(session, role, entry, device, assurance))
@@ -308,8 +310,6 @@ def probe(session: dict, role: str, entry: str, device: str,
         same = hmac.compare_digest(values[0], values[1])
         different = None
         if compare_entry is not None:
-            if compare_entry == entry:
-                raise ProbeError("comparison entry must differ")
             values.append(_measure(session, role, compare_entry, device, assurance))
             different = not hmac.compare_digest(values[0], values[2])
         return {
