@@ -216,9 +216,9 @@ class IsolatedHardwareHarnessTests(unittest.TestCase):
             if name == "public.pem":
                 raise OSError("simulated temporary verifier failure")
             return real_private(directory, name, value)
-        with patch.object(harness, "_tool", side_effect=lambda n: n), \\
-             patch.object(harness, "_run", return_value=b"synthetic-public-response"), \\
-             patch.object(harness, "_assertion_result", return_value=secret), \\
+        with patch.object(harness, "_tool", side_effect=lambda n: n), \
+             patch.object(harness, "_run", return_value=b"synthetic-public-response"), \
+             patch.object(harness, "_assertion_result", return_value=secret), \
              patch.object(harness, "_private_input", side_effect=side_effect):
             with self.assertRaises(OSError):
                 harness._measure(self.session, "primary", "alpha", "/dev/hidraw1", "uv")
