@@ -10,6 +10,8 @@ on:
       - 'docs/security/V02F-recovery-assurance-and-cryptographic-policy.md'
       - 'docs/architecture/v02g-vnext-cryptographic-protocol-review.md'
       - 'docs/security/V02H-adversarial-conformance-and-review-submission.md'
+      - 'docs/security/V02H-round-two-review-disposition.md'
+      - 'docs/roadmap/acceptance-register.md'
       - 'docs/specification/v0.4.5.md'
       - 'docs/decisions/register.md'
       - 'tools/security_probes/CRYPTO_REVIEW_REQUEST.md'
@@ -24,6 +26,8 @@ on:
       - 'docs/security/V02F-recovery-assurance-and-cryptographic-policy.md'
       - 'docs/architecture/v02g-vnext-cryptographic-protocol-review.md'
       - 'docs/security/V02H-adversarial-conformance-and-review-submission.md'
+      - 'docs/security/V02H-round-two-review-disposition.md'
+      - 'docs/roadmap/acceptance-register.md'
       - 'docs/specification/v0.4.5.md'
       - 'docs/decisions/register.md'
       - 'tools/security_probes/CRYPTO_REVIEW_REQUEST.md'
@@ -57,6 +61,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tools/v02_verifier -p 'test_review_bundle.py' -v
           python3 -m unittest discover -s tools/v02_verifier -p 'test_v02f_policy_contract.py' -v
+          python3 -m unittest discover -s tools/v02_verifier -p 'test_v02_round2_register.py' -v
           python3 tools/v02_verifier/review_bundle.py --write /tmp/v02d-review-manifest.json
           python3 tools/v02_verifier/review_bundle.py --check /tmp/v02d-review-manifest.json
           sha256sum /tmp/v02d-review-manifest.json

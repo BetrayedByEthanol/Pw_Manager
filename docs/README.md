@@ -1,7 +1,7 @@
 # Vaulty Documentation Index
 
 **Canonical design target:** **v0.4.5**, 6 November 2026.  
-**Implementation reference:** GitHub `main` `239f80c` ([V02-G PR #15 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/15), test-only V3RV proposal). V02-H is a source-pinned *internal* adversarial reviewer packet; OPEN-01/15 and all release gates still blocked.  
+**Implementation reference:** GitHub `main` `9d854a6` ([V02-H PR #16 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/16), untrusted wire-only adversarial evidence). Round-two findings are registered with owner-consent and no-crypto-proof qualifications. OPEN-01/15 and release gates remain blocked.  
 **Safety status:** Prototype foundation builds and tests; **not safe for real credentials and not security-certified**.
 
 Start here rather than relying on previous chats or the historical README feature checklist.
@@ -19,7 +19,8 @@ Start here rather than relying on previous chats or the historical README featur
 | [V02-E cryptographic review findings and pre-approval hardening](security/V02E-review-findings-and-preapproval-hardening.md) | Merged F-1–F-9 dispositions, shared route validator, partial memory and origin-integrity hardening, vNext test-only AAD | **Merged candidate only; no independent approval** |
 | [V02-F recovery assurance and cryptographic policy decisions](security/V02F-recovery-assurance-and-cryptographic-policy.md) | Merged proposals for weaker-recovery informed consent, root-separated assurance, KDF benchmarking/work caps, NFC/UTF-8 encoding and code scopes | **Merged proposal; new owner/expert decisions open** |
 | [V02-G cryptographic vNext review candidate](architecture/v02g-vnext-cryptographic-protocol-review.md) | Merged V3RV review-only frame/descriptor, strict test codec and proposed typed-factor transcript | **Merged test-only; no authenticated keys/approved wire** |
-| [V02-H adversarial conformance and external review submission](security/V02H-adversarial-conformance-and-review-submission.md) | Two-language V3RV wire/context vectors, malformed/mutation corpus, scoped recovery/ancestry and KDF cost model, source-pinned unsigned expert packet | **Internal evidence only; OPEN-01/15 blocked** |
+| [V02-H adversarial conformance and external review submission](security/V02H-adversarial-conformance-and-review-submission.md) | Merged two-language V3RV wire/context vectors, mutation/ancestry/KDF reference cases, source-pinned unsigned expert packet | **Merged internal evidence; OPEN-01/15 blocked** |
+| [Round-two V02-H security-review findings](security/V02H-round-two-review-disposition.md) | F-1–F-9/W1 accepted for follow-up; owner controls weaker Standard recovery and P6/HMAC/V3RV are not security proof | **Security issues registered, NOT product/crypto approval** |
 | [Architecture v0.4.5](architecture/v0.4.5.md) | System components, single-file structure, trust boundaries, key flows and operation sequences | **Target design** |
 | [Implementation roadmap](roadmap/implementation.md) | V01-A through V09, V04M workstream, dependencies and release gates | **Work plan** |
 | [Feature roadmap](roadmap/features.md) | All 38 normalized requirements, four N-features and links to the 67 historical source items | **Feature ledger** |
