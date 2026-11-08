@@ -1,0 +1,27 @@
+{
+  "actual_invalid_pin_attempted": false,
+  "actual_uv_absent_signed_assertion_tested": false,
+  "browser_webauthn_tested": false,
+  "entry_route_ready": false,
+  "i_p04": "PARTIAL",
+  "i_p06": "PARTIAL",
+  "local_self_report_only": true,
+  "open_01": "BLOCKED",
+  "open_15": "BLOCKED",
+  "physical_key_uniqueness_verified": false,
+  "production_runtime_replay_protection_tested": false,
+  "release_gates": "G1-G3 BLOCKED",
+  "review_only": true,
+  "schema": "vaulty-v02l-redacted-negative-evidence-v1",
+  "source_git_commit": "edd3256a90a2993d907525495e3eb01bdabe9a47",
+  "cases": {
+    "positive_signed_up_uv": "OBSERVED",
+    "tampered_authenticator_data": "LOCAL_VERIFIER_REJECTED",
+    "tampered_signature": "LOCAL_VERIFIER_REJECTED",
+    "wrong_challenge": "LOCAL_VERIFIER_REJECTED",
+    "wrong_public_key": "LOCAL_VERIFIER_REJECTED",
+    "wrong_rp": "LOCAL_VERIFIER_REJECTED"
+  },
+  "mode": "verifier",
+  "status": "LOCAL_NEGATIVE_OBSERVATIONS_CAPTURED"
+}
