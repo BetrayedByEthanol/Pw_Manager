@@ -117,7 +117,9 @@ fn isolated_virtual_policy_fails_closed_even_in_a_tampered_synthetic_model() {
     // independently rejects it in case a future integration supplies an
     // incorrect or stale decoded policy record after a trusted load.
     let (file, mut opened, ids) = file_and_opened();
-    opened.body.entries[4].mode = EntryMode::CustomVirtual;
+    // V02 canonical decoding may sort entries; identify by UUID, not index.
+    opened.body.entries.iter_mut().find(|e| e.id == ids[4]).unwrap().mode =
+        EntryMode::CustomVirtual;
     let now = Instant::now();
     let mut session = Session::new(limits());
     session.inspect_public_file(&file).unwrap();
