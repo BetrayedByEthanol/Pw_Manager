@@ -84,7 +84,7 @@ fn linux_logind_events_lock_even_on_unexpected_wake_or_unlock() {
         (LogindSafetyEvent::SessionUnlocked, LockReason::ListenerUnavailable),
         (LogindSafetyEvent::PrepareForSleep(true), LockReason::Suspend),
         (LogindSafetyEvent::PrepareForSleep(false), LockReason::Suspend),
-        (LogindSafetyEvent::PrepareForShutdown(true), LockReason::Hibernate),
+        (LogindSafetyEvent::PrepareForShutdown(true), LockReason::Shutdown),
         (LogindSafetyEvent::PrepareForShutdown(false), LockReason::ListenerUnavailable),
         (LogindSafetyEvent::SessionRemoved, LockReason::ListenerUnavailable),
         (LogindSafetyEvent::SubscriptionLost, LockReason::ListenerUnavailable),
@@ -155,6 +155,14 @@ fn forged_intent_fields_or_replayed_operation_are_rejected() {
     let original = session.begin_read(ids[1]).unwrap();
     let mut spoofed = original;
     spoofed.entry_id = ids[0];
+    assert_eq!(boundary.attempt_read(&mut session, &spoofed,
+               &PhysicalFido2Adapter, None), Err(BoundaryDeny::StaleOperation));
+    spoofed = original;
+    spoofed.first = crate::v03::FirstFactor::FreshEntryPassword;
+    assert_eq!(boundary.attempt_read(&mut session, &spoofed,
+               &PhysicalFido2Adapter, None), Err(BoundaryDeny::StaleOperation));
+    spoofed = original;
+    spoofed.tier = EntryTier::Isolated;
     assert_eq!(boundary.attempt_read(&mut session, &spoofed,
                &PhysicalFido2Adapter, None), Err(BoundaryDeny::StaleOperation));
     spoofed = original;
