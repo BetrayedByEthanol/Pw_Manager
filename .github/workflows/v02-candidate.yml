@@ -13,6 +13,7 @@ on:
       - 'docs/security/V02H-round-two-review-disposition.md'
       - 'docs/security/V02I-fido2-prf-isolation-and-hardware-assurance.md'
       - 'docs/security/V02J-isolated-fido2-hardware-verification.md'
+      - 'docs/security/V02K-physical-fido2-verification-and-evidence.md'
       - 'tools/hardware/**'
       - 'docs/roadmap/acceptance-register.md'
       - 'docs/specification/v0.4.5.md'
@@ -32,6 +33,7 @@ on:
       - 'docs/security/V02H-round-two-review-disposition.md'
       - 'docs/security/V02I-fido2-prf-isolation-and-hardware-assurance.md'
       - 'docs/security/V02J-isolated-fido2-hardware-verification.md'
+      - 'docs/security/V02K-physical-fido2-verification-and-evidence.md'
       - 'tools/hardware/**'
       - 'docs/roadmap/acceptance-register.md'
       - 'docs/specification/v0.4.5.md'
@@ -58,6 +60,7 @@ jobs:
         run: |
           cargo check --manifest-path tools/v02_verifier/Cargo.toml --locked --all-targets
           cargo test --manifest-path tools/v02_verifier/Cargo.toml --locked --all-targets
+          cargo run --manifest-path tools/v02_verifier/Cargo.toml --locked --bin vaulty_v02k -- preflight
       - name: Cross-library V02-C synthetic vector conformance
         run: |
           sudo apt-get update
