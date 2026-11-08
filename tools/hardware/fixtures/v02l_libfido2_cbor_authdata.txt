@@ -1,0 +1,7 @@
+# Synthetic third output line from fido2-assert -G, matching libfido2's real
+# CBOR-encoded byte-string format (NOT a captured authenticator signature).
+# Raw payload = SHA256("vaulty-test.localhost") + flags 0x05 (UP+UV)
+#               + signCount 0x00000000 (37 bytes).
+# CBOR representation = 58 25 || 37 raw bytes (39 bytes total).
+# The original full CBOR byte-string must be passed unchanged to -V.
+WCUTxIcdAONwGZHDxvS/FGDum8YZrp1IglgG2wzzNm7OnwUAAAAA
