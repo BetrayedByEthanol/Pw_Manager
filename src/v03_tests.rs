@@ -112,6 +112,26 @@ fn all_four_entry_modes_choose_only_their_explicit_provider() {
 }
 
 #[test]
+fn isolated_virtual_policy_fails_closed_even_in_a_tampered_synthetic_model() {
+    // The authenticated V02 codec also rejects this inconsistency. V03
+    // independently rejects it in case a future integration supplies an
+    // incorrect or stale decoded policy record after a trusted load.
+    let (file, mut opened, ids) = file_and_opened();
+    opened.body.entries[4].mode = EntryMode::CustomVirtual;
+    let now = Instant::now();
+    let mut session = Session::new(limits());
+    session.inspect_public_file(&file).unwrap();
+    session.load_synthetic(opened, [9; 32], [7; 32], now).unwrap();
+    session.synthetic_monitor_registered();
+    assert_eq!(session.begin_read_at(ids[4], now),
+        Err(SessionError::InvalidEntryPolicy));
+    assert_eq!(session.phase(), Phase::Loaded);
+    // No operation was staged on denied access.
+    assert_eq!(session.refuse_unimplemented(Uuid::new_v4()),
+        Err(SessionError::InvalidOperation));
+}
+
+#[test]
 fn intent_ids_are_fresh_and_stale_or_unimplemented_operations_fail_closed() {
     let (mut session, ids, _) = loaded_fixture();
     let first = session.begin_read(ids[1]).unwrap();
