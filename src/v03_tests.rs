@@ -194,7 +194,7 @@ fn listener_is_required_and_loss_always_locks_without_resumption() {
 fn read_intent_expiration_cancels_it_without_extending_session_lifetime() {
     let (mut session, ids, started) = loaded_fixture();
     let first = session.begin_read_at(ids[0], started).unwrap();
-    assert!(!session.poll_at(started + Duration::from_secs(30)));
+    assert!(!session.poll_at(started + Duration::from_secs(15)));
     assert_eq!(session.refuse_unimplemented(first.operation_id),
         Err(SessionError::InvalidOperation));
     assert_eq!(session.phase(), Phase::Loaded);
