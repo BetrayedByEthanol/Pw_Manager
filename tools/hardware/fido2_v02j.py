@@ -133,11 +133,14 @@ def _unb64(value: str) -> bytes:
 
 
 def _run(args: list[str], *, data: bytes | None = None,
-         timeout: int = 90) -> bytes:
-    # No shell. stderr is never included in an exception/receipt.
+         timeout: int = 90, interactive: bool = False) -> bytes:
+    # No shell. stderr is never included in an exception/receipt. Device
+    # acquisition with -i request file can inherit stdin for PIN prompts.
+    # stderr is inherited only for interactive prompts (never -d debug).
     try:
         call = subprocess.run(
-            args, input=data, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            args, input=data, stdout=subprocess.PIPE,
+            stderr=None if interactive else subprocess.DEVNULL,
             timeout=timeout, check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -179,6 +182,15 @@ def _lines(raw: bytes, count: int) -> list[str]:
     return lines
 
 
+def _private_input(directory: str, name: str, value: bytes) -> Path:
+    # Only public challenge/RP/credential ID/salt are written here.
+    path = Path(directory) / name
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(value)
+    return path
+
+
 def register_credential(session: dict, role: str, device: str) -> dict:
     """Create a *new test-only* nonresident credential and verify its public
     attestation record; this does NOT validate the manufacturer's trust chain.
@@ -190,8 +202,11 @@ def register_credential(session: dict, role: str, device: str) -> dict:
     request = ("\n".join((_b64(challenge), session["rp_id"],
                           f"vaulty-v02j-{role}", _b64(user_id))) + "\n").encode("ascii")
     # No private keys, passwords or PRF values ever go to a file.
-    made = _run([_tool("fido2-cred"), "-M", "-h", "-v",
-                 device, "es256"], data=request)
+    with tempfile.TemporaryDirectory(prefix="vaulty-v02j-public-") as directory:
+        request_file = _private_input(directory, "make-credential.txt", request)
+        made = _run([_tool("fido2-cred"), "-M", "-h", "-v",
+                     "-i", str(request_file), device, "es256"],
+                    interactive=True)
     # libfido2 verification explicitly checks UV and the extension bit.
     verified = _run([_tool("fido2-cred"), "-V", "-h", "-v", "es256"], data=made)
     # -V output format: credential-id line + PEM encoded public key.
@@ -274,18 +289,20 @@ def _measure(session: dict, role: str, entry: str, device: str,
         flags += ["-v", "-t", "uv=true"]
     else:
         flags += ["-t", "uv=false", "-t", "pin=false"]
-    generated = _run([_tool("fido2-assert"), "-G", *flags, device], data=request)
-    secret = _assertion_result(generated, challenge=challenge, rp_id=session["rp_id"])
     with tempfile.TemporaryDirectory(prefix="vaulty-v02j-public-") as directory:
-        key_path = Path(directory) / "public.pem"
-        key_path.write_text(cred["public_key_pem"], encoding="ascii")
-        key_path.chmod(0o600)
-        fields = _lines(generated, 5)
-        verify = ("\n".join(fields[:4]) + "\n").encode("ascii")
-        opts = ["-V", "-h", "-p"] + (["-v"] if assurance == "uv" else [])
+        request_path = _private_input(directory, "assertion-request.txt", request)
+        generated = _run([_tool("fido2-assert"), "-G", *flags,
+                          "-i", str(request_path), device], interactive=True)
+        secret = _assertion_result(generated, challenge=challenge, rp_id=session["rp_id"])
         try:
-            _run([_tool("fido2-assert"), *opts, str(key_path), "es256"], data=verify)
-        except ProbeError:
+            key_path = _private_input(directory, "public.pem",
+                                      cred["public_key_pem"].encode("ascii"))
+            fields = _lines(generated, 5)
+            verify = ("\n".join(fields[:4]) + "\n").encode("ascii")
+            opts = ["-V", "-h", "-p"] + (["-v"] if assurance == "uv" else [])
+            _run([_tool("fido2-assert"), *opts, str(key_path), "es256"],
+                 data=verify)
+        except BaseException:
             wipe(secret)
             raise
     return secret
