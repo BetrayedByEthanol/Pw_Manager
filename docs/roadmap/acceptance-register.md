@@ -1,6 +1,6 @@
 # Vaulty — Acceptance, Evidence and Security Gap Register
 
-**Snapshot date:** 2026-11-08 | **Repository evidence baseline:** `main` merge commit `9d854a6d43c6cb486afc0dba25bb0a89f3197480` ([V02-H PR #16 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/16), wire-only adversarial candidate). [Round-two findings](../security/V02H-round-two-review-disposition.md) accepted for follow-up **with F-1 owner-choice and no-cryptographic-proof qualifications**, not independent OPEN-01/15 approval.  
+**Snapshot date:** 2026-11-08 | **Repository evidence baseline:** `main` merge commit `a3f177722d0105de167b848d78df807ee108803a` ([round-two findings PR #17 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/17), issues only). [V02-I hardware assurance and PRF isolation](../security/V02I-fido2-prf-isolation-and-hardware-assurance.md) is a test-only policy proposal, **not real-device or OPEN-01/15 approval**.  
 **Purpose:** provide a reviewable distinction between **design approved**, **source merged**, **CI passed**, **security behavior verified** and **release certified**. None is interchangeable. See [implementation roadmap](implementation.md).
 
 ## 1. Recorded merged evidence
@@ -204,6 +204,8 @@ No A02F criterion is production cryptographic approval; V02-F can merge as a **r
 
 V02-H can be merged as **internal review preparation only**, never as proof of vNext cryptographic security. The [review packet](../security/V02H-adversarial-conformance-and-review-submission.md) names the missing crypto cases explicitly.
 
+| EV-020 | [V02-I PRF isolation and hardware assurance packet](../security/V02I-fido2-prf-isolation-and-hardware-assurance.md); [synthetic Python PRF input reference](../../tools/v02_verifier/reference_v02i_prf.py); [test-only Rust comparison](../../src/v02/v02i_prf_review.rs) | **Unmerged candidate:** six frozen public PRF input/CTAP salt vectors; per-entry/slot/credential/purpose separation, UV versus UP-only transport checks and explicit two-key enrollment/backup-coverage model. CI and external review pending. No physical PRF output or vNext slot keys generated. | Owner OPEN-HW-ASSURANCE and OPEN-PRF-SALT, OPEN-01/15, authorized source→destination migration, actual device/owner factor proof, authenticated graph/READY and G1–G3 BLOCKED. |
+
 ## 2l. Round-two findings acceptance, scoped to source review only
 
 [**Full F-1–F-9 and W1 disposition**](../security/V02H-round-two-review-disposition.md) is part of the security findings register. It records **ACCEPTED FOR FOLLOW-UP**, not a cryptographic, device or owner decision. **Q1:** weaker Standard-entry recovery is structurally permitted but requires a separate explicit owner decision/consent; code-only VMK recovery alone does not unlock all entries, and ISOLATED remains hardware-mandatory. **Q2:** neither V02-B HMAC/P6 nor V3RV frozen wire/context vectors prove multi-key commitment, partitioning-oracle security or authenticated vNext operations. OPEN-01/15 and G1–G3 remain **BLOCKED**.
@@ -222,6 +224,20 @@ V02-H can be merged as **internal review preparation only**, never as proof of v
 | W1 / SEC-17 | **OPEN — FULL GRAPH / NONCE / ROLLBACK** | Rust commit-time ancestor ownership/cycles/duplicate checks; nonce uniqueness **per key**, not blanket cross-slot nonce ban; S4/R8 snapshot limitations |
 
 **No task in this table is implicitly owner-approved by merging the findings PR; the F-5 closure is restricted to structural policy parity.**
+
+## 2m. V02-I FIDO2 hardware assurance and PRF isolation (review-only)
+
+[**V02-I protocol and two-key lifecycle proposal**](../security/V02I-fido2-prf-isolation-and-hardware-assurance.md) addresses SEC-06 (F-3/F-4/F-7), SEC-17 (W1 scope) and FR-AUTH-02/FR-REC-02 without shipping cryptography.
+
+| ID | Candidate acceptance | Supporting evidence | Still blocked |
+| --- | --- | --- | --- |
+| A02I-01 | Distinct proposed per-entry/slot/credential/purpose public PRF evaluation input | Six cross-language frozen preimages/32-byte CTAP **salt hashes**, Rust `#[cfg(test)]` and Python reference verify; reject wrong entry owner, nil IDs, oversize credential, zero RP | Real FIDO2 PRF proof, OPEN-01/15 security review; hashing public context is NOT hardware or crypto proof |
+| A02I-02 | No confusion of WebAuthn PRF versus native CTAP hmac-secret inputs | WebAuthn `eval.first=raw_input`; native CTAP `salt32=SHA256("WebAuthn PRF"||0||raw_input)`; reject proposed no-UV branch via browser PRF, permit synthetic native flag only as a review case | Same credential/UV/RP real-device compatibility and signed UP/UV verifier |
+| A02I-03 | Separate vault-level trusted-key registration from entry-specific access | Primary-only creation leaves backup `PENDING`; later independently seal backup route with present device and authorized DEK, VMK write/Option A when code-dependent | V04/V06 runtime trustworthy slot provisioning, atomic commit/coverage verification |
+| A02I-04 | No S2 or owner consent weakening | Isolated every complete DEK route physical; STRICT_NONE disables recovery only; explicit Isolated→Standard downgrade/re-encryption path; no silent weaker Standard recovery | OPEN-REC-CONSENT and OPEN-HW-ASSURANCE owner decisions, no complete runtime ancestry enforcement |
+| A02I-05 | Hardware evidence and release boundaries stay open | Unexecuted I-P01–I-P09 OPEN-15 matrix, separately listed OPEN-PRF-SALT and UV/UP owner question, source-pinned reviewer inventory | No hardware operation, no authenticated vNext seal/open, no G1/G2/G3 release gate |
+
+**V02-I can merge only as an unapproved policy and synthetic input-validation milestone.** It does not close OPEN-15, OPEN-01, SEC-06, SEC-17, recovery completeness, or any runtime safety gate.
 
 ## 3. Security findings register
 
