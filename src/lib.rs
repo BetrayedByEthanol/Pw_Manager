@@ -5,3 +5,5 @@
 pub mod v02;
 // Review-gated model; no production unlock/authenticator adapters activated.
 pub mod v03;
+// V03-A trust boundaries: no real lifecycle or authenticator activation.
+pub mod v03a;
