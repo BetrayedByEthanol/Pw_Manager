@@ -131,7 +131,11 @@ pub struct PublicSummary {
     pub vault_id: Uuid,
     pub generation: u64,
     /// PUBLIC ONLY; no cryptographic authentication or rollback acceptance.
-    pub authenticated: bool,
+    authenticated: bool,
+}
+impl PublicSummary {
+    /// Public framing cannot establish cryptographic authenticity.
+    pub fn is_authenticated(&self) -> bool { self.authenticated }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -258,6 +262,7 @@ impl Session {
     pub fn close(&mut self) {
         self.state = State::Closed;
         self.monitor_live = false;
+        self.last_lock_reason = None;
     }
     /// Drop all loaded material and pending intents. Not a claim that the
     /// allocator/OS cleared copies outside these owned Zeroizing buffers.
