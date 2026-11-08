@@ -168,7 +168,7 @@ fn new_output() -> Result<PathBuf> {
     Ok(dest)
 }
 fn python(tool: &Path, args: &[&str]) -> Result<()> {
-    let exit=Command::new("python3").arg("-I").arg(tool).args(args)
+    let exit=Command::new("python3").arg("-B").arg("-I").arg(tool).args(args)
         .status().map_err(|_|"python3 unavailable")?;
     if exit.success() { Ok(()) }
     else { Err("local FIDO2 command failed; this stage has no accepted result") }
@@ -189,27 +189,36 @@ fn confirm(which: &str, hid: &str) -> Result<()> {
 // duplicates, unexpected values or altered security gates fail closed.
 // This is evidence validation, NOT signature/attestation verification.
 fn fields(text: &str) -> Result<BTreeMap<String,String>> {
-    if text.len()>4096 || text.contains('\0') { return Err("oversized receipt"); }
-    let mut rows=text.lines().map(str::trim);
-    if rows.next()!=Some("{") { return Err("unexpected receipt format"); }
-    let mut map=BTreeMap::new(); let mut end=false;
-    for line in rows {
-        if line=="}" { if end {return Err("duplicate JSON end");} end=true; continue; }
-        if end || line.is_empty() { return Err("trailing or blank receipt"); }
-        let data=line.strip_suffix(',').unwrap_or(line);
-        let (k,v)=data.split_once(": ").ok_or("malformed receipt entry")?;
-        let k=k.strip_prefix('"').and_then(|s|s.strip_suffix('"'))
-            .ok_or("malformed receipt key")?;
-        if !KEYS.contains(&k) || !k.bytes().all(|c| c.is_ascii_lowercase()
-            || c.is_ascii_digit() || c==b'_') { return Err("unknown receipt key"); }
-        if !matches!(v,"true"|"false"|"null"|"\"vaulty-v02j-observation-v1\""
-            |"\"OBSERVED\""|"\"NOT_EXECUTED\""|
-            "\"signed_native_ctap_test_assertions\""|"\"uv\"") {
-            return Err("unexpected receipt value");
-        }
-        if map.insert(k.to_owned(),v.to_owned()).is_some() {return Err("duplicate receipt key");}
+    // Require EXACT Python json.dumps(sort_keys=True, indent=2) representation:
+    // fixed lexicographic key order, two spaces, separator commas, last line
+    // uncommaed, final newline. Reject malformed JSON rather than guessing.
+    if text.len()>4096 || text.contains('\0') || !text.ends_with("}\n") {
+        return Err("oversized or noncanonical receipt");
     }
-    if !end || map.len()!=KEYS.len() {return Err("missing receipt field");}
+    let mut rows=text.lines();
+    if rows.next()!=Some("{") { return Err("unexpected receipt opening"); }
+    let sorted=KEYS.iter().copied().collect::<BTreeSet<_>>();
+    let mut map=BTreeMap::new();
+    for (i,key) in sorted.iter().enumerate() {
+        let line=rows.next().ok_or("missing receipt field")?;
+        let prefix=format!("  \"{key}\": ");
+        let value=line.strip_prefix(&prefix).ok_or("unexpected key ordering/indentation")?;
+        let value=if i+1==sorted.len() {
+            if value.ends_with(',') {return Err("trailing comma in receipt");}
+            value
+        } else {
+            value.strip_suffix(',').ok_or("missing JSON separator comma")?
+        };
+        if !matches!(value,"true"|"false"|"null"
+            |"\"vaulty-v02j-observation-v1\""|"\"OBSERVED\""|"\"NOT_EXECUTED\""
+            |"\"signed_native_ctap_test_assertions\""|"\"uv\"") {
+            return Err("unknown receipt value");
+        }
+        map.insert((*key).to_owned(),value.to_owned());
+    }
+    if rows.next()!=Some("}") || rows.next().is_some() {
+        return Err("trailing receipt content");
+    }
     Ok(map)
 }
 fn observation(json: &str) -> Result<Observation> {
@@ -271,11 +280,23 @@ fn report(sha:&str, outcome:&str, p:&Option<Observation>,b:&Option<Observation>)
     s
 }
 fn store_report(dir:&Path,body:&str)->Result<PathBuf>{
+    // Atomic replacement of a precreated INCOMPLETE redacted report.
+    // This makes Ctrl-C during PIN/touch leave an independently shareable,
+    // non-PASS file rather than only private session/credential details.
     let path=dir.join("evidence-v02k.json");
+    let temp=dir.join(format!(".evidence-v02k-{}.tmp",std::process::id()));
     let mut file=OpenOptions::new().write(true).create_new(true).mode(0o600)
-        .open(&path).map_err(|_|"cannot create private evidence")?;
-    file.write_all(body.as_bytes()).map_err(|_|"cannot persist evidence")?;
-    file.sync_all().map_err(|_|"cannot fsync evidence")?;
+        .open(&temp).map_err(|_|"cannot create temporary private evidence")?;
+    if let Err(_e)=file.write_all(body.as_bytes()).and_then(|_|file.sync_all()) {
+        drop(file);
+        let _=fs::remove_file(&temp);
+        return Err("cannot persist evidence");
+    }
+    drop(file);
+    if fs::rename(&temp,&path).is_err() {
+        let _=fs::remove_file(&temp);
+        return Err("cannot atomically commit redacted evidence");
+    }
     Ok(path)
 }
 fn stage(tool:&Path,session:&Path,dir:&Path,role:&str,hid:&str)->Result<Observation>{
@@ -295,24 +316,29 @@ fn run(o:&Options)->Result<()>{
     let primary=o.primary.as_deref().ok_or("primary device missing")?;
     let backup=o.backup.as_deref().ok_or("backup device missing")?;
     device(primary)?;
-    if primary!=backup {device(backup)?;}
+    // Backup may be offline until its explicit stage; validate at its prompt.
     let sha=pinned_head()?;let tool=harness()?;let dir=new_output()?;
     let session=dir.join("session.json");
     let session_name=session.to_str().ok_or("session path not UTF-8")?;
     println!("Review-only hardware verification. Git commit: {sha}");
     println!("Private test folder: {}",dir.display());
     let mut p=None;let mut b=None;let mut state="INCOMPLETE";
+    let report_path=store_report(&dir,&report(&sha,state,&p,&b))?;
+    println!("Redacted partial report created: {}", report_path.display());
     let executed=(||->Result<()>{
         python(&tool,&["init","--session",session_name,"--rp-id",&o.rp])?;
         p=Some(stage(&tool,&session,&dir,"primary",primary)?);
+        store_report(&dir,&report(&sha,state,&p,&b))?;
         b=Some(stage(&tool,&session,&dir,"backup",backup)?);
         state=if observed(&p)=="OBSERVED" && observed(&b)=="OBSERVED" {
             "LOCAL_OBSERVATIONS_CAPTURED"
         }else{"LOCAL_MISMATCH_REQUIRES_REVIEW"};
+        store_report(&dir,&report(&sha,state,&p,&b))?;
         Ok(())
     })();
-    let path=store_report(&dir,&report(&sha,state,&p,&b))?;
-    println!("\nShare ONLY this redacted file: {}",path.display());
+    // Normal failures can still leave a partial report; SIGINT at any point
+    // leaves the last atomically committed INCOMPLETE report.
+    println!("\nShare ONLY this redacted file: {}",report_path.display());
     println!("Do NOT share session.json, primary.json, backup.json, PINs or PRF values.");
     println!("OPEN-01/15 and G1–G3 remain BLOCKED.");
     executed
