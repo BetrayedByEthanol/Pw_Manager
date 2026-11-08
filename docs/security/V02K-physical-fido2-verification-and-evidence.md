@@ -1,8 +1,10 @@
 # V02-K — Physical FIDO2 Verification & Evidence Intake (Rust operator runner)
 
-**Status: operator execution required; NO physical device has been used in GitHub/Forgejo CI.** V02-K extends [merged V02-J PR #19](https://github.com/BetrayedByEthanol/Pw_Manager/pull/19), merge `9e7edb83f29b36078ca85b2eb3e4a1a0db03b1bb`. The source lives in [Rust V02 verifier binary](../../tools/v02_verifier/src/bin/vaulty_v02k.rs), with [Rust regression tests](../../tools/v02_verifier/src/bin/vaulty_v02k/tests.rs). It calls the [V02-J local test-only Python/libfido2 CLI](../../tools/hardware/fido2_v02j.py) for *actual* device operations. Rust does not read token PRF outputs, PINs or private credentials.
+**Status (2026-11-08): V02-K PR #20 MERGED; operator local native CTAP observations RECEIVED, not independently verified; NO physical device has been used in GitHub/Forgejo CI.** V02-K extends [merged V02-J PR #19](https://github.com/BetrayedByEthanol/Pw_Manager/pull/19), merge `9e7edb83f29b36078ca85b2eb3e4a1a0db03b1bb`. The source lives in [Rust V02 verifier binary](../../tools/v02_verifier/src/bin/vaulty_v02k.rs), with [Rust regression tests](../../tools/v02_verifier/src/bin/vaulty_v02k/tests.rs). It calls the [V02-J local test-only Python/libfido2 CLI](../../tools/hardware/fido2_v02j.py) for *actual* device operations. Rust does not read token PRF outputs, PINs or private credentials.
 
 **Nothing in this milestone provisions or unlocks an actual Vaulty vault, approves production UV/touch-only behavior, completes WebAuthn/browser interoperability, or closes OPEN-01, OPEN-15 or G1–G3.** The operator-provided report is a reproducible *self-reported local observation* for further review, never a qualified independent cryptographic or hardware verdict.
+
+**Owner evidence intake:** [EV-023 report and scope](V02K-local-hardware-evidence-received-2026-11-08.md), submitted 2026-11-08, records two reported YubiKey 5 NFC USB-A devices (firmware 5.7.4), both local probe stages `OBSERVED`, and a still-incomplete I-P matrix. Unsigned operator observations are not independent OPEN-15 certification.
 
 ## 1. Prerequisites
 
@@ -99,4 +101,4 @@ Rust tests exercise argument/terminal gating, malformed/duplicate/secret-bearing
 
 For repeatability, the source-review inventory includes both Rust files and this runbook at an exact commit. The GitHub workflow runs the Rust tests, V02-C/H/I synthetic vectors and existing V02-J mocked tests. Do not upload the private test directory to a public issue or PR.
 
-**Next step:** provide the single redacted report, annotate any device/OS/firmware details you are comfortable sharing, and use the evidence to design targeted OPEN-15 tests. The hardware assurance profile `OPEN-HW-ASSURANCE` and salt transcript `OPEN-PRF-SALT` remain unapproved. The independent crypto gate OPEN-01 remains separate.
+**Next step after EV-023 intake:** obtain independent OPEN-15 review of the owner-submitted observations, run controlled WebAuthn/browser-vs-native PRF parity I-P05 and signed negative tests I-P04/I-P06; schedule I-P07–I-P09 once production-adjacent runtime/rewrap features can be tested. Do not upload private local session files or infer an approved security profile. `OPEN-HW-ASSURANCE`, `OPEN-PRF-SALT`, OPEN-01/15 and G1–G3 remain open/blocked.

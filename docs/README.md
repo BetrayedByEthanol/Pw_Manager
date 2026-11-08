@@ -1,7 +1,7 @@
 # Vaulty Documentation Index
 
 **Canonical design target:** **v0.4.5**, 6 November 2026.  
-**Implementation reference:** GitHub `main` `9e7edb83` ([V02-J PR #19 merged](https://github.com/BetrayedByEthanol/Pw_Manager/pull/19), opt-in libfido2 lab only). V02-K adds a Rust operator command and redacted evidence intake; **hardware execution requires the owner's keys and has not occurred in CI**. OPEN-01/15 and G1–G3 remain BLOCKED.  
+**Implementation reference:** GitHub `main` at V02-K PR #20 merge `f65615e8` (review-only Rust FIDO2 local runner). [EV-023 operator local hardware observations](security/V02K-local-hardware-evidence-received-2026-11-08.md) received for two reported YubiKey 5 NFC USB-A firmware 5.7.4 devices. **These are not independently verified; OPEN-01/15 and G1–G3 BLOCKED.**  
 **Safety status:** Prototype foundation builds and tests; **not safe for real credentials and not security-certified**.
 
 Start here rather than relying on previous chats or the historical README feature checklist.
@@ -22,8 +22,9 @@ Start here rather than relying on previous chats or the historical README featur
 | [V02-H adversarial conformance and external review submission](security/V02H-adversarial-conformance-and-review-submission.md) | Merged two-language V3RV wire/context vectors, mutation/ancestry/KDF reference cases, source-pinned unsigned expert packet | **Merged internal evidence; OPEN-01/15 blocked** |
 | [Round-two V02-H security-review findings](security/V02H-round-two-review-disposition.md) | F-1–F-9/W1 accepted for follow-up; owner controls weaker Standard recovery and P6/HMAC/V3RV are not security proof | **Merged issue register, NOT approval** |
 | [V02-I FIDO2 PRF isolation & hardware assurance](security/V02I-fido2-prf-isolation-and-hardware-assurance.md) | Merged proposed entry-specific PRF salt input, two-token Isolated coverage and UV versus touch-only questions | **Merged public-input review only; no hardware proof** |
-| [V02-J local FIDO2 hardware verification foundation](security/V02J-isolated-fido2-hardware-verification.md) | Merged opt-in libfido2 test harness, offline mock tests and I-P01–09 runbook | **No physical test evidence yet** |
-| [V02-K Rust physical test runner & evidence intake](security/V02K-physical-fido2-verification-and-evidence.md) | Clone/build/run command, primary+backup native test observations, strict redacted source-pinned report and partial hardware matrix | **Owner hardware run pending; OPEN-15 BLOCKED** |
+| [V02-J local FIDO2 hardware verification foundation](security/V02J-isolated-fido2-hardware-verification.md) | Merged opt-in libfido2 test harness, offline mock tests and I-P01–09 runbook | **No physical operation in V02-J merge CI; see later V02-K EV-023 observations** |
+| [V02-K Rust physical test runner & evidence intake](security/V02K-physical-fido2-verification-and-evidence.md) | Merged Rust runner, partial I-P matrix and strict redaction | **Local operator results received; NOT independent OPEN-15 verification** |
+| [V02-K EV-023 operator evidence received](security/V02K-local-hardware-evidence-received-2026-11-08.md) | Source-pinned redacted owner report; primary/backup model and firmware; I-P01–09 coverage and residual reviewer work | **RECEIVED, not VERIFIED; all release gates blocked** |
 | [Architecture v0.4.5](architecture/v0.4.5.md) | System components, single-file structure, trust boundaries, key flows and operation sequences | **Target design** |
 | [Implementation roadmap](roadmap/implementation.md) | V01-A through V09, V04M workstream, dependencies and release gates | **Work plan** |
 | [Feature roadmap](roadmap/features.md) | All 38 normalized requirements, four N-features and links to the 67 historical source items | **Feature ledger** |
