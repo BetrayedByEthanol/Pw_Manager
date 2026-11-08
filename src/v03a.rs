@@ -8,7 +8,7 @@
 //! production LOADED constructor or secret-release/DEK unwrap path.
 //! OPEN-01 / OPEN-15 and G1–G3 remain blocked.
 use crate::v03::{
-    LifecycleEvent, LockReason, ProviderRequirement, ReadIntent, Session, SessionError,
+    LifecycleEvent, ProviderRequirement, ReadIntent, Session,
 };
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -36,6 +36,7 @@ pub enum MonitorError {
     InvalidWatchdog,
     NotTrusted,
     Stale,
+    SessionExpired,
 }
 /// A watchdog cannot be declared healthy through the public API. The only
 /// positive hook is synthetic and available exclusively under #[cfg(test)].
@@ -71,7 +72,9 @@ impl LifecycleGuard {
             return Err(MonitorError::Stale);
         }
         // The V03 session's own inactivity/absolute clocks are independent.
-        session.poll();
+        if session.poll() {
+            return Err(MonitorError::SessionExpired);
+        }
         Ok(())
     }
     fn invalidate(&mut self, session: &mut Session) {
@@ -131,6 +134,23 @@ pub enum BoundaryDeny {
     TrustedBackendUnavailable,
 }
 
+/// Sealed provider interface: arbitrary third-party code cannot implement
+/// a fake "verified hardware" provider and have this boundary accept it.
+mod sealed { pub trait Sealed {} }
+pub trait ProviderAdapter: sealed::Sealed {
+    fn requirement(&self) -> ProviderRequirement;
+}
+pub struct VirtualNonFactorAdapter;
+pub struct PhysicalFido2Adapter;
+impl sealed::Sealed for VirtualNonFactorAdapter {}
+impl sealed::Sealed for PhysicalFido2Adapter {}
+impl ProviderAdapter for VirtualNonFactorAdapter {
+    fn requirement(&self) -> ProviderRequirement { ProviderRequirement::VirtualNonFactor }
+}
+impl ProviderAdapter for PhysicalFido2Adapter {
+    fn requirement(&self) -> ProviderRequirement { ProviderRequirement::FreshPhysicalFido2 }
+}
+
 /// Only a review-time protocol planning boundary. Neither adapter possesses
 /// a PRF implementation, a token, nor a method to mark a read authorized.
 pub struct AuthenticatorBoundary {
@@ -148,15 +168,16 @@ impl AuthenticatorBoundary {
     /// pending operation, then consume that operation on every attempted
     /// provider use. This method ALWAYS denies: it has no verified factor.
     /// Caller-supplied intent fields and credential IDs never grant access.
-    pub fn attempt_read(
+    pub fn attempt_read<A: ProviderAdapter>(
         &self, session: &mut Session, intent: &ReadIntent,
-        selected: ProviderRequirement, credential_id: Option<Uuid>,
+        adapter: &A, credential_id: Option<Uuid>,
     ) -> Result<(), BoundaryDeny> {
         if session.require_pending_read(
             intent.operation_id, intent.entry_id, intent.provider,
         ).is_err() {
             return Err(BoundaryDeny::StaleOperation);
         }
+        let selected = adapter.requirement();
         let reason = if selected != intent.provider {
             BoundaryDeny::WrongProvider
         } else {
