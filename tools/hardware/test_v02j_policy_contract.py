@@ -31,7 +31,7 @@ class HardwarePolicyBoundaryTests(unittest.TestCase):
     def test_review_only_does_not_approve_uv_salt_crypto_or_recovery(self):
         for marker in ("OPEN-HW-ASSURANCE", "OPEN-PRF-SALT", "OPEN-REC-CONSENT",
                        "OPEN-01", "OPEN-15", "G1–G3", "Option A",
-                       "S1/S2/R1", "NOT Vaulty runtime authentication"):
+                       "S1/S2/R1", "not a Vaulty authenticator implementation"):
             self.assertIn(marker.lower(), self.packet.lower())
         self.assertIn("**BLOCKED — independent security/device review**", self.decisions)
         for gate in ("OPEN-01", "OPEN-15", "G1", "G2", "G3"):
