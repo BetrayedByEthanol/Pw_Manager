@@ -288,6 +288,56 @@ def wrong_device_probe(session: dict, target_role: str, control_role: str,
             "control_after": "OBSERVED"}
 
 
+def _safe_failure(exc: BaseException) -> str:
+    """Fixed operator-facing hints; never echo paths, CLI output or secrets."""
+    if isinstance(exc, FileExistsError):
+        return "RECEIPT_EXISTS: use a NEW --receipt filename; existing evidence is never overwritten"
+    if isinstance(exc, PermissionError):
+        return "PRIVATE_PATH_PERMISSIONS: check owner and 0700 directory / 0600 file modes"
+    if isinstance(exc, (EOFError, KeyboardInterrupt)):
+        return "OPERATOR_CANCELLED: no test result accepted"
+    if isinstance(exc, j.ProbeError):
+        reason = str(exc)
+        if "clean Git checkout" in reason:
+            return "GIT_NOT_CLEAN: commit or revert local changes before hardware evidence"
+        if "session" in reason or "repository" in reason:
+            return "SESSION_INVALID: set SESSION to the existing private V02-K session.json; run check-session"
+        if "credential" in reason or "registered role" in reason:
+            return "TEST_CREDENTIAL_INVALID: both original primary/backup synthetic registrations are required"
+        if "hardware-test" in reason:
+            return "HARDWARE_OPT_IN_REQUIRED: add --hardware-test"
+        if "CI" in reason:
+            return "CI_FORBIDDEN: real device operations must be local"
+        if "root" in reason:
+            return "ROOT_FORBIDDEN: run as your normal login, not sudo"
+        if "console" in reason or "terminal" in reason:
+            return "TTY_REQUIRED: use an interactive local terminal"
+        if "selected device" in reason or "device" in reason or "/dev/hidraw" in reason:
+            return "DEVICE_GATE: recheck fido2-token -L and selected direct HID device"
+        if "operator declined" in reason:
+            return "OPERATOR_DECLINED: enter TEST only when ready"
+        if "FIDO2 tool" in reason or "signed" in reason or "RP" in reason or "authenticator" in reason:
+            return "FIDO2_VERIFICATION_FAILED: no trustworthy negative result recorded"
+    return "UNCLASSIFIED_FAILURE: inspect private session/permissions and try a new receipt filename"
+
+
+def check_session(path: str) -> int:
+    """No token access. Print statuses only, never session paths or fields."""
+    session = _session(path)
+    for role in j.ROLES:
+        _credential(session, role)
+    print(json.dumps({
+        "schema": "vaulty-v02l-session-precheck-v1",
+        "review_only": True,
+        "session_valid": True,
+        "primary_test_credential_present": True,
+        "backup_test_credential_present": True,
+        "hardware_tests_executed": False,
+        "open_15_approved": False,
+    }, sort_keys=True))
+    return 0
+
+
 def run_live(args: argparse.Namespace) -> int:
     if not args.hardware_test:
         raise j.ProbeError("explicit --hardware-test required")
@@ -328,9 +378,11 @@ def run_live(args: argparse.Namespace) -> int:
             "LOCAL_DEVICE_REJECTION_OBSERVED",
             "LOCAL_ABSENCE_PRECHECK_OBSERVED",
         ) else 2
-    except (j.ProbeError, OSError):
-        # A partial shareable report remains INCOMPLETE. Failure diagnostics
-        # are generic to avoid exposing HID paths or CLI stdout/stderr.
+    except (j.ProbeError, OSError) as exc:
+        # A partial shareable report remains INCOMPLETE. Only fixed-class
+        # operator hints are printed, never raw libfido2 stdout/stderr, paths,
+        # PINs, PRF values or untrusted exception text.
+        print("V02-L: " + _safe_failure(exc), file=sys.stderr)
         return 2
     finally:
         print("Share only the V02-L redacted receipt. Do not share private sessions, "
@@ -342,6 +394,8 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="mode", required=True)
     sub.add_parser("preflight", help="No hardware commands")
+    check = sub.add_parser("check-session", help="Validate private test session offline (no token access)")
+    check.add_argument("--session", required=True)
     for mode in ("verifier", "wrong-device", "unavailable"):
         p = sub.add_parser(mode, help="Explicit operator-only physical negative test")
         if mode != "unavailable":
@@ -357,6 +411,12 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse(argv)
+    if args.mode == "check-session":
+        try:
+            return check_session(args.session)
+        except (j.ProbeError, OSError, EOFError, KeyboardInterrupt) as exc:
+            print("V02-L: " + _safe_failure(exc), file=sys.stderr)
+            return 2
     if args.mode == "preflight":
         print(json.dumps({
             "review_only": True,
@@ -374,9 +434,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print("V02-L local test observations recorded (NOT independent verification).")
         return result
-    except (j.ProbeError, OSError, EOFError, KeyboardInterrupt):
-        print("V02-L test blocked/cancelled: check opt-in, test session, terminal and device. "
-              "No hardware security approval.", file=sys.stderr)
+    except (j.ProbeError, OSError, EOFError, KeyboardInterrupt) as exc:
+        print("V02-L: " + _safe_failure(exc) +
+              ". No hardware security approval.", file=sys.stderr)
         return 2
 
 
