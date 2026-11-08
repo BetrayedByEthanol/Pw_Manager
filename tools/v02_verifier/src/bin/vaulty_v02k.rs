@@ -333,5 +333,5 @@ fn main(){
     }
 }
 #[cfg(test)]
-#[path = "vaulty_v02k_tests.rs"]
+#[path = "vaulty_v02k/tests.rs"]
 mod tests;
