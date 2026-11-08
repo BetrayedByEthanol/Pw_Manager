@@ -281,6 +281,17 @@ V02-H can be merged as **internal review preparation only**, never as proof of v
 
 ### V02-L operator feedback follow-up — TTY and safe failure classification
 
+**Codex P2 on session preflight — ACCEPTED/FIXED IN PR CANDIDATE:** the earlier `check-session`
+accepted the outer V02-J schema and two credential descriptors but did not
+validate the `vault_id`, entry/slot UUIDs and PRF context fields needed by
+`j._context()`. The amended offline preflight derives all four UV normal
+contexts (primary/backup × alpha/beta) and rejects missing or malformed
+fields, duplicate synthetic IDs/credentials, and malformed RP before reporting
+`session_valid=true`. The same check guards live verifier/wrong-device
+execution before operator prompts. A focused no-hardware regression creates
+malformed retained private sessions and verifies blocked exit/status;
+**this does not certify physical keys or runtime routes**.
+
 **Source correction candidate (not new hardware evidence):** local user execution on
 Pop!_OS reached `fido2-token -L` with both HID paths and returned
 an `absent-precheck.json` with `LOCAL_ABSENCE_PRECHECK_OBSERVED`.
