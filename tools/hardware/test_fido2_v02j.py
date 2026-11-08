@@ -130,10 +130,12 @@ class IsolatedHardwareHarnessTests(unittest.TestCase):
     def test_measure_requires_verified_signature_and_uv_before_success(self):
         trace = []
         secret = bytes([7])*32
-        def fake_run(args, *, data=None, timeout=90):
+        def fake_run(args, *, data=None, timeout=90, interactive=False):
             trace.append(args)
             if "-G" in args:
-                lines = data.decode("ascii").splitlines()
+                self.assertTrue(interactive)
+                self.assertIsNone(data)
+                lines = Path(args[args.index("-i")+1]).read_text(encoding="ascii").splitlines()
                 return "\n".join([lines[0], lines[1], harness._b64(b"authenticator-data"),
                                    harness._b64(b"signature"), harness._b64(secret)]).encode() + b"\n"
             if "-V" in args:
@@ -152,9 +154,10 @@ class IsolatedHardwareHarnessTests(unittest.TestCase):
         self.assertEqual(value, bytearray(32))
 
     def test_signed_verification_failure_never_returns_prf_result(self):
-        def fake_run(args, *, data=None, timeout=90):
+        def fake_run(args, *, data=None, timeout=90, interactive=False):
             if "-G" in args:
-                lines = data.decode("ascii").splitlines()
+                self.assertTrue(interactive)
+                lines = Path(args[args.index("-i")+1]).read_text(encoding="ascii").splitlines()
                 return "\n".join([lines[0], lines[1], harness._b64(b"authdata"),
                                    harness._b64(b"sig"), harness._b64(bytes([5])*32)]).encode()
             raise harness.ProbeError("signature invalid")
@@ -182,9 +185,14 @@ class IsolatedHardwareHarnessTests(unittest.TestCase):
         src = self.session
         src["credentials"] = {}
         calls = []
-        def fake(args, *, data=None, timeout=90):
+        def fake(args, *, data=None, timeout=90, interactive=False):
             calls.append(args)
             if "-M" in args:
+                self.assertTrue(interactive)
+                self.assertIsNone(data)
+                request = Path(args[args.index("-i")+1])
+                self.assertEqual(len(request.read_text(encoding="ascii").splitlines()), 4)
+                self.assertEqual(stat.S_IMODE(request.stat().st_mode), 0o600)
                 return b"attestation-placeholder"
             if "-V" in args:
                 self.assertIn("-h", args)
