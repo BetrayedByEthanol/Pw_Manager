@@ -13,7 +13,7 @@ The merged V03 model establishes state and unauthenticated read/write *intents*.
 | SessionLocked | Lock, reason ScreenLock |
 | PrepareForSleep(true) | Lock, reason Suspend |
 | PrepareForSleep(false) | **Still lock**; wake never silently restores LOADED |
-| PrepareForShutdown(true) | Lock, reason Hibernate/termination |
+| PrepareForShutdown(true) | Lock, reason Shutdown |
 | SessionUnlocked | Treat as possible missed earlier lock, fail closed |
 | SessionRemoved, SubscriptionLost | Fail closed and invalidate health |
 | MalformedOrUnknown, unexpected shutdown state | Fail closed and invalidate health |
@@ -24,7 +24,7 @@ The guard starts **not trusted**. Its public API can check health, lock on event
 
 ## B. Authenticator boundary
 
-The `AuthenticatorBoundary` uses **sealed** `ProviderAdapter` marker implementations: `VirtualNonFactorAdapter` and `PhysicalFido2Adapter`. It evaluates only a `ReadIntent` that still matches the *session-owned* active operation ID, entry ID and selected provider. Read pending records now retain entry+provider to prevent stale/cross-entry/policy-substituted requests. Selection of the wrong provider consumes the active intent without falling back to another provider.
+The `AuthenticatorBoundary` uses **sealed** `ProviderAdapter` marker implementations: `VirtualNonFactorAdapter` and `PhysicalFido2Adapter`. It evaluates only a `ReadIntent` that still matches the *session-owned* active operation ID, entry ID, first-factor requirement, entry tier and selected provider. Read pending records now retain all policy fields to prevent stale/cross-entry/policy-substituted requests. Selection of the wrong provider consumes the active intent without falling back to another provider.
 
 - Virtual remains a non-factor. No virtual seed or synthetic PRF is exposed.
 - Physical factors have no runtime `Active` registration path. Test-only states exercise missing/suspended/revoked/active denials. Even **test-only Active** always returns `TrustedBackendUnavailable`, not an authorization or valid hardware assertion.
