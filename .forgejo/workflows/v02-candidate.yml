@@ -35,6 +35,8 @@ jobs:
           python3 -m unittest discover -s tools/v02_verifier -p 'test_v02_round2_register.py' -v
           python3 tools/v02_verifier/reference_v02i_prf.py --verify
           python3 -m unittest discover -s tools/v02_verifier -p 'test_v02i_policy_contract.py' -v
+          python3 -m unittest discover -s tools/hardware -p 'test_*.py' -v
+          python3 tools/hardware/fido2_v02j.py preflight
           python3 tools/v02_verifier/review_bundle.py --write /tmp/v02d-review-manifest.json
           python3 tools/v02_verifier/review_bundle.py --check /tmp/v02d-review-manifest.json
           sha256sum /tmp/v02d-review-manifest.json
