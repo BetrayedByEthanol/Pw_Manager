@@ -22,6 +22,8 @@ import subprocess
 import sys
 import tempfile
 
+# Support Python -I without admitting current-working-directory imports.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fido2_v02j as j
 
 SCHEMA = "vaulty-v02l-redacted-negative-evidence-v1"
