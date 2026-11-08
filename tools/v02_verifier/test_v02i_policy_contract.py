@@ -29,14 +29,14 @@ class V02IReviewPolicyTests(unittest.TestCase):
                      "STRICT_NONE",
                      "Option A"):
             self.assertIn(term, self.policy)
-        self.assertIn("a **fresh registered physical FIDO2 operation**", self.spec)
+        self.assertIn("MUST perform a fresh registered physical FIDO2 operation", self.spec)
         self.assertIn("ISOLATED code-only entry recovery is forbidden", self.spec)
 
     def test_proposed_salt_and_uv_profile_are_not_approved(self):
         for term in ("OPEN-HW-ASSURANCE", "OPEN-PRF-SALT",
                      "**PROVISIONAL protocol candidate**",
                      "**OPEN owner decision**",
-                     "NOT a final wire version",
+                     "not a final wire version",
                      "only under `#[cfg(test)]`",
                      "UV_REQUIRED", "UP_ONLY_TOUCH",
                      "WebAuthn PRF client request: eval.first = raw_input",
@@ -60,7 +60,7 @@ class V02IReviewPolicyTests(unittest.TestCase):
 
     def test_hardware_policy_stays_separate_from_owner_recovery_choice(self):
         self.assertIn("OPEN-REC-CONSENT", self.policy)
-        self.assertIn("weaker Standard recovery remains an owner choice",
+        self.assertIn("Weaker Standard recovery remains an owner choice",
                       self.policy)
         self.assertIn("P6/HMAC", self.acceptance)
         self.assertIn("OPEN-HW-ASSURANCE", self.decisions)
