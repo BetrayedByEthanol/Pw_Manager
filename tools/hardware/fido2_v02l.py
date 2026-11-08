@@ -86,11 +86,48 @@ def _confirm(label: str) -> None:
         raise j.ProbeError("operator declined hardware test")
 
 
-def _require_signed_flags(data: bytes, rp_id: str) -> None:
-    # These bytes are not trusted until libfido2 also verifies the signature.
-    # This parser adds explicit fail-closed checks rather than replacing -V.
-    if len(data) < 37:
+def _decode_cbor_authenticator_data(encoded: bytes) -> bytes:
+    """Decode the *single*, definite CBOR byte string emitted by fido2-assert.
+
+    libfido2's fido_assert_authdata_ptr() contains the CBOR byte-string
+    wrapper; the -G CLI prints its base64 representation (37 bytes => 58 25
+    followed by the 37 raw WebAuthn bytes). The -V CLI wants that ORIGINAL
+    CBOR encoding. Never feed decoded bytes to the signature verifier.
+    Reject raw bytes, indefinite strings, nonminimal length, and trailing
+    encoded objects rather than guessing their meaning.
+    """
+    if not encoded or encoded[0] >> 5 != 2:
+        raise j.ProbeError("expected CBOR byte-string authenticator data")
+    additional = encoded[0] & 0x1f
+    if additional < 24:
+        offset, size = 1, additional
+    elif additional == 24:
+        if len(encoded) < 2:
+            raise j.ProbeError("truncated CBOR byte-string length")
+        offset, size = 2, encoded[1]
+        if size < 24:
+            raise j.ProbeError("noncanonical CBOR byte-string length")
+    elif additional == 25:
+        if len(encoded) < 3:
+            raise j.ProbeError("truncated CBOR byte-string length")
+        offset, size = 3, int.from_bytes(encoded[1:3], "big")
+        if size < 256:
+            raise j.ProbeError("noncanonical CBOR byte-string length")
+    else:
+        # Current V02-J _unb64 input bound is <=1024 decoded bytes. Longer,
+        # indefinite and reserved/unsupported length encodings fail closed.
+        raise j.ProbeError("unsupported CBOR byte-string length")
+    if size < 37:
         raise j.ProbeError("authenticator data too short")
+    if len(encoded) != offset + size:
+        raise j.ProbeError("CBOR byte-string length mismatch or trailing data")
+    return encoded[offset:]
+
+
+def _require_signed_flags(cbor_authdata: bytes, rp_id: str) -> None:
+    # Parse fields for early fail-closed checks, but do not trust them until
+    # the ORIGINAL CBOR string is verified under the registered public key.
+    data = _decode_cbor_authenticator_data(cbor_authdata)
     if data[:32] != hashlib.sha256(rp_id.encode("utf-8")).digest():
         raise j.ProbeError("signed RP hash mismatch")
     if data[32] & FLAGS != FLAGS:
@@ -205,7 +242,7 @@ def verifier_negatives(session: dict, role: str, device: str) -> dict:
                 "wrong_challenge": [j._b64(secrets.token_bytes(32)), *signed[1:]],
                 "wrong_rp": [signed[0], "invalid.localhost", *signed[2:]],
                 "tampered_authenticator_data": [signed[0], signed[1],
-                                                 _mutate_b64(signed[2], offset=33), signed[3]],
+                                                 _mutate_b64(signed[2], offset=34), signed[3]],
                 "tampered_signature": [*signed[:3],
                                        _mutate_b64(signed[3], offset=0)],
                 "wrong_public_key": signed,
