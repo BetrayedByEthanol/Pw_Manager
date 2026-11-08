@@ -122,3 +122,38 @@ fn no_production_rp_defaults_and_invalid_rps_fail() {
         assert!(!valid_rp(s));
     }
 }
+
+#[test]
+fn rejects_noncanonical_comma_whitespace_order_and_newline() {
+    let input=sample();
+    assert!(observation(&input.replace(",\n", "\n")).is_err());
+    let with_trailing_comma=input.replacen("\n}\n", ",\n}\n", 1);
+    assert!(observation(&with_trailing_comma).is_err());
+    assert!(observation(&input.replace("  \"review_only\":", "    \"review_only\":")).is_err());
+    assert!(observation(input.trim_end_matches('\n')).is_err());
+    let lines:Vec<_>=input.lines().collect();
+    let mut scrambled=lines.clone();
+    scrambled.swap(1,2);
+    assert!(observation(&(scrambled.join("\n")+"\n")).is_err());
+}
+
+#[test]
+fn redacted_report_is_atomic_and_precreated_incomplete() {
+    let dir=std::env::temp_dir().join(format!(
+        "v02k-ci-test-{}-{}",std::process::id(),
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    std::fs::create_dir(&dir).unwrap();
+    let empty=report(&"a".repeat(40),"INCOMPLETE",&None,&None);
+    let path=store_report(&dir,&empty).unwrap();
+    assert!(path.is_file());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(),empty);
+    let primary=Some(Observation { stable:true, isolated:true });
+    let partial=report(&"a".repeat(40),"INCOMPLETE",&primary,&None);
+    store_report(&dir,&partial).unwrap();
+    let recorded=std::fs::read_to_string(&path).unwrap();
+    assert!(recorded.contains("\"backup\": \"NOT_EXECUTED\""));
+    assert!(recorded.contains("\"primary\": \"OBSERVED\""));
+    assert!(recorded.contains("\"open_15\": \"BLOCKED\""));
+    std::fs::remove_file(&path).unwrap();
+    std::fs::remove_dir(&dir).unwrap();
+}
