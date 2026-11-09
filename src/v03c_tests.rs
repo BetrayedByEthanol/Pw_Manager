@@ -57,6 +57,19 @@ fn watchdog_gap_revokes_non_sliding_session_and_never_resumes() {
 }
 
 #[test]
+fn late_positive_health_probe_cannot_resurrect_expired_watchdog() {
+    let (mut controller, _) = fixture();
+    let started = Instant::now();
+    controller.observe_snapshot_at(started).unwrap();
+    assert_eq!(controller.observe_snapshot_at(started + Duration::from_secs(5)),
+        Err(MonitorFailure::WatchdogOverdue));
+    assert_eq!(controller.phase(), Phase::Locked);
+    assert_eq!(controller.monitor_phase(), MonitorPhase::Terminated);
+    assert_eq!(controller.observe_snapshot_at(started + Duration::from_secs(6)),
+        Err(MonitorFailure::Terminated));
+}
+
+#[test]
 fn all_terminal_logind_events_cancel_and_drop_session() {
     for event in [
         TerminalEvent::SessionLock,
