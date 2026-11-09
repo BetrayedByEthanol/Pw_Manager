@@ -4,6 +4,7 @@
 //! constructs LOADED, authorizes a client or forwards D-Bus output as proof
 //! of authorization. All external D-Bus errors become fixed failure codes.
 use futures_util::{FutureExt, StreamExt};
+use std::collections::HashMap;
 use std::os::unix::fs::MetadataExt;
 use std::time::{Duration, Instant};
 use tokio::time::{MissedTickBehavior, timeout};
@@ -278,6 +279,65 @@ fn drain<'a>(stream: &mut zbus::proxy::SignalStream<'a>) -> bool {
     }
 }
 
+/// A logind delay inhibitor itself triggers the manager's
+/// PropertiesChanged(DelayInhibited) notification. This is bookkeeping, not
+/// a lock/sleep event, and MUST NOT fail startup or runtime monitoring.
+/// Only a trusted, well-formed Manager.PropertiesChanged containing solely
+/// that property may be ignored. Every other change stays terminal.
+fn classify_manager_property_fields(
+    changed_iface: &str,
+    changed: &HashMap<String, zbus::zvariant::OwnedValue>,
+    invalidated: &[String],
+) -> Option<TerminalEvent> {
+    if changed_iface != MANAGER_IFACE || (changed.is_empty() && invalidated.is_empty()) {
+        return Some(TerminalEvent::MalformedMessage);
+    }
+    if changed.keys().chain(invalidated.iter()).all(|key| key == "DelayInhibited") {
+        return None;
+    }
+    // PreparingForSleep / PreparingForShutdown remain fail-closed, including
+    // invalidations. Unknown manager properties are also terminal rather
+    // than creating a permissive allowlist of unreviewed notifications.
+    Some(TerminalEvent::SnapshotRejected)
+}
+
+fn manager_property_event(message: &Message, owner: &str) -> Option<TerminalEvent> {
+    if sender(message).as_deref() != Some(owner)
+        || path(message).as_deref() != Some(MANAGER)
+        || message.header().interface().map(|v| v.as_str()) != Some(PROPERTIES_IFACE)
+        || member(message).as_deref() != Some("PropertiesChanged")
+    {
+        return Some(TerminalEvent::MalformedMessage);
+    }
+    let parsed: Result<
+        (String, HashMap<String, zbus::zvariant::OwnedValue>, Vec<String>), _
+    > = message.body().deserialize();
+    match parsed {
+        Ok((changed_iface, changed, invalidated)) =>
+            classify_manager_property_fields(&changed_iface, &changed, &invalidated),
+        Err(_) => Some(TerminalEvent::MalformedMessage),
+    }
+}
+
+/// Startup and runtime must apply the EXACT same classifier. The observer
+/// will not reject its own delay-inhibitor change, but cannot ignore sleep,
+/// shutdown, unknown manager state or a corrupt/untrusted notification.
+fn drain_manager_properties(
+    stream: &mut zbus::proxy::SignalStream<'_>, owner: &str,
+) -> bool {
+    loop {
+        match stream.next().now_or_never() {
+            Some(Some(message)) => {
+                if manager_property_event(&message, owner).is_some() {
+                    return true;
+                }
+            }
+            Some(None) => return true,
+            None => return false,
+        }
+    }
+}
+
 /// Startup safety: any session signal (even another user's) is conservatively
 /// a reason to reject initialization, since we had not pinned a target yet.
 /// A stream error or closed stream is also fail-closed.
@@ -348,7 +408,7 @@ async fn monitor(seconds: u64) -> Outcome<()> {
         || local_session(&manager).await? != session_path
     { return Err("STARTUP_BINDING_CHANGED"); }
     if drain(&mut owner_signals) || drain(&mut manager_signals)
-        || drain(&mut manager_prop_signals)
+        || drain_manager_properties(&mut manager_prop_signals, &owner)
         || drain_early_session_stream(&mut session_signals)
         || drain_early_session_stream(&mut session_prop_signals)
     { return Err("STARTUP_SIGNAL_RACE"); }
@@ -394,8 +454,14 @@ async fn monitor(seconds: u64) -> Outcome<()> {
                 }
             }
             message = manager_prop_signals.next() => {
-                controller.on_event(message.map_or(TerminalEvent::BusDisconnected,
-                    |_| TerminalEvent::SnapshotRejected));
+                match message {
+                    Some(msg) => {
+                        if let Some(event) = manager_property_event(&msg, &owner) {
+                            controller.on_event(event);
+                        }
+                    }
+                    None => controller.on_event(TerminalEvent::BusDisconnected),
+                }
             }
             message = session_prop_signals.next() => {
                 match message {
