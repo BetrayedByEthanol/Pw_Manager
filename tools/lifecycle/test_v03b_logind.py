@@ -19,7 +19,9 @@ SESSION = "/org/freedesktop/login1/session/_32"
 
 def snap(**override):
     value = dict(uid=os.getuid(), locked=False, active=True, state="active",
-                 kind="x11", can_lock=True, sleeping=False, shutting_down=False)
+                 kind="x11", can_lock=True, session_class="user", remote=False,
+                 seat=("seat0", "/org/freedesktop/login1/seat/seat0"),
+                 sleeping=False, shutting_down=False)
     value.update(override)
     return value
 
@@ -78,7 +80,10 @@ class GateTests(unittest.TestCase):
         for variant in [
             dict(uid=os.getuid()+1), dict(locked=True), dict(locked=None),
             dict(active=False), dict(state="closing"), dict(kind="tty"),
-            dict(can_lock=False), dict(sleeping=True), dict(shutting_down=True),
+            dict(can_lock=False), dict(session_class="greeter"),
+            dict(remote=True), dict(seat=("", "/org/freedesktop/login1/seat/")),
+            dict(seat=("seat0", "/wrong")),
+            dict(sleeping=True), dict(shutting_down=True),
         ]:
             with self.subTest(variant=variant):
                 self.assertFalse(m.positive_snapshot(snap(**variant)))
