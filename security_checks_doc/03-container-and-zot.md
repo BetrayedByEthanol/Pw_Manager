@@ -55,3 +55,21 @@ bash scripts/security/run-static-container.sh \\
 ```
 
 Never mount real Vaulty data, token sockets, the host container-engine socket or signing credentials. Named Cargo caches are **not shared** between untrusted CI jobs; this wrapper is for single-owner local smoke testing only.
+
+### Example commands after Zot has authenticated TLS
+
+The following is a **template** and must not be executed against the existing provisional HTTP registry as a trusted distribution:
+
+```bash
+REGISTRY='registry.example.tld'
+LOCAL='localhost/vaulty/security-static:sec01a'
+REMOTE="$REGISTRY/vaulty/security-static:sec01a"
+podman login "$REGISTRY"                     # interactive, no password in shell args
+podman tag "$LOCAL" "$REMOTE"
+podman push --digestfile /tmp/vaulty-sec01a-push.digest "$REMOTE"
+cat /tmp/vaulty-sec01a-push.digest           # capture and independently verify
+# On the isolated Forgejo runner, after review:
+podman pull "$REGISTRY/vaulty/security-static@sha256:<approved-64-hex>"
+```
+
+Use a **separate, narrowly scoped publisher identity** and an isolated runner read/pull identity. Store the verified exact image digest (including registry and repository) in the security approval inventory only after vulnerability scanning, provenance review, a smoke run and reviewer sign-off. Do not copy the example mutable tag into the runner label.
