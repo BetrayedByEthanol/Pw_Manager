@@ -128,6 +128,40 @@ fn uptime() -> Outcome<f64> {
     if !first.is_finite() || first < 0.0 { return Err("NO_BOOTTIME_CLOCK"); }
     Ok(first)
 }
+/// Check session state on a SEPARATE task. No long D-Bus await may run in
+/// the event/watchdog select loop, which owns and revokes SessionSupervisor.
+/// This is not a grant of authorization: even a fully successful probe leaves
+/// the underlying production session unable to become LOADED.
+async fn live_health_probe(
+    connection: Connection, expected_owner: String, expected_session: OwnedObjectPath,
+) -> Outcome<()> {
+    let bus = bounded(Proxy::new(&connection, DBUS, DBUS_PATH, DBUS)).await?;
+    let manager = bounded(Proxy::new(&connection, SERVICE, MANAGER, MANAGER_IFACE)).await?;
+    let session = bounded(Proxy::new(
+        &connection, SERVICE, expected_session.as_str(), SESSION_IFACE,
+    )).await?;
+    if current_owner(&bus).await? != expected_owner
+        || local_session(&manager).await? != expected_session
+    {
+        return Err("SESSION_MISMATCH");
+    }
+    safe_snapshot(&manager, &session).await?;
+    // A service restart or session replacement mid-query is a denial, not
+    // a valid heartbeat (individual property calls may span time).
+    if current_owner(&bus).await? != expected_owner
+        || local_session(&manager).await? != expected_session
+    {
+        return Err("SESSION_MISMATCH");
+    }
+    Ok(())
+}
+
+fn uptime_deadline_expired(previous: f64, last_good: f64, now: f64, seconds: f64) -> bool {
+    !previous.is_finite() || !last_good.is_finite() || !now.is_finite()
+        || now < previous || now < last_good
+        || now - previous >= seconds || now - last_good >= seconds
+}
+
 fn drain<'a>(stream: &mut zbus::proxy::SignalStream<'a>) -> bool {
     loop {
         match stream.next().now_or_never() {
@@ -178,19 +212,27 @@ async fn monitor(seconds: u64) -> Outcome<()> {
         || start.elapsed() > Duration::from_secs(15)
     { return Err("STARTUP_WATCHDOG_GAP"); }
     controller.observe_snapshot().map_err(|_| "UNVERIFIED_SESSION")?;
-    let mut tick = tokio::time::interval(Duration::from_secs(1));
+    // The watchdog and event receivers must stay responsive even if a
+    // health query is delayed. A single bounded probe runs on a separate
+    // Tokio task, and returns ONLY a non-authorizing result via this channel.
+    // In contrast to awaiting D-Bus inside the timer branch, there is no
+    // query future capable of starving the lock/suspend/owner signal arms.
+    let (probe_tx, mut probe_results) = tokio::sync::mpsc::channel::<Outcome<()>>(1);
+    let mut probe_task: Option<tokio::task::JoinHandle<()>> = None;
+    let mut next_probe = Instant::now();
+    let mut tick = tokio::time::interval(Duration::from_millis(100));
     tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut previous_uptime = uptime()?;
+    let mut last_good_uptime = previous_uptime;
     let stop_at = Instant::now() + Duration::from_secs(seconds);
     loop {
-        if Instant::now() >= stop_at { break; }
         tokio::select! {
+            biased;
             message = owner_signals.next() => {
-                if message.is_some() {
-                    controller.on_event(TerminalEvent::LogindOwnerChanged);
-                } else {
-                    controller.on_event(TerminalEvent::BusDisconnected);
-                }
+                controller.on_event(message.map_or(
+                    TerminalEvent::BusDisconnected,
+                    |_| TerminalEvent::LogindOwnerChanged,
+                ));
             }
             message = manager_signals.next() => {
                 controller.on_event(message.map_or(TerminalEvent::BusDisconnected,
@@ -208,37 +250,68 @@ async fn monitor(seconds: u64) -> Outcome<()> {
                 controller.on_event(message.map_or(TerminalEvent::BusDisconnected,
                     |_| TerminalEvent::SnapshotRejected));
             }
+            received = probe_results.recv() => {
+                // A task panic, dropped sender or failed validation is denial.
+                // Crucially, no result is applied until the watchdog deadline
+                // is checked against a suspend-inclusive clock.
+                probe_task.take();
+                let now = uptime()?;
+                if uptime_deadline_expired(
+                    previous_uptime, last_good_uptime, now, 5.0
+                ) {
+                    controller.on_event(TerminalEvent::WatchdogOverdue);
+                } else if !matches!(received, Some(Ok(()))) {
+                    controller.on_event(TerminalEvent::SnapshotRejected);
+                } else if controller.observe_snapshot().is_err() {
+                    controller.on_event(TerminalEvent::WatchdogOverdue);
+                } else {
+                    last_good_uptime = now;
+                    next_probe = Instant::now() + Duration::from_secs(1);
+                }
+            }
             _ = tick.tick() => {
-                let u = uptime()?;
-                if u < previous_uptime || u - previous_uptime > 5.0 {
+                let now = uptime()?;
+                if uptime_deadline_expired(
+                    previous_uptime, last_good_uptime, now, 5.0
+                ) {
+                    controller.on_event(TerminalEvent::WatchdogOverdue);
+                } else if controller.tick().is_err() {
                     controller.on_event(TerminalEvent::WatchdogOverdue);
                 }
-                if controller.monitor_phase() != MonitorPhase::Terminated {
-                    if current_owner(&dbus).await? != owner
-                       || local_session(&manager).await? != session_path {
-                        controller.on_event(TerminalEvent::SessionMismatch);
-                    } else if safe_snapshot(&manager, &session).await.is_err() {
-                        controller.on_event(TerminalEvent::SnapshotRejected);
-                    } else {
-                        let finished_uptime = uptime()?;
-                        // A suspend or stalled D-Bus query DURING health
-                        // validation must be rejected before a positive
-                        // snapshot can refresh the watchdog.
-                        if finished_uptime < u || finished_uptime - u > 5.0 {
-                            controller.on_event(TerminalEvent::WatchdogOverdue);
-                        } else {
-                            previous_uptime = finished_uptime;
-                            controller.observe_snapshot().map_err(|_| "MONITOR_TERMINATED")?;
-                            controller.tick().map_err(|_| "MONITOR_TERMINATED")?;
-                        }
-                    }
+                previous_uptime = now;
+                if controller.monitor_phase() != MonitorPhase::Terminated
+                    && probe_task.is_none() && Instant::now() >= next_probe
+                {
+                    let conn = connection.clone();
+                    let pinned_owner = owner.clone();
+                    let pinned_session = session_path.clone();
+                    let sender = probe_tx.clone();
+                    probe_task = Some(tokio::spawn(async move {
+                        // The WHOLE probe has a shorter deadline than the
+                        // independently enforced 5-second watchdog. It is
+                        // canceled on timeout, not allowed to complete late.
+                        let result = match timeout(
+                            Duration::from_secs(4),
+                            live_health_probe(conn, pinned_owner, pinned_session),
+                        ).await {
+                            Ok(result) => result,
+                            Err(_) => Err("HEALTH_PROBE_TIMEOUT"),
+                        };
+                        let _ = sender.send(result).await;
+                    }));
                 }
+            }
+            _ = tokio::time::sleep_until(stop_at.into()) => {
+                // Observation expiry is not an unlock or a factor success.
+                break;
             }
         }
         if controller.monitor_phase() == MonitorPhase::Terminated {
+            if let Some(task) = probe_task.take() { task.abort(); }
             return Err("SESSION_LOCKED_FAIL_CLOSED");
         }
     }
+    if let Some(task) = probe_task.take() { task.abort(); }
     Ok(())
 }
 #[tokio::main]
