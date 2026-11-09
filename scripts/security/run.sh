@@ -24,6 +24,9 @@ case "$mode" in
   check-versions)
     bash scripts/security/check-versions.sh
     ;;
+  static-pr|static-quick|static-dependencies|static-browser|static-sast|static-secrets)
+    bash scripts/security/run-static.sh "${mode#static-}"
+    ;;
   pr|quick|dependencies|browser|sast|fuzz-smoke|full|release-verify)
     echo "SEC00_NOT_CONFIGURED: $mode belongs to a later SEC-01 package; refusing false PASS" >&2
     exit 78
