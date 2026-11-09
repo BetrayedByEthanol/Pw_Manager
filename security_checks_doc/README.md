@@ -23,3 +23,5 @@ SEC-01A introduces runnable static checks, but **infrastructure acceptance is se
 - Existing `extenstion/` spelling and five standalone Cargo manifests are preserved.
 - No real credentials, PRF outputs, recovery codes, hardware tokens or signing keys may enter ordinary CI. OPEN-01/OPEN-15/G1–G3 remain blocked.
 - Gitea's compatible workflow mechanism may be used after testing; these paths and runbooks target Forgejo, the source-of-truth CI.
+
+For a complete local candidate scan inside rootless Podman (after building the container), use `bash scripts/security/run-static-container.sh --image localhost/vaulty/security-static:sec01a --candidate --mode static-pr`. An offline run requires dependency/advisory caches; see [container instructions](03-container-and-zot.md).
