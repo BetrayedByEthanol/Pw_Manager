@@ -1,0 +1,10 @@
+rules:
+  - id: vaulty-python-shell-true
+    languages: [python]
+    severity: ERROR
+    message: Do not run arbitrary commands using a shell in Vaulty security tooling.
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.run(..., shell=True, ...)
+          - pattern: subprocess.Popen(..., shell=True, ...)
+          - pattern: subprocess.call(..., shell=True, ...)
