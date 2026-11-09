@@ -32,8 +32,8 @@ case "$mode" in
     exit 78
     ;;
   help|-h|--help)
-    echo "Usage: bash scripts/security/run.sh {contract|doctor|plan|rust-baseline|check-versions|pr|quick|dependencies|browser|sast|fuzz-smoke|full|release-verify}"
-    echo "SEC-00 implements only contract, doctor, plan and rust-baseline; scanner modes exit 78."
+    echo "Usage: bash scripts/security/run.sh {contract|doctor|plan|rust-baseline|check-versions|static-pr|static-quick|static-dependencies|static-browser|static-sast|static-secrets|pr|quick|dependencies|browser|sast|fuzz-smoke|full|release-verify}"
+    echo "SEC-01A candidate checks: static-*. Enforced PR/release gates remain disabled; original pr/full/release-verify commands exit 78."
     ;;
   *)
     echo "Unknown security mode: $mode" >&2
