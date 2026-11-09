@@ -95,6 +95,38 @@ References:
 - [systemd Inhibitor Locks](https://systemd.io/INHIBITOR_LOCKS/)
 - [logind D-Bus interface](https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.login1.html)
 
+### 2a. Operator observation readiness handshake (Codex P2)
+
+The local Python evidence harness must **not** prompt for screen lock,
+suspend or logind restart until the Rust observer is actually listening.
+The earlier `RUNNING_OBSERVATION` marker was printed before launching
+the child and could induce false `UNSAFE_SESSION` or `STARTUP_SIGNAL_RACE`
+receipts when the operator acted too quickly.
+
+The Rust runner now emits exactly
+`V03-C: OBSERVER_READY; no session or credential authorized`, flushed
+**after** it establishes signal subscriptions, holds the delay inhibitor,
+pins the logind owner/session, checks startup state, drains queued startup
+events and sets the initial watchdog. It does not emit a READY marker
+on errors during initialization.
+
+The Python capture tool uses a bounded read of this exact line from the
+child process, rather than preemptively printing its own marker. Only when
+the marker arrives and the observer remains running does it print
+`RUNNING_OBSERVATION`; **only then** may the operator trigger the
+selected lifecycle event. If no valid marker arrives within the finite
+startup deadline, the child is stopped and the receipt is `INCOMPLETE`
+without an action prompt.
+
+The receipt classifier additionally requires the exact READY line before
+a baseline finish or terminal event can be recorded as a local observation.
+Receipts record `observer_ready_handshake` and
+`operator_action_prompted_after_ready` as test bookkeeping, not
+authorization. The marker is neither a proof that a production daemon is
+safe nor an invitation to unlock a real vault.
+
+See [Codex P2 disposition](../security/V03D-codex-readiness-handshake-p2-2026-11-09.md).
+
 ### 3. Operator physical/Linux tests
 
 The **read-only** Rust executable remains opt-in, non-root, and must be
@@ -116,14 +148,15 @@ python3 -B -I tools/lifecycle/v03d_capture.py \
   --mode baseline --seconds 30 \
   --receipt "$OUT/baseline.json" --hardware-test
 
-# Lock case: use the desktop's lock control after RUNNING_OBSERVATION.
+# Lock case: DO NOT act at the startup/preparation message.
+# Use the desktop's lock control only after RUNNING_OBSERVATION.
 # Unlock normally afterwards, then read only the redacted receipt.
 python3 -B -I tools/lifecycle/v03d_capture.py \
   --mode lock --seconds 60 \
   --receipt "$OUT/screen-lock.json" --hardware-test
 
 # OPTIONAL suspend: on a test machine with saved work and a confirmed
-# recovery path, manually request Suspend after RUNNING_OBSERVATION.
+# recovery path, manually request Suspend only after RUNNING_OBSERVATION.
 # Never auto-trigger suspend from the verification utility.
 python3 -B -I tools/lifecycle/v03d_capture.py \
   --mode suspend --seconds 60 \
@@ -137,9 +170,10 @@ python3 -B -I tools/lifecycle/v03d_capture.py \
 ```
 
 The script first compiles the **locked** isolated review executable,
-asks for explicit TEST confirmation and never invokes a sleep, lock, or
-service restart action itself. The operator manually triggers any selected
-event. It writes an exclusive 0600 receipt in an existing private 0700
+asks for explicit TEST confirmation, **waits for Rust OBSERVER_READY**, and
+never invokes a sleep, lock, or service restart action itself. The operator
+manually triggers an event **only after** RUNNING_OBSERVATION, never while
+the runner is preparing. It writes an exclusive 0600 receipt in an existing private 0700
 directory and refuses to overwrite previous evidence. It checks the Git
 working tree is clean and records the full commit SHA.
 
@@ -165,7 +199,7 @@ only the reviewed redacted JSON receipt.
 | A03D-01 Startup race | All-session signal subscriptions precede PID lookup; reject queued startup Lock/Unlock; match rule/source test | Actual rapid lock/unlock on Linux and verifier review |
 | A03D-02 Inhibitor | Owned sleep:shutdown delay FD, fail-closed acquisition, synchronous session lock before FD drop, mock FD tests | Live inhibitor and pre-suspend transition, power-cycle safety and compositor reliability |
 | A03D-03 Monitoring | V03-C independent watchdog, no blocking health probes, owner/session checks | Actual lock/suspend/disconnect and watchdog fault injection on test desktop |
-| A03D-04 Receipts | Private no-overwrite redacted self-report; mode-specific event verification, offline tests | Operator local runs; independent review and repeatability |
+| A03D-04 Receipts | Rust emits flushed READY only after full initialization; Python waits with deadline and emits action prompt only afterward; no READY/early failure is INCOMPLETE; private no-overwrite redacted mode-specific receipts and offline tests | Operator local runs; independent review and repeatability |
 | A03D-05 Safety gates | No public V03 LOADED constructor, no real secret backend, locked CI | G1–G3, OPEN-01/15, actual daemon lifecycle and memory hardening |
 
 **No source merge or operator receipt is itself a READY vote.** Security
