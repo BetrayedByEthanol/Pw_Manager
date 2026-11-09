@@ -30,7 +30,7 @@ The runner:
   properties signals and NameOwnerChanged, then checks the service's unique
   name and PID-bound logind session. Revalidates bindings every second.
 - Uses a direct, **uncached** D-Bus Properties.Get for `User`, `Seat`,
-  `Active`, `LockedHint`, `CanLock`, `Remote`, `Class`, `Type`,
+  `Active`, `LockedHint`, lock capability hints (not universally exposed), `Remote`, `Class`, `Type`,
   `State`, `PreparingForSleep` and `PreparingForShutdown`.
 - Requires a local, non-remote, active, unlocked, seat-backed `user`
   session on X11 or Wayland belonging to the invoking process's UID.
@@ -95,3 +95,13 @@ executable stays inert.
 **Next:** V03-C1 harden early session-signal subscriptions and implement the
 delay inhibitor in a trusted daemon; add real desktop logind failure-injection
 and independent session/crypto review. No production unlock until then.
+
+
+### P2 compatibility correction (review round)
+The mandatory logind Session `CanLock` Properties.Get was removed from the
+Rust and previous Python observers. Although modern systemd interfaces may
+expose it, Ubuntu 24.04's installed Session XML does not. Both now require
+supported, typed `LockedHint` plus logind session/owner state and explicitly
+subscribed Lock/Unlock signals instead. These are **observations**, not a
+cryptographic or compositor-backed promise that screen locking is reliable.
+A real desktop integration test remains required for production G2.
