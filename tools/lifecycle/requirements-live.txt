@@ -1,0 +1,3 @@
+# Optional Linux V03-B observer ONLY; never installed by product or CI.
+# Install in an isolated venv, never the production daemon environment.
+dbus-next==0.2.3

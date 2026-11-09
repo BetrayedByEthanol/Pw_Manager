@@ -36,6 +36,7 @@ jobs:
           python3 tools/v02_verifier/reference_v02i_prf.py --verify
           python3 -m unittest discover -s tools/v02_verifier -p 'test_v02i_policy_contract.py' -v
           python3 -m unittest discover -s tools/hardware -p 'test_*.py' -v
+          python3 -B -m unittest discover -s tools/lifecycle -p 'test_*.py' -v
           python3 tools/hardware/fido2_v02j.py preflight
           python3 -B -I tools/hardware/fido2_v02l.py preflight
           cargo run --manifest-path tools/v02_verifier/Cargo.toml --locked --bin vaulty_v02k -- preflight

@@ -1,6 +1,6 @@
 # Vaulty — Acceptance, Evidence and Security Gap Register
 
-**Snapshot date:** 2026-11-09 | **Merged source baseline:** [V03 PR #25](https://github.com/BetrayedByEthanol/Pw_Manager/pull/25), commit `6411bcdc2477e8148cf0010ca9641122a8a410ae`. **Local self-reported evidence received:** [EV-023 V02-K native PRF stability/scope](../security/V02K-local-hardware-evidence-received-2026-11-08.md) and [EV-025 V02-L negative verifier/wrong-key observations](../security/V02L-local-hardware-negative-evidence-received-2026-11-09.md). **No independent OPEN-15, OPEN-01 or G1–G3 approval; no actual Vaulty entry unlocked.**  
+**Snapshot date:** 2026-11-09 | **Merged source baseline:** [V03-A PR #26](https://github.com/BetrayedByEthanol/Pw_Manager/pull/26), commit `633841a85f55ba0df8df9542ae5b91ac6cf13bb8`. **Local self-reported evidence received:** [EV-023 V02-K native PRF stability/scope](../security/V02K-local-hardware-evidence-received-2026-11-08.md) and [EV-025 V02-L negative verifier/wrong-key observations](../security/V02L-local-hardware-negative-evidence-received-2026-11-09.md). **No independent OPEN-15, OPEN-01 or G1–G3 approval; no actual Vaulty entry unlocked.**  
 **Purpose:** provide a reviewable distinction between **design approved**, **source merged**, **CI passed**, **security behavior verified** and **release certified**. None is interchangeable. See [implementation roadmap](implementation.md).
 
 ## 1. Recorded merged evidence
@@ -234,7 +234,7 @@ can return an entry secret, a verified hardware proof or an approved write.
 authenticator, authorized credential release or runtime production availability.**
 EV-023/EV-025 remain operator local self-reports, not approvals.
 
-## 2r. V03-A trusted lifecycle / authenticator boundary (PR candidate; negative evidence only)
+## 2r. V03-A trusted lifecycle / authenticator boundary (merged PR #26; negative evidence only)
 
 Source: [V03-A boundary design](../architecture/V03A-trusted-lifecycle-and-authenticator-boundary.md),
 `src/v03a.rs` and `src/v03a_tests.rs`. **No system-bus integration, production
@@ -254,6 +254,30 @@ OPEN-01 and OPEN-15 remain blocked.
 **Do not classify a typed `LogindSafetyEvent` as an authenticated system-bus
 message or a `ProviderAdapter` as a verified authenticator.** Production
 activation is a separately reviewed later milestone.
+
+## 2s. V03-B Linux logind observer and watchdog (PR candidate, not runtime security)
+
+[Read-only Linux observer implementation/review limitations](../architecture/V03B-linux-logind-watchdog.md)
+and `tools/lifecycle/v03b_logind.py` are separate from the Rust
+authorization daemon. They can contact the actual system bus only during
+explicit operator invocation, but their stdout, process exit status or
+`OBSERVED_ONLY` report **never authorize V03 Session or a factor**. CI
+uses a fully fake bus and does not exercise the physical desktop.
+
+| ID | V03-B acceptance candidate | Tests/evidence | Still blocked |
+| --- | --- | --- | --- |
+| A03B-01 | Match actual logind service and local session, not guessed bus names/paths | Direct `dbus-next` system bus, `GetNameOwner`, `GetSessionByPID`, bound sender/path, startup subscriptions before snapshot; offline mocks | Real machine observation/confirmed systemd/logind behavior; no trusted in-process Rust session integration |
+| A03B-02 | No secret activity before trusted session state | Fail if `LockedHint`, `Active`, `CanLock`, desktop session kind, UID, `PreparingForSleep` or `PreparingForShutdown` invalid; observe-only no authorization output | Desktop lock semantics vary; OS session/compositor pairing and true trusted client gate |
+| A03B-03 | Lost or malformed OS signals fail closed | Owner restart/change, session removal, lock/unlock, property changes, malformed D-Bus, overflow, query failures and disconnect tests | Live D-Bus failure-injection, signal coverage and delay inhibitor |
+| A03B-04 | Independent watchdog detects suspend gaps | Periodic owner/session/property refresh, bounded D-Bus query timeouts and `CLOCK_BOOTTIME` gap rejection; synthetic regressions | In-process Rust watchdog/lifecycle registration, OS suspend-before-secret-wipe confirmation |
+| A03B-05 | No READY/cryptographic escalation | Optional dependency isolated from product, no VMK/DEK API, default executable inert, source-inventory and CI fixture checks | OPEN-01, OPEN-15, G1–G3 and trusted physical provider still blocked |
+
+**No A03B criterion is production-verified by CI.** Completion of the
+read-only transport milestone is not permission to wire browser, native host
+or plaintext credential operations to an untrusted event-output channel.
+An independently reviewed in-process daemon listener or authenticated
+transport, initial-state TOCTOU defense and actual local failure testing
+must precede production LOADED state.
 
 ## 2l. Round-two findings acceptance, scoped to source review only
 
