@@ -320,10 +320,14 @@ OPEN-01 and OPEN-15 remain BLOCKED.
 | ID | Review candidate / acceptance | Implementation and CI evidence | Remaining / no release inference |
 | --- | --- | --- | --- |
 | A03D-01 | No startup window between PID lookup and Lock/Unlock signal subscription | `zbus::MessageStream::for_match_rule` for all Session and PropertiesChanged path-namespace messages installed **before** GetSessionByPID, buffered startup signal rejection, mock rule regression | Local rapid lock/unlock, compositor fidelity and independent source review; not a privileged LOADED gate |
-| A03D-02 | Delay inhibitor owned until after sensitive state lock | Fail-closed `Manager.Inhibit("sleep:shutdown", ..., "delay")`, FD bound to Rust SessionSupervisor via RAII; synchronous terminal lock precedes FD release, including scope exit; mock FD test | Local inhibitor acquisition/real pre-suspend handling; systemd max delay, forced suspend and crash-time cleanup still uncontrolled |
+| A03D-02 | Delay inhibitor owned until after sensitive state lock | Fail-closed `Manager.Inhibit("sleep:shutdown", ..., "delay")`, FD bound to Rust SessionSupervisor via RAII; synchronous terminal lock precedes FD release, including scope exit; **P1 correction:** common startup/runtime classifier ignores only authenticated `DelayInhibited` bookkeeping; security-related/mixed/malformed manager properties remain terminal; synthetic D-Bus signal tests | Live baseline/inhibitor and pre-suspend handling still unverified; systemd max delay, forced suspend and crash-time cleanup uncontrolled |
 | A03D-03 | No auth or restoration on resume/failure | V03-C watchdog remains independent, all normal-built sessions CLOSED, irreversible termination; no new ability to set loaded session | Actual daemon wiring, secure session event subscriptions and process memory policy |
 | A03D-04 | Redacted operator evidence | `v03d_capture.py` compiles locked Rust runner, requires TEST, Git-clean source, private 0600 receipt, no overwrites; result classified from fixed event category; synthetic tests | Real local baseline/lock/sleep/disconnect receipts must be supplied by operator; no CLI output, D-Bus traces or private session data in PR |
 | A03D-05 | Gate labels not escalated | Source inventory, GitHub/Forgejo Rust/receipt tests, no live CI suspend | OPEN-01/15 and G1–G3 blocked; no independent physical evidence |
+
+**Codex P1 accepted and corrected in source**: see
+[V03-D manager/inhibitor property notification disposition](../security/V03D-codex-manager-property-inhibitor-p1-2026-11-09.md).
+No physical evidence or independent G2 approval follows from synthetic tests.
 
 **No EV-026 physical receipt exists until an actual operator runs the
 local desktop procedure and submits only redacted output.** Successful
