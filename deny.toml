@@ -5,7 +5,10 @@ all-features = true
 
 [advisories]
 yanked = "warn"
-unmaintained = "warn"
+# cargo-deny 0.20.2 uses a scope here, not a lint severity.
+# Fail on unmaintained direct dependencies of these standalone Rust crates;
+# transitive-only unmaintained advisories are outside this initial policy.
+unmaintained = "workspace"
 
 [licenses]
 confidence-threshold = 0.8
