@@ -488,6 +488,64 @@ mod tests {
     use vaulty_v02_candidate_verifier::v03::Phase;
 
     #[test]
+    fn delay_fd_is_released_only_after_same_process_session_is_locked() {
+        use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+        struct MockFd(Arc<AtomicUsize>);
+        impl Drop for MockFd {
+            fn drop(&mut self) { self.0.fetch_add(1, Ordering::SeqCst); }
+        }
+        let drops = Arc::new(AtomicUsize::new(0));
+        let mut scope = InhibitedSupervisor::new(
+            closed_controller(Duration::from_secs(5)),
+            MockFd(drops.clone()),
+        );
+        assert_eq!(drops.load(Ordering::SeqCst), 0);
+        scope.on_event(TerminalEvent::SleepStart);
+        assert_eq!(scope.phase(), Phase::Locked);
+        assert_eq!(scope.terminal_event(), Some(TerminalEvent::SleepStart));
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+        drop(scope);
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn early_return_releases_delay_fd_after_revoking_session() {
+        use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+        struct MockFd(Arc<AtomicUsize>);
+        impl Drop for MockFd {
+            fn drop(&mut self) { self.0.fetch_add(1, Ordering::SeqCst); }
+        }
+        let drops = Arc::new(AtomicUsize::new(0));
+        {
+            let scope = InhibitedSupervisor::new(
+                closed_controller(Duration::from_secs(5)),
+                MockFd(drops.clone()),
+            );
+            assert_eq!(scope.monitor_phase(), MonitorPhase::Observing);
+            assert_eq!(drops.load(Ordering::SeqCst), 0);
+            // Simulated D-Bus error exits this scope without a signal.
+        }
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn all_session_path_subscription_can_reject_early_lock_unlock_races() {
+        // A local signal path is not known until GetSessionByPID has
+        // completed. The early stream therefore covers the entire session
+        // path namespace rather than one object resolved too late.
+        let rule = MatchRule::builder()
+            .msg_type(MessageType::Signal)
+            .sender(SERVICE).unwrap()
+            .interface(SESSION_IFACE).unwrap()
+            .path_namespace("/org/freedesktop/login1/session").unwrap()
+            .build();
+        let rendered = rule.to_string();
+        assert!(rendered.contains("path_namespace='/org/freedesktop/login1/session'"));
+        assert!(!rendered.contains("member='Lock'")); // Lock AND Unlock
+        assert!(!rendered.contains("arg0=")); // no pre-resolution session ID
+    }
+
+    #[test]
     fn ubuntu_24_04_compatible_snapshot_requires_supported_lock_hint_not_canlock() {
         // There is no mandatory CanLock D-Bus Get. An active, unlocked,
         // local graphical session with supported LockedHint is observable.
