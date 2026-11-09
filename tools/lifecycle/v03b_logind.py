@@ -138,6 +138,13 @@ def positive_snapshot(values: dict[str, Any]) -> bool:
         and values.get("state") == "active"
         and type(values.get("can_lock")) is bool and values["can_lock"] is True
         and values.get("kind") in ("x11", "wayland")
+        and values.get("session_class") == "user"
+        and type(values.get("remote")) is bool and values["remote"] is False
+        and isinstance(values.get("seat"), (list, tuple))
+        and len(values["seat"]) == 2
+        and isinstance(values["seat"][0], str) and bool(values["seat"][0])
+        and isinstance(values["seat"][1], str)
+        and values["seat"][1].startswith("/org/freedesktop/login1/seat/")
         and type(values.get("uid")) is int and values["uid"] == os.getuid()
         and type(values.get("sleeping")) is bool and values["sleeping"] is False
         and type(values.get("shutting_down")) is bool
@@ -216,6 +223,9 @@ class DirectSystemBus:
             "state": await get(session, SESSION_IFACE, "State"),
             "kind": await get(session, SESSION_IFACE, "Type"),
             "can_lock": await get(session, SESSION_IFACE, "CanLock"),
+            "session_class": await get(session, SESSION_IFACE, "Class"),
+            "remote": await get(session, SESSION_IFACE, "Remote"),
+            "seat": await get(session, SESSION_IFACE, "Seat"),
             "sleeping": await get(MANAGER, MANAGER_IFACE, "PreparingForSleep"),
             "shutting_down": await get(MANAGER, MANAGER_IFACE, "PreparingForShutdown"),
         }
