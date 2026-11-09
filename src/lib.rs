@@ -7,3 +7,5 @@ pub mod v02;
 pub mod v03;
 // V03-A trust boundaries: no real lifecycle or authenticator activation.
 pub mod v03a;
+// V03-C owns session lock enforcement; live bus runner is a separate crate.
+pub mod v03c;
