@@ -127,8 +127,8 @@ impl SessionSupervisor {
         };
         self.session.on_lifecycle(mapped); // clears the owned LOADED body
     }
-    /// No mutable session getter, resume, or ability to mark V03's internal
-    /// monitor authorized. Any future production load requires fresh approval.
+    // No mutable session getter, resume, or ability to mark V03's internal
+    // monitor authorized. Any future production load requires fresh approval.
 }
 #[cfg(test)]
 #[path = "v03c_tests.rs"]
