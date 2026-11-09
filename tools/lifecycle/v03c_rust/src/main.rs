@@ -41,6 +41,22 @@ where T: TryFrom<zbus::zvariant::OwnedValue>,
         "Get", &(proxy.interface().as_str(), name))).await?;
     raw.try_into().map_err(|_| "INVALID_PROPERTY")
 }
+/// Validate only properties supported by the target logind interface.
+/// These are OBSERVATIONS, not a certificate that a desktop compositor
+/// implements a reliable lock screen. The logind Session Lock/Unlock stream
+/// must also have been subscribed before snapshot reads commence.
+fn acceptable_session_state(
+    uid: u32, own_uid: u32, seat: &str, seat_path: &str,
+    locked: bool, active: bool, remote: bool,
+    state: &str, kind: &str, class: &str, sleeping: bool, shutdown: bool,
+) -> bool {
+    uid == own_uid && !seat.is_empty()
+        && seat_path.starts_with("/org/freedesktop/login1/seat/")
+        && !locked && active && !remote
+        && !sleeping && !shutdown && state == "active"
+        && class == "user" && matches!(kind, "x11" | "wayland")
+}
+
 async fn safe_snapshot(manager: &Proxy<'_>, session: &Proxy<'_>) -> Outcome<()> {
     let (uid, _): (u32, OwnedObjectPath) = property(session, "User").await?;
     let (seat, seat_path): (String, OwnedObjectPath) = property(session, "Seat").await?;
@@ -65,12 +81,10 @@ async fn safe_snapshot(manager: &Proxy<'_>, session: &Proxy<'_>) -> Outcome<()> 
     );
     let own_uid = std::fs::metadata("/proc/self")
         .map_err(|_| "NO_KERNEL_UID")?.uid();
-    if uid != own_uid || seat.is_empty()
-        || !seat_path.as_str().starts_with("/org/freedesktop/login1/seat/")
-        || locked || !active || remote
-        || sleeping || shutdown || state != "active"
-        || class != "user" || !matches!(kind.as_str(), "x11" | "wayland")
-    {
+    if !acceptable_session_state(
+        uid, own_uid, &seat, seat_path.as_str(), locked, active, remote,
+        &state, &kind, &class, sleeping, shutdown,
+    ) {
         return Err("UNSAFE_SESSION");
     }
     Ok(())
