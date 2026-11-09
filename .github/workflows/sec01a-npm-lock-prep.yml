@@ -20,6 +20,6 @@ jobs:
         run: |
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           echo SEC01A_LOCK_BEGIN
-          gzip -n -c package-lock.json | base64 -w0
+          base64 -w0 package-lock.json
           echo
           echo SEC01A_LOCK_END
