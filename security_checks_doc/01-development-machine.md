@@ -68,3 +68,5 @@ cargo deny --config deny.toml --manifest-path tools/security_probes/rust/Cargo.t
 ```
 
 The `[advisories] unmaintained = "workspace"` setting is a **scope** supported by cargo-deny 0.20.2: unmaintained direct dependencies fail; transitive-only unmaintained advisories are not included in that gate. Do not use `"warn"`, which is not a supported value. TOML parsing alone is insufficient: the real pinned cargo-deny CLI must parse this configuration.
+
+**Version-specific caveat:** `licenses.unlicensed` is removed in cargo-deny 0.20.2, just like `unmaintained = "warn"` is invalid. The current policy omits the removed key; unlicensed crates fail by default unless an individually reviewed license clarification is added. A real pinned 0.20.2 CLI smoke test of both `check bans` and `check sources` passed in [review run 42610908904](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42610908904). It does not replace the full five-manifest dependency policy scan.
