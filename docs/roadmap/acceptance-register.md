@@ -1,6 +1,6 @@
 # Vaulty — Acceptance, Evidence and Security Gap Register
 
-**Snapshot date:** 2026-11-09 | **Merged source baseline:** [V02-L follow-up PR #23](https://github.com/BetrayedByEthanol/Pw_Manager/pull/23), commit `edd3256a90a2993d907525495e3eb01bdabe9a47`. **Local self-reported evidence received:** [EV-023 V02-K native PRF stability/scope](../security/V02K-local-hardware-evidence-received-2026-11-08.md) and [EV-025 V02-L negative verifier/wrong-key observations](../security/V02L-local-hardware-negative-evidence-received-2026-11-09.md). **No independent OPEN-15, OPEN-01 or G1–G3 approval; no actual Vaulty entry unlocked.**  
+**Snapshot date:** 2026-11-09 | **Merged source baseline:** [V03 PR #25](https://github.com/BetrayedByEthanol/Pw_Manager/pull/25), commit `6411bcdc2477e8148cf0010ca9641122a8a410ae`. **Local self-reported evidence received:** [EV-023 V02-K native PRF stability/scope](../security/V02K-local-hardware-evidence-received-2026-11-08.md) and [EV-025 V02-L negative verifier/wrong-key observations](../security/V02L-local-hardware-negative-evidence-received-2026-11-09.md). **No independent OPEN-15, OPEN-01 or G1–G3 approval; no actual Vaulty entry unlocked.**  
 **Purpose:** provide a reviewable distinction between **design approved**, **source merged**, **CI passed**, **security behavior verified** and **release certified**. None is interchangeable. See [implementation roadmap](implementation.md).
 
 ## 1. Recorded merged evidence
@@ -212,7 +212,7 @@ V02-H can be merged as **internal review preparation only**, never as proof of v
 | EV-024 | [Merged V02-L-A/B PR #22](https://github.com/BetrayedByEthanol/Pw_Manager/pull/22); [merged V02-L diagnostics and PRF context follow-up #23](https://github.com/BetrayedByEthanol/Pw_Manager/pull/23); [runbook](../security/V02L-native-fido2-negative-and-failure-verification.md); [lab code](../../tools/hardware/fido2_v02l.py) | **SOURCE MERGED**, including libfido2 CBOR framing correction, no-secret error reporting, full offline native PRF context checks, and negative verifier/failure harness. Local operator execution is recorded **separately** in EV-025. | No production vault route or device manufacturer attestation; independent OPEN-15/01, V03/V06 runtime; G1–G3 BLOCKED. |
 | EV-025 | [V02-L redacted operator evidence intake](../security/V02L-local-hardware-negative-evidence-received-2026-11-09.md); [primary](../security/evidence/v02l-primary-verifier-local-2026-11-09.json); [backup](../security/evidence/v02l-backup-verifier-local-2026-11-09.json); [wrong-device](../security/evidence/v02l-wrong-device-local-2026-11-09.json) | **RECEIVED 2026-11-09 (local self-report):** three receipts source-pinned to merged `edd3256a`. Each physical-role verifier reports `positive_signed_up_uv=OBSERVED` and five corrupted-input negatives `LOCAL_VERIFIER_REJECTED`. Wrong-device reports `control_before=OBSERVED`, target credential `LOCAL_DEVICE_REJECTION_UNCLASSIFIED`, `control_after=OBSERVED`. Earlier invalid-credential/INCOMPLETE attempts are not counted as accepted negatives. | Not independent token/firmware/device-uniqueness proof, not a classified cause of cross-device rejection, not a signed-UV-absent test, not daemon replay/revocation/fallback, not browser parity or production key slot; I-P03/04/06 **PARTIAL**, OPEN-15/01 and G1–G3 BLOCKED. |
 
-## 2q. V03 session state and authenticator adapter foundation (PR #25 candidate)
+## 2q. V03 session state and authenticator adapter foundation (merged PR #25; limited acceptance)
 
 **Source stage only — not a release gate or provider implementation.** The code
 in [V03 foundation](../architecture/V03-session-and-authenticator-foundation.md)
@@ -233,6 +233,27 @@ can return an entry secret, a verified hardware proof or an approved write.
 **Never interpret V03's local READ intent or test-only LOADED as a verified
 authenticator, authorized credential release or runtime production availability.**
 EV-023/EV-025 remain operator local self-reports, not approvals.
+
+## 2r. V03-A trusted lifecycle / authenticator boundary (PR candidate; negative evidence only)
+
+Source: [V03-A boundary design](../architecture/V03A-trusted-lifecycle-and-authenticator-boundary.md),
+`src/v03a.rs` and `src/v03a_tests.rs`. **No system-bus integration, production
+LOADED path, trusted factor verification, new recovery slots or real hardware
+operations.** Lifecycle and provider tests are synthetic, while G1–G3,
+OPEN-01 and OPEN-15 remain blocked.
+
+| ID | Review-gated acceptance | Expected source/tests | Remaining / no approval |
+| --- | --- | --- | --- |
+| A03A-01 | Lifecycle monitor starts unavailable and cannot be marked healthy by public library callers | Health watchdog 1–60 seconds; simulated verified source/heartbeat only `#[cfg(test)]`; stale or disconnected source locks and cancels pending operations | Real D-Bus signal authentication, local session/seat matching, initial lock state, independent liveness timer, OS integration proof |
+| A03A-02 | Conservative Linux logind event handling | Session lock, sleep true/false, shutdown, unexpected unlock, subscription loss and malformed event all lock/clear; wake cannot resurrect loaded state | Linux logind subscription and trusted sender binding, delay inhibitor, Windows equivalents |
+| A03A-03 | Entry read-intent policy cannot be silently substituted | Pending operation binds ID, entry, default-vs-custom first factor, physical-vs-virtual provider and tier; forged/stale/replayed requests rejected | Trusted daemon and per-entry factor authorizations / actual DEK unwrap |
+| A03A-04 | No software substitute for physical or ISOLATED access | Sealed virtual/physical adapter types; physical→virtual and reverse substitution denied; virtual never called a second factor | Registered FIDO2 key, RP/UV/UP/salt proof on each read, V06 revocation registry, OPEN-15 |
+| A03A-05 | Physical unavailable/suspended/revoked/active *synthetic* states cannot grant unlock | Test-only registry state and no external Active registration path; every attempt returns denial and cancels matched pending intent | Real authenticator integration and a trusted registry/owner consent |
+| A03A-06 | CI and source evidence do not activate credentials | Root + isolated verifier compile/test, pinned V03-A sources, main executable remains fail closed | OPEN-01/15 and G1–G3 blocked, no independent validation |
+
+**Do not classify a typed `LogindSafetyEvent` as an authenticated system-bus
+message or a `ProviderAdapter` as a verified authenticator.** Production
+activation is a separately reviewed later milestone.
 
 ## 2l. Round-two findings acceptance, scoped to source review only
 

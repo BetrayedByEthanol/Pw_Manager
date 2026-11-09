@@ -32,6 +32,7 @@ pub enum LockReason {
     ScreenLock,
     Suspend,
     Hibernate,
+    Shutdown,
     ListenerUnavailable,
     InvalidAuthenticatedTransition,
 }
@@ -143,6 +144,7 @@ pub enum LifecycleEvent {
     ScreenLocked,
     Suspend,
     Hibernate,
+    Shutdown,
     ListenerDisconnected,
     ListenerFailed,
     Resumed,
@@ -190,7 +192,10 @@ impl VirtualProvider {
 }
 
 enum Pending {
-    Read { id: Uuid, expires: Instant },
+    Read {
+        id: Uuid, entry_id: Uuid, first: FirstFactor,
+        provider: ProviderRequirement, tier: EntryTier, expires: Instant,
+    },
     Write { id: Uuid, expires: Instant },
 }
 impl Pending {
@@ -276,6 +281,7 @@ impl Session {
             LifecycleEvent::ScreenLocked => Some(LockReason::ScreenLock),
             LifecycleEvent::Suspend => Some(LockReason::Suspend),
             LifecycleEvent::Hibernate => Some(LockReason::Hibernate),
+            LifecycleEvent::Shutdown => Some(LockReason::Shutdown),
             LifecycleEvent::ListenerDisconnected | LifecycleEvent::ListenerFailed =>
                 Some(LockReason::ListenerUnavailable),
             // Resume never resurrects a locked/unloaded session.
@@ -350,7 +356,7 @@ impl Session {
         // "previous touch" cache, and no branch has a trusted backend yet.
         let operation_id = Uuid::new_v4();
         loaded.pending = Some(Pending::Read {
-            id: operation_id,
+            id: operation_id, entry_id, first, provider, tier: record.tier,
             expires: now.checked_add(Duration::from_secs(15))
                 .ok_or(SessionError::InvalidLimits)?,
         });
@@ -390,6 +396,25 @@ impl Session {
             max_changes, authorized: false,
         })
     }
+    /// Internal pending-intent match for V03-A. A caller's ReadIntent is NOT
+    /// a trusted factor proof. Matching it neither unwraps a DEK nor
+    /// authorizes a read; it only prevents stale/provider-substituted requests
+    /// from being processed by the non-authorizing adapter boundary.
+    pub(crate) fn require_pending_read(
+        &mut self, intent: &ReadIntent,
+    ) -> Result<(), SessionError> {
+        let loaded = self.require_loaded(Instant::now())?;
+        if !matches!(&loaded.pending,
+            Some(Pending::Read {
+                id, entry_id, first, provider, tier, ..
+            }) if *id == intent.operation_id && *entry_id == intent.entry_id
+                 && *first == intent.first && *provider == intent.provider
+                 && *tier == intent.tier)
+        {
+            return Err(SessionError::InvalidOperation);
+        }
+        Ok(())
+    }
     /// Always refuses to complete read/write authorization. The future V04/V06
     /// trusted daemon must create non-forgeable factor and owner-approval
     /// evidence; a caller-provided boolean or previously successful hardware
@@ -417,7 +442,7 @@ impl Session {
     // real OPEN->LOADED requires an audited VMK, last-seen-head gate,
     // registered provider bootstrap and a trusted lifecycle monitor.
     #[cfg(test)]
-    fn load_synthetic(&mut self, opened: v02::Opened, vers: [u8; 32],
+    pub(crate) fn load_synthetic(&mut self, opened: v02::Opened, vers: [u8; 32],
                       provider_seed: [u8; 32], now: Instant)
         -> Result<(), SessionError>
     {
@@ -446,7 +471,7 @@ impl Session {
         Ok(())
     }
     #[cfg(test)]
-    fn synthetic_monitor_registered(&mut self) {
+    pub(crate) fn synthetic_monitor_registered(&mut self) {
         self.monitor_live = true;
     }
 }
