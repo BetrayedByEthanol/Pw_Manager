@@ -7,7 +7,7 @@ Run from repository root after [development-machine setup](01-development-machin
 | SEC-00 and SEC-01A contracts | `bash scripts/security/run.sh contract` | Regression tests; **not** a security scan |
 | Versions | `python3 scripts/security/check-static-versions.py` | Exact runtime versions; not proof of software provenance |
 | Clippy | `cargo clippy --manifest-path Cargo.toml --locked --all-targets -- -D clippy::correctness` | Repeat for all five manifests via `run-static.sh` |
-| cargo-deny | `cargo deny --manifest-path Cargo.toml --config deny.toml check` | Repeated for all five lockfiles |
+| cargo-deny | `cargo deny --manifest-path Cargo.toml --locked --config deny.toml check` | Repeated for all five lockfiles |
 | Gitleaks | `gitleaks git --config .gitleaks.toml --redact --no-banner .` | Requires complete Git history |
 | Semgrep | `semgrep scan --config .security/semgrep --error --metrics off src extenstion tools` | Local custom rules; security findings fail |
 | ESLint | `npm run lint:js` | Exact dev dependency, npm ci first |
