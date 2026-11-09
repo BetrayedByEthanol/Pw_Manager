@@ -491,3 +491,7 @@ For each implementation PR record:
 - **Status before/after**, explicit **not implemented** items, gate impacted.
 
 Claims of COMPLETE or CERTIFIED require primary evidence for the exact behavior; do not infer from code being present or a mock response.
+
+## SEC-00 — Security infrastructure preparation (candidate / not accepted)
+
+Evidence owner: [SEC-00 acceptance criteria](../security/assurance/SEC-00-acceptance.md) and [location-specific runbook](../ci/SEC-00-security-infrastructure.md). Status of this PR: **PREPARATION ONLY, NOT MERGED, UNVERIFIED ON RUNNERS**. Proposed source includes contract JSON, negative tests, local bootstrap plan and intentionally fail-closed scanner CLI. It must not be counted as mandatory PR scanning, validated hardware assurance, trusted OCI registry, isolated CI runner, SBOM, signing, or production authorization. Cross-package prerequisite for SEC-01A/B/C/D only; OPEN-01/OPEN-15/G1–G3 and prior V02 evidence dispositions unchanged.
