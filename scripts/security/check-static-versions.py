@@ -35,7 +35,13 @@ def check(requested=None):
         ("web-ext", ["web-ext", "--version"], r"(\d+\.\d+\.\d+)", VERSIONS["web-ext"]),
     ]
     errors = []
+    known = {item[0] for item in checks}
+    if requested is not None and not requested <= known:
+        print(f"SEC01A_UNKNOWN_TOOL: {sorted(requested - known)}", file=sys.stderr)
+        return 64
     for name, argv, pattern, expected in checks:
+        if requested is not None and name not in requested:
+            continue
         try:
             result = output(argv)
             match = re.search(pattern, result)
