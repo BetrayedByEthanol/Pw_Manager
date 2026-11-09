@@ -282,6 +282,7 @@ class Observer:
             self.gate.accept(self.events.get_nowait())
 
     async def start(self) -> None:
+        started_boot = boottime()
         await self.transport.connect()
         self.transport.on_message(self.receive)
         # Install ALL matches before owner/session queries. During bootstrap,
@@ -306,6 +307,8 @@ class Observer:
         self.drain()
         if not self.transport.connected:
             self.gate.stop("BUS_DISCONNECTED")
+        if boottime() < started_boot or boottime() - started_boot > 20.0:
+            self.gate.stop("STARTUP_WATCHDOG_GAP")
         self.gate.initializing = False
         self.last_tick = boottime()
 
@@ -326,7 +329,10 @@ class Observer:
         if not positive_snapshot(await self.transport.snapshot(session)):
             self.gate.stop("UNSAFE_SESSION")
         self.drain()
-        self.last_tick = boottime()
+        completed = boottime()
+        if completed < now or completed - now > max(5.0, self.interval * 3.0):
+            self.gate.stop("WATCHDOG_GAP")
+        self.last_tick = completed
 
     async def observe(self, seconds: float) -> str:
         if not 0.1 <= seconds <= 600:
