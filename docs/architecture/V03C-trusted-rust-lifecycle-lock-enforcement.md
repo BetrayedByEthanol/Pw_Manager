@@ -65,8 +65,8 @@ The runner:
    subscription-order hardening and real Pop!_OS desktop failure tests.
 4. **Dependency and lockfile:** The review-only Rust driver is isolated in
    its own Cargo manifest. It is not compiled into the root executable.
-   After a successful draft CI build, generate and commit its Cargo.lock
-   before final review/merge and run with `--locked`. Any dependency changes
+   The candidate's separately generated Cargo.lock is now committed
+   and all integration checks run with `--locked`. Any dependency changes
    require a separate audit; CI compilation is not a supply-chain review.
 5. **No independent approval:** OPEN-01, OPEN-15, OPEN-HW-ASSURANCE,
    OPEN-PRF-SALT, G1–G3 all remain blocked. No new READY routes, owner
@@ -82,8 +82,8 @@ cargo check --manifest-path tools/v02_verifier/Cargo.toml --locked --all-targets
 
 Review-only Rust logind driver (no secrets):
 ```sh
-cargo test --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --all-targets
-cargo run --manifest-path tools/lifecycle/v03c_rust/Cargo.toml -- \
+cargo test --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --locked --all-targets
+cargo run --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --locked -- \
   --observe-only --seconds 20
 ```
 
