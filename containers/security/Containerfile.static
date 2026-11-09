@@ -49,6 +49,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
 ENV PATH="/opt/sec01a-venv/bin:/opt/sec01a-js/node_modules/.bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1
+RUN mkdir -p /cache/cargo /cache/target
 WORKDIR /workspace
 # Checkout is supplied by the CI job; never bake user secrets or repository into image.
 CMD ["bash"]
