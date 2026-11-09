@@ -1,4 +1,5 @@
 //! V03-C same-process Rust system-bus logind observer. NO vault unlocking.
+#![forbid(unsafe_code)]
 //! This runner owns a Rust SessionSupervisor and a CLOSED Session. It never
 //! constructs LOADED, authorizes a client or forwards D-Bus output as proof
 //! of authorization. All external D-Bus errors become fixed failure codes.
@@ -208,7 +209,6 @@ async fn monitor(seconds: u64) -> Outcome<()> {
                 if u < previous_uptime || u - previous_uptime > 5.0 {
                     controller.on_event(TerminalEvent::WatchdogOverdue);
                 }
-                previous_uptime = u;
                 if controller.monitor_phase() != MonitorPhase::Terminated {
                     if current_owner(&dbus).await? != owner
                        || local_session(&manager).await? != session_path {
@@ -216,8 +216,17 @@ async fn monitor(seconds: u64) -> Outcome<()> {
                     } else if safe_snapshot(&manager, &session).await.is_err() {
                         controller.on_event(TerminalEvent::SnapshotRejected);
                     } else {
-                        controller.observe_snapshot().map_err(|_| "MONITOR_TERMINATED")?;
-                        controller.tick().map_err(|_| "MONITOR_TERMINATED")?;
+                        let finished_uptime = uptime()?;
+                        // A suspend or stalled D-Bus query DURING health
+                        // validation must be rejected before a positive
+                        // snapshot can refresh the watchdog.
+                        if finished_uptime < u || finished_uptime - u > 5.0 {
+                            controller.on_event(TerminalEvent::WatchdogOverdue);
+                        } else {
+                            previous_uptime = finished_uptime;
+                            controller.observe_snapshot().map_err(|_| "MONITOR_TERMINATED")?;
+                            controller.tick().map_err(|_| "MONITOR_TERMINATED")?;
+                        }
                     }
                 }
             }
@@ -233,6 +242,10 @@ async fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 4 || args[1] != "--observe-only" || args[2] != "--seconds" {
         eprintln!("V03-C: specify --observe-only --seconds N; no secrets supported");
+        std::process::exit(2);
+    }
+    if std::fs::metadata("/proc/self").map(|m| m.uid() == 0).unwrap_or(true) {
+        eprintln!("V03-C: non-root Linux desktop session required");
         std::process::exit(2);
     }
     let Ok(seconds) = args[3].parse::<u64>() else {
