@@ -1,7 +1,10 @@
 """SEC-01A source-level and fail-closed contract tests; no network/scan required."""
+import io
 import json
 import re
 import subprocess
+import tarfile
+import tempfile
 import tomllib
 import unittest
 from pathlib import Path
@@ -42,6 +45,61 @@ class SEC01AStaticContractTests(unittest.TestCase):
         policy = tomllib.loads((ROOT / "deny.toml").read_text(encoding="utf-8"))
         for group in ("advisories", "bans", "licenses", "sources"):
             self.assertIn(group, policy)
+
+    def _extract_fake_archive(self, tool, member):
+        with tempfile.TemporaryDirectory(prefix="sec01a-archive-") as td:
+            root = Path(td)
+            archive = root / "release.tar.gz"
+            data = b"fixture-executable-content-not-live-binary\\n"
+            with tarfile.open(archive, "w:gz") as tar:
+                info = tarfile.TarInfo(member)
+                info.mode = 0o755
+                info.size = len(data)
+                tar.addfile(info, io.BytesIO(data))
+            dest = root / "bin"
+            proc = subprocess.run(
+                ["bash", str(ROOT / "scripts/security/extract-static-tool.sh"),
+                 str(archive), tool, str(dest)],
+                cwd=ROOT, capture_output=True, text=True, timeout=10,
+            )
+            binary = dest / tool
+            return proc, binary.read_bytes() if binary.is_file() else None
+
+    def test_cargo_deny_versioned_release_archive_extracts_exact_member(self):
+        proc, data = self._extract_fake_archive(
+            "cargo-deny", "cargo-deny-0.20.2-x86_64-unknown-linux-musl/cargo-deny"
+        )
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        self.assertEqual(b"fixture-executable-content-not-live-binary\\n", data)
+
+    def test_gitleaks_flat_release_archive_extracts_exact_member(self):
+        proc, data = self._extract_fake_archive("gitleaks", "gitleaks")
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        self.assertEqual(b"fixture-executable-content-not-live-binary\\n", data)
+
+    def test_cargo_deny_flat_archive_is_rejected(self):
+        proc, data = self._extract_fake_archive("cargo-deny", "cargo-deny")
+        self.assertEqual(78, proc.returncode)
+        self.assertIn("SEC01A_ARCHIVE_MEMBER_MISSING", proc.stderr)
+        self.assertIsNone(data)
+
+    def test_both_install_paths_use_reviewed_archive_helper(self):
+        helper = "extract-static-tool.sh"
+        self.assertIn(
+            helper,
+            (ROOT / "scripts/security/install-static-tools.sh").read_text(encoding="utf-8"),
+        )
+        oci = (ROOT / "containers/security/Containerfile.static").read_text(encoding="utf-8")
+        self.assertIn("COPY scripts/security/" + helper, oci)
+        self.assertIn("bash /usr/local/share/vaulty/" + helper, oci)
+
+    def test_unmaintained_scope_matches_pinned_cargo_deny_policy(self):
+        policy = tomllib.loads((ROOT / "deny.toml").read_text(encoding="utf-8"))
+        self.assertEqual("workspace", policy["advisories"]["unmaintained"])
+        self.assertIn(
+            policy["advisories"]["unmaintained"],
+            {"all", "workspace", "transitive", "none"},
+        )
 
     def test_renovate_is_proposal_only(self):
         config = json.loads((ROOT / "renovate.json").read_text(encoding="utf-8"))
