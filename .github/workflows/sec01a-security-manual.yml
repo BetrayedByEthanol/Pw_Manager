@@ -1,0 +1,44 @@
+name: SEC-01A manual static security (no homelab)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-security-manual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Install native Rust build prerequisites
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential git curl tar python3 python3-venv pkg-config \
+            libpcsclite-dev libfido2-dev libudev-dev libusb-1.0-0-dev \
+            libxkbcommon-dev libssl-dev libclang-dev
+      - name: Install reviewed Rust release and Clippy component
+        run: |
+          rustup toolchain install 1.99.1 --profile minimal --component clippy
+          rustup default 1.99.1
+      - name: Install candidate developer tools with verified external artifacts
+        run: bash scripts/security/install-static-tools.sh --apply --confirm
+      - name: Setup developer tool PATH
+        run: |
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.local/share/vaulty/sec01a-venv/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Validate contracts and candidate tool versions
+        run: |
+          bash scripts/security/run.sh contract
+          python3 scripts/security/check-static-versions.py
+      - name: Execute static security analysis (real checks, not crypto approval)
+        run: bash scripts/security/run.sh static-pr
