@@ -31,6 +31,13 @@ MAX_PENDING = 128
 UNIQUE = re.compile(r"^:[0-9]+\.[0-9]+$")
 
 
+def boottime() -> float:
+    # CLOCK_MONOTONIC may exclude Linux suspend; CLOCK_BOOTTIME includes it.
+    if not hasattr(time, "CLOCK_BOOTTIME"):
+        raise MonitoringStopped("NO_BOOTTIME_CLOCK")
+    return time.clock_gettime(time.CLOCK_BOOTTIME)
+
+
 class MonitoringStopped(Exception):
     """Fixed, non-sensitive failure reason; never propagate D-Bus payload."""
 
@@ -227,6 +234,7 @@ class Observer:
         self.gate = Decision()
         self.events: asyncio.Queue[Signal] = asyncio.Queue(maxsize=MAX_PENDING)
         self.failed: str | None = None
+        self.last_tick: float | None = None
 
     def receive(self, raw: Any) -> None:
         # Called in the bus's own event loop; copies only typed event metadata.
@@ -235,9 +243,21 @@ class Observer:
         try:
             if raw.message_type != self.transport._MessageType.SIGNAL:
                 return
+            # PropertiesChanged may contain large untrusted values; ignore
+            # their contents, since the boundary stops on the signal itself.
+            interface = str(raw.interface)
+            member = str(raw.member)
+            if interface == PROPS and member == "PropertiesChanged":
+                body = ()
+            else:
+                if len(raw.body) > 3 or any(
+                    isinstance(v, str) and len(v) > 256 for v in raw.body
+                ):
+                    self.failed = "MALFORMED_EVENT"
+                    return
+                body = tuple(raw.body)
             signal = Signal(str(raw.sender), str(raw.path),
-                            str(raw.interface), str(raw.member),
-                            str(raw.signature), tuple(raw.body))
+                            interface, member, str(raw.signature), body)
             if self.events.full():
                 self.failed = "EVENT_QUEUE_OVERFLOW"
                 return
@@ -277,6 +297,7 @@ class Observer:
         if not self.transport.connected:
             self.gate.stop("BUS_DISCONNECTED")
         self.gate.initializing = False
+        self.last_tick = boottime()
 
     async def verify_health(self) -> None:
         # A live connection alone is not a heartbeat. Recheck owner and
@@ -284,12 +305,18 @@ class Observer:
         self.drain()
         if not self.transport.connected:
             self.gate.stop("BUS_DISCONNECTED")
+        now = boottime()
+        if self.last_tick is None or now < self.last_tick or (
+            now - self.last_tick > max(5.0, self.interval * 3.0)
+        ):
+            self.gate.stop("WATCHDOG_GAP")
         owner, session = self.gate.owner, self.gate.session
         if await self.transport.owner() != owner or await self.transport.session_by_pid() != session:
             self.gate.stop("BINDING_CHANGED")
         if not positive_snapshot(await self.transport.snapshot(session)):
             self.gate.stop("UNSAFE_SESSION")
         self.drain()
+        self.last_tick = boottime()
 
     async def observe(self, seconds: float) -> str:
         if not 0.1 <= seconds <= 600:
@@ -305,7 +332,10 @@ class Observer:
             return "OBSERVED_ONLY"
         except MonitoringStopped:
             raise
-        except (OSError, TimeoutError, ValueError, ConnectionError, asyncio.CancelledError) as exc:
+        except asyncio.CancelledError:
+            raise MonitoringStopped("OBSERVATION_CANCELLED") from None
+        except Exception:
+            # Never expose D-Bus errors containing session paths or payloads.
             raise MonitoringStopped("BUS_OR_HEALTH_FAILED") from None
         finally:
             self.transport.close()
