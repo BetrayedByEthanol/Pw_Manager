@@ -24,6 +24,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: SEC-00 preparation contract (not security scans)
+        run: bash scripts/security/run.sh contract
       - name: Reference tests
         run: |
           cd tools/security_probes
