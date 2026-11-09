@@ -292,7 +292,11 @@ fn classify_manager_property_fields(
     if changed_iface != MANAGER_IFACE || (changed.is_empty() && invalidated.is_empty()) {
         return Some(TerminalEvent::MalformedMessage);
     }
-    if changed.keys().chain(invalidated.iter()).all(|key| key == "DelayInhibited") {
+    if changed.keys().chain(invalidated.iter()).all(|key| key == "DelayInhibited")
+        // systemd's DelayInhibited property has D-Bus type 's'. Even a
+        // trusted logind sender must not make us ignore a malformed value.
+        && changed.values().all(|value| value.value_signature().as_str() == "s")
+    {
         return None;
     }
     // PreparingForSleep / PreparingForShutdown remain fail-closed, including
