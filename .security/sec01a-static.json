@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "package": "SEC-01A",
+  "status": "CANDIDATE_NOT_ENFORCED",
+  "tools": {
+    "rustc": "1.99.1",
+    "cargo-deny": "0.20.2",
+    "gitleaks": "8.30.1",
+    "semgrep": "1.184.0",
+    "node_major": 22,
+    "eslint": "10.14.0",
+    "web-ext": "10.8.0"
+  },
+  "checks": ["clippy", "cargo-deny", "gitleaks", "semgrep", "eslint", "web-ext"],
+  "gitleaks": {
+    "platform": "linux_x64",
+    "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz",
+    "sha256": "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+  },
+  "cargo-deny": {
+    "platform": "x86_64-unknown-linux-musl",
+    "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz",
+    "sha256": "9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f"
+  },
+  "dependencies": {
+    "cargo": "all five committed Cargo.lock files",
+    "npm": "package-lock.json (npm ci required)",
+    "semgrep": "top-level version pinned; transitive PyPI wheel hashes pending approval"
+  },
+  "runner": {
+    "label": "vaulty-pr",
+    "published_image_digest": null,
+    "registered_and_isolated": false,
+    "protected_check_enabled": false
+  },
+  "notes": [
+    "Candidate versions are not authorization to use unverified binaries.",
+    "No security scanner or image is production/release approved by SEC-01A until independently validated.",
+    "Forgejo branch protection must be enabled and verified externally."
+  ]
+}
