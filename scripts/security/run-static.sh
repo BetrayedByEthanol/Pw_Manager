@@ -50,8 +50,8 @@ if [[ "$mode" == pr || "$mode" == secrets ]]; then
   gitleaks git --config .gitleaks.toml --redact --no-banner .
 fi
 if [[ "$mode" == pr || "$mode" == quick || "$mode" == browser ]]; then
-  [[ -x node_modules/.bin/eslint && -x node_modules/.bin/web-ext ]] || {
-    echo "SEC01A_NODE_MODULES_MISSING: run npm ci --ignore-scripts" >&2; exit 78;
+  command -v eslint >/dev/null && command -v web-ext >/dev/null || {
+    echo "SEC01A_BROWSER_TOOLS_MISSING: npm ci --ignore-scripts locally or use approved OCI image" >&2; exit 78;
   }
   echo "SEC01A_ESLINT"
   npm run lint:js
