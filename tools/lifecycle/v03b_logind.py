@@ -136,7 +136,9 @@ def positive_snapshot(values: dict[str, Any]) -> bool:
         type(values.get("locked")) is bool and values["locked"] is False
         and type(values.get("active")) is bool and values["active"] is True
         and values.get("state") == "active"
-        and type(values.get("can_lock")) is bool and values["can_lock"] is True
+        # No mandatory CanLock: absent from Ubuntu 24.04 logind Session.
+        # The supported LockedHint + Lock/Unlock subscriptions are hints,
+        # not proof that the compositor can reliably lock.
         and values.get("kind") in ("x11", "wayland")
         and values.get("session_class") == "user"
         and type(values.get("remote")) is bool and values["remote"] is False
@@ -222,7 +224,6 @@ class DirectSystemBus:
             "active": await get(session, SESSION_IFACE, "Active"),
             "state": await get(session, SESSION_IFACE, "State"),
             "kind": await get(session, SESSION_IFACE, "Type"),
-            "can_lock": await get(session, SESSION_IFACE, "CanLock"),
             "session_class": await get(session, SESSION_IFACE, "Class"),
             "remote": await get(session, SESSION_IFACE, "Remote"),
             "seat": await get(session, SESSION_IFACE, "Seat"),

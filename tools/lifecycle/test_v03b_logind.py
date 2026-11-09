@@ -19,7 +19,7 @@ SESSION = "/org/freedesktop/login1/session/_32"
 
 def snap(**override):
     value = dict(uid=os.getuid(), locked=False, active=True, state="active",
-                 kind="x11", can_lock=True, session_class="user", remote=False,
+                 kind="x11", session_class="user", remote=False,
                  seat=("seat0", "/org/freedesktop/login1/seat/seat0"),
                  sleeping=False, shutting_down=False)
     value.update(override)
@@ -75,12 +75,12 @@ class GateTests(unittest.TestCase):
         g.initializing = False
         return g
 
-    def test_initial_session_must_be_local_active_unlocked_and_can_lock(self):
+    def test_initial_session_rejects_locked_or_nonlocal_no_canlock_dependency(self):
         self.assertTrue(m.positive_snapshot(snap()))
         for variant in [
             dict(uid=os.getuid()+1), dict(locked=True), dict(locked=None),
             dict(active=False), dict(state="closing"), dict(kind="tty"),
-            dict(can_lock=False), dict(session_class="greeter"),
+            dict(session_class="greeter"),
             dict(remote=True), dict(seat=("", "/org/freedesktop/login1/seat/")),
             dict(seat=("seat0", "/wrong")),
             dict(sleeping=True), dict(shutting_down=True),

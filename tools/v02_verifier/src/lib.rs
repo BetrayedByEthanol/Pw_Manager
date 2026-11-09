@@ -6,3 +6,5 @@ pub mod v02;
 pub mod v03;
 #[path = "../../../src/v03a.rs"]
 pub mod v03a;
+#[path = "../../../src/v03c.rs"]
+pub mod v03c;

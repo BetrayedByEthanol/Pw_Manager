@@ -1,6 +1,6 @@
 # Vaulty — Acceptance, Evidence and Security Gap Register
 
-**Snapshot date:** 2026-11-09 | **Merged source baseline:** [V03-A PR #26](https://github.com/BetrayedByEthanol/Pw_Manager/pull/26), commit `633841a85f55ba0df8df9542ae5b91ac6cf13bb8`. **Local self-reported evidence received:** [EV-023 V02-K native PRF stability/scope](../security/V02K-local-hardware-evidence-received-2026-11-08.md) and [EV-025 V02-L negative verifier/wrong-key observations](../security/V02L-local-hardware-negative-evidence-received-2026-11-09.md). **No independent OPEN-15, OPEN-01 or G1–G3 approval; no actual Vaulty entry unlocked.**  
+**Snapshot date:** 2026-11-09 | **Merged source baseline:** [V03-B PR #27](https://github.com/BetrayedByEthanol/Pw_Manager/pull/27), commit `1c9cb59846646f32e860f07821f9aa00b4d36836`. **Local self-reported evidence received:** [EV-023 V02-K native PRF stability/scope](../security/V02K-local-hardware-evidence-received-2026-11-08.md) and [EV-025 V02-L negative verifier/wrong-key observations](../security/V02L-local-hardware-negative-evidence-received-2026-11-09.md). **No independent OPEN-15, OPEN-01 or G1–G3 approval; no actual Vaulty entry unlocked.**  
 **Purpose:** provide a reviewable distinction between **design approved**, **source merged**, **CI passed**, **security behavior verified** and **release certified**. None is interchangeable. See [implementation roadmap](implementation.md).
 
 ## 1. Recorded merged evidence
@@ -278,6 +278,37 @@ or plaintext credential operations to an untrusted event-output channel.
 An independently reviewed in-process daemon listener or authenticated
 transport, initial-state TOCTOU defense and actual local failure testing
 must precede production LOADED state.
+
+## 2t. V03-C Rust in-process lifecycle lock / logind driver (PR #28 candidate)
+
+[Implementation and review boundary](../architecture/V03C-trusted-rust-lifecycle-lock-enforcement.md):
+a Rust `SessionSupervisor` owns V03 Session and handles terminal lifecycle
+events synchronously. An opt-in, separate Rust `zbus` runner exercises this
+controller in the same process with a **CLOSED** session, not the trusted
+production daemon. The observer neither enables LOADED nor authenticates
+VMK, DEK, PRF, owner consent or clients. No production gate is cleared.
+
+| ID | Candidate verification | Evidence | Remaining requirement |
+| --- | --- | --- | --- |
+| A03C-01 | Rust-controlled lock/cancel on security events | Test-only synthetic LOADED fixture; terminal event matrix including lock, unlock, sleep, shutdown, bus loss, owner change, stale watchdog | Production loaded-session wiring and independent review |
+| A03C-02 | No monitor-positive shortcut to secret authorization | SessionSupervisor owns Session, no mutable getter, snapshot remains diagnostic; normal Rust has no LOADED constructor | Actual trusted daemon authorization; G2 blocked |
+| A03C-03 | Direct Rust logind D-Bus observation | Optional zbus manager/session signals, unique owner and PID-bound session; Ubuntu-compatible required `LockedHint` plus other supported, typed properties, no required `CanLock`; new local-session negative tests | Harden startup subscription race, real desktop lock/source provenance tests and watcher integration |
+| A03C-04 | Failure propagation and suspend gap | Event loop checks independent 5 s watchdog every 100 ms while D-Bus owner/session/snapshot probe runs in separate, whole-probe 4 s timeout task; priority terminal-signal consumption and late-success rejection; offline hung-probe/lock-preemption/suspend-gap regressions | Pre-suspend wipe assurance/delay inhibitor, actual OS exercise and independent reviewer signoff |
+| A03C-05 | No release/gate escalation | Separate review-only Cargo manifest, CI synthetic tests, inert default binary | OPEN-01/15, G1–G3, audited dependencies and production security review |
+
+**Codex round one: both P2s accepted and corrected in PR #28.**
+See [V03-C P2 findings and negative-test disposition](../security/V03C-codex-round-one-review-disposition-2026-11-09.md).
+CI-successful code is **not** a live desktop test; the supported
+`LockedHint` is not an independently authenticated compositor lock. A
+bounded off-thread health probe now leaves the same-process Rust watchdog
+and terminal event processing responsive even while logind is slow.
+
+**Known blocker:** Subscribing to the specific Session after GetSessionByPID
+can miss a transient Lock+Unlock during startup; the later unlocked snapshot
+might be insufficient. Acquire the exact Session signal stream without that
+gap or implement a stronger initial-state trust sequence before real loading.
+Similarly, no delay inhibitor exists and the read-only Rust runner cannot
+guarantee secret wipe before suspend. These are not minor release caveats.
 
 ## 2l. Round-two findings acceptance, scoped to source review only
 

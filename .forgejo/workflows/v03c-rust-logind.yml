@@ -1,0 +1,27 @@
+name: Vaulty V03-C Rust logind review
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  offline-review:
+    runs-on: docker
+    container:
+      image: rust:1-bookworm
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: V03-C original Rust source and offline negative tests
+        run: |
+          cargo check --manifest-path tools/v02_verifier/Cargo.toml --locked --all-targets
+          cargo test --manifest-path tools/v02_verifier/Cargo.toml --locked --lib -- v03c
+      - name: Locked dedicated Rust logind observer build and offline tests
+        run: |
+          cargo check --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --locked --all-targets
+          cargo test --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --locked --all-targets
+      - name: Inert executable remains fail closed
+        run: |
+          grep -F 'ExitCode::FAILURE' src/main.rs
+          ! grep -R -F 'dumpmasterkey' src/ --include='*.rs'
