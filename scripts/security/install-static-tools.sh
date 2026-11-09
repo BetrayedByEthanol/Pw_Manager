@@ -13,7 +13,7 @@ while (( $# )); do
     --confirm) ack=true; shift;;
     --candidate) candidate_ack=true; shift;;
     -h|--help)
-      echo "Usage: bash scripts/security/install-static-tools.sh [--plan | --apply --confirm]"
+      echo "Usage: bash scripts/security/install-static-tools.sh [--plan | --apply --confirm --candidate]"
       echo "Installs approved Gitleaks/cargo-deny archives, top-level-version-pinned Semgrep and npm dev tools."
       echo "Rust 1.99.1 + Clippy and a Python3 venv-capable runtime must already exist."
       echo "Semgrep transitive PyPI packages are NOT hash-locked; not release-approved."
