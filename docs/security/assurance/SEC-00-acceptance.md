@@ -37,3 +37,7 @@ The readiness workflow, if green, proves only that the **preparation contract** 
 - Review runner/registry trust boundary and current homelab HTTP Zot exception.
 - Confirm the existing CI, cryptographic reference, test fixtures, hardware evidence and release blockers are unchanged.
 - Pin the reviewed SEC-00 commit and record local contract test outputs; leave missing GitHub/Forgejo/VM evidence marked unverified.
+
+## SEC-00 Rust baseline loader review correction (Codex P2)
+
+**Accepted and corrected in PR #30.** `scripts/security/run-cargo-all.sh` previously used `mapfile -t manifests < <(python3 ...)`, which ignored loader failure and could claim successful completion with zero crates. The replacement captures Python's exit status, rejects malformed/empty manifest output, and exits **78** if loading fails; it never reports completion without loaded manifests. Four simulated regression cases cover missing Python, nonzero Python exit, empty output, and successful dispatch of ten `--locked` Cargo check/test commands for all five manifests. These tests run in the SEC-00 preparation check; both GitHub and Forgejo security-probes workflows now trigger that check for changes to `scripts/security/**`, `tools/security/**`, and `.security/**`. No actual Rust compilation is claimed by the mock-command regression test; the existing locked Rust CI job supplies compilation verification.
