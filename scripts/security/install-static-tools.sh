@@ -5,6 +5,7 @@ repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 cd "$repo_root"
 mode=plan
 ack=false
+candidate_ack=false
 while (( $# )); do
   case "$1" in
     --plan) mode=plan; shift;;
