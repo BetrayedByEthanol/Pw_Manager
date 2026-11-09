@@ -66,10 +66,9 @@ PY
   printf '%s  %s\n' "${info[1]}" "$tmp/$tool.tar.gz" | sha256sum --check --status || {
     echo "SEC01A_HASH_MISMATCH: $tool" >&2; exit 78;
   }
-  # Extract only the expected binary from a digest-verified archive.
-  tar -xzf "$tmp/$tool.tar.gz" -C "$tmp" "$tool"
-  install -m 0755 "$tmp/$tool" "$install_dir/$tool"
-  rm -f "$tmp/$tool"
+  # Shared extraction logic matches cargo-deny's nested release member and
+  # Gitleaks' top-level member. Archives are SHA-256 checked immediately above.
+  bash scripts/security/extract-static-tool.sh "$tmp/$tool.tar.gz" "$tool" "$install_dir"
 done
 echo "SEC-01A verified binary tools installed to $install_dir"
 
