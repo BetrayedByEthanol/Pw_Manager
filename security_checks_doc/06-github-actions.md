@@ -12,4 +12,4 @@ It uses `workflow_dispatch` **only** (no GitHub PR/push scan), `contents: read`,
 4. Check `Validate contracts and candidate tool versions` and `Execute static security analysis` logs; report true exit codes.
 5. Log results in the SEC-01A acceptance register. A manual GitHub run is **supplemental evidence** and cannot substitute for protected Forgejo checks.
 
-GitHub installs Python Semgrep with a pinned top-level version but without fully hash-locked transitive wheels; treat the supply-chain state as candidate. GitHub runner images and hosted action behavior may change; reverify before relying on results. Do not add privileged tokens to this workflow.
+GitHub uses an explicitly requested `--candidate` install for manual testing. It installs Python Semgrep with a pinned top-level version but without fully hash-locked transitive wheels; treat the supply-chain state as candidate. GitHub runner images and hosted action behavior may change; reverify before relying on results. Do not add privileged tokens to this workflow.
