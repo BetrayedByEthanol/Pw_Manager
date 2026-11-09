@@ -32,6 +32,9 @@ FILE_ALLOWLIST = (
     "tools/lifecycle/v03c_rust/Cargo.toml",
     "tools/lifecycle/v03c_rust/Cargo.lock",
     "tools/lifecycle/v03c_rust/src/main.rs",
+    "tools/lifecycle/v03d_capture.py",
+    "tools/lifecycle/test_v03d_capture.py",
+    "docs/architecture/V03D-linux-lifecycle-hardening-and-evidence.md",
     "docs/architecture/V03C-trusted-rust-lifecycle-lock-enforcement.md",
     "docs/security/V03C-codex-round-one-review-disposition-2026-11-09.md",
     ".github/workflows/v03c-rust-logind.yml",
@@ -147,7 +150,7 @@ def inventory(root: Path, commit: str, paths: tuple[str, ...] = FILE_ALLOWLIST) 
     manifest = {
         "schema": SCHEMA,
         "git_commit": commit,
-        "scope": "inactive V02 candidates, non-activating V03/V03-A/V03-C Rust session model and opt-in V03-B/C Linux logind reviewers; no real system bus, hardware or production unlock in CI",
+        "scope": "inactive V02 candidates and V03-A/C/D Rust lifecycle, early bus subscription/inhibitor review runner and redacted operator intake; CI does not exercise physical suspend, system bus or production vault",
         "source_files": sources,
         "release_gates": BLOCKED,
         "external_cryptographic_review": "NOT PERFORMED",
