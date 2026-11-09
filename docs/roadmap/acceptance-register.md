@@ -1,6 +1,6 @@
 # Vaulty — Acceptance, Evidence and Security Gap Register
 
-**Snapshot date:** 2026-11-09 | **Merged source baseline:** [V03-B PR #27](https://github.com/BetrayedByEthanol/Pw_Manager/pull/27), commit `1c9cb59846646f32e860f07821f9aa00b4d36836`. **Local self-reported evidence received:** [EV-023 V02-K native PRF stability/scope](../security/V02K-local-hardware-evidence-received-2026-11-08.md) and [EV-025 V02-L negative verifier/wrong-key observations](../security/V02L-local-hardware-negative-evidence-received-2026-11-09.md). **No independent OPEN-15, OPEN-01 or G1–G3 approval; no actual Vaulty entry unlocked.**  
+**Snapshot date:** 2026-11-09 | **Merged source baseline:** [V03-C PR #28](https://github.com/BetrayedByEthanol/Pw_Manager/pull/28), commit `0d2881acf6d5382bd93423b0c04f477d582074af`. **Local self-reported evidence received:** [EV-023 V02-K native PRF stability/scope](../security/V02K-local-hardware-evidence-received-2026-11-08.md) and [EV-025 V02-L negative verifier/wrong-key observations](../security/V02L-local-hardware-negative-evidence-received-2026-11-09.md). **No independent OPEN-15, OPEN-01 or G1–G3 approval; no actual Vaulty entry unlocked.**  
 **Purpose:** provide a reviewable distinction between **design approved**, **source merged**, **CI passed**, **security behavior verified** and **release certified**. None is interchangeable. See [implementation roadmap](implementation.md).
 
 ## 1. Recorded merged evidence
@@ -279,7 +279,7 @@ An independently reviewed in-process daemon listener or authenticated
 transport, initial-state TOCTOU defense and actual local failure testing
 must precede production LOADED state.
 
-## 2t. V03-C Rust in-process lifecycle lock / logind driver (PR #28 candidate)
+## 2t. V03-C Rust in-process lifecycle lock / logind driver (merged PR #28; non-production)
 
 [Implementation and review boundary](../architecture/V03C-trusted-rust-lifecycle-lock-enforcement.md):
 a Rust `SessionSupervisor` owns V03 Session and handles terminal lifecycle
@@ -309,6 +309,27 @@ might be insufficient. Acquire the exact Session signal stream without that
 gap or implement a stronger initial-state trust sequence before real loading.
 Similarly, no delay inhibitor exists and the read-only Rust runner cannot
 guarantee secret wipe before suspend. These are not minor release caveats.
+
+## 2u. V03-D early Linux lifecycle subscription, delay inhibitor and operator verification (PR #29 candidate)
+
+[Source design, operator-only evidence and limits](../architecture/V03D-linux-lifecycle-hardening-and-evidence.md).
+**Source verification is not physical/desktop verification.** The Rust runner
+owns only a non-unlockable V03 Session in normal builds. Release G1–G3,
+OPEN-01 and OPEN-15 remain BLOCKED.
+
+| ID | Review candidate / acceptance | Implementation and CI evidence | Remaining / no release inference |
+| --- | --- | --- | --- |
+| A03D-01 | No startup window between PID lookup and Lock/Unlock signal subscription | `zbus::MessageStream::for_match_rule` for all Session and PropertiesChanged path-namespace messages installed **before** GetSessionByPID, buffered startup signal rejection, mock rule regression | Local rapid lock/unlock, compositor fidelity and independent source review; not a privileged LOADED gate |
+| A03D-02 | Delay inhibitor owned until after sensitive state lock | Fail-closed `Manager.Inhibit("sleep:shutdown", ..., "delay")`, FD bound to Rust SessionSupervisor via RAII; synchronous terminal lock precedes FD release, including scope exit; mock FD test | Local inhibitor acquisition/real pre-suspend handling; systemd max delay, forced suspend and crash-time cleanup still uncontrolled |
+| A03D-03 | No auth or restoration on resume/failure | V03-C watchdog remains independent, all normal-built sessions CLOSED, irreversible termination; no new ability to set loaded session | Actual daemon wiring, secure session event subscriptions and process memory policy |
+| A03D-04 | Redacted operator evidence | `v03d_capture.py` compiles locked Rust runner, requires TEST, Git-clean source, private 0600 receipt, no overwrites; result classified from fixed event category; synthetic tests | Real local baseline/lock/sleep/disconnect receipts must be supplied by operator; no CLI output, D-Bus traces or private session data in PR |
+| A03D-05 | Gate labels not escalated | Source inventory, GitHub/Forgejo Rust/receipt tests, no live CI suspend | OPEN-01/15 and G1–G3 blocked; no independent physical evidence |
+
+**No EV-026 physical receipt exists until an actual operator runs the
+local desktop procedure and submits only redacted output.** Successful
+source CI must not be recorded as a real logind lock/suspend verification.
+The V03-B legacy Python observer was already made Ubuntu-compatible by
+the V03-C P2 correction, but it does not control Vaulty's Rust session.
 
 ## 2l. Round-two findings acceptance, scoped to source review only
 
