@@ -185,7 +185,7 @@ class ObserverTests(unittest.IsolatedAsyncioTestCase):
         watcher = m.Observer(bus, interval=0.1)
         with self.assertRaises(m.MonitoringStopped):
             await watcher.observe(0.1)
-        self.assertFalse(watcher.gate.initializing)
+        self.assertTrue(watcher.gate.initializing)
         # The signal is never treated as proof of successful startup.
         self.assertTrue(bus.closed)
 
