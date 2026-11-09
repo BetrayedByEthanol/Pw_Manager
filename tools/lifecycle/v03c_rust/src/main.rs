@@ -31,9 +31,14 @@ async fn local_session(manager: &Proxy<'_>) -> Outcome<OwnedObjectPath> {
     bounded(manager.call("GetSessionByPID", &(std::process::id(),))).await
 }
 async fn property<T>(proxy: &Proxy<'_>, name: &str) -> Outcome<T>
-where T: for<'de> zbus::zvariant::Type + serde::de::Deserialize<'de>,
+where T: TryFrom<zbus::zvariant::OwnedValue>,
 {
-    bounded(proxy.get_property(name)).await
+    // Read the live property directly from logind, never a proxy cache.
+    let props = bounded(Proxy::new(proxy.connection(), SERVICE,
+        proxy.path().as_str(), PROPERTIES_IFACE)).await?;
+    let raw: zbus::zvariant::OwnedValue = bounded(props.call(
+        "Get", &(proxy.interface().as_str(), name))).await?;
+    raw.try_into().map_err(|_| "INVALID_PROPERTY")
 }
 async fn safe_snapshot(manager: &Proxy<'_>, session: &Proxy<'_>) -> Outcome<()> {
     let (uid, _): (u32, OwnedObjectPath) = property(session, "User").await?;
@@ -140,7 +145,7 @@ async fn monitor(seconds: u64) -> Outcome<()> {
     let mut owner_signals = bounded(dbus.receive_signal_with_args(
         "NameOwnerChanged", &[(0, SERVICE)])).await?;
     let mut manager_signals = bounded(manager.receive_all_signals()).await?;
-    let mut manager_properties = bounded(Proxy::new(
+    let manager_properties = bounded(Proxy::new(
         &connection, SERVICE, MANAGER, PROPERTIES_IFACE)).await?;
     let mut manager_prop_signals = bounded(manager_properties.receive_all_signals()).await?;
     let owner = current_owner(&dbus).await?;
@@ -155,9 +160,7 @@ async fn monitor(seconds: u64) -> Outcome<()> {
         &connection, SERVICE, session_path.as_str(), PROPERTIES_IFACE)).await?;
     let mut session_signals = bounded(session.receive_all_signals()).await?;
     let mut session_prop_signals = bounded(session_properties.receive_all_signals()).await?;
-    bounded(async { safe_snapshot(&manager, &session).await
-        .map_err(|_| zbus::Error::Failure("unsafe".into())) }).await
-        .map_err(|_| "UNSAFE_SESSION")?;
+    safe_snapshot(&manager, &session).await?;
     if current_owner(&dbus).await? != owner
         || local_session(&manager).await? != session_path
     { return Err("STARTUP_BINDING_CHANGED"); }
