@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "package": "SEC-00",
+  "state": "PREPARATION_ONLY",
+  "release_authorized": false,
+  "installation_policy": {
+    "unapproved_tools_may_not_be_installed_by_automation": true,
+    "require_exact_versions_and_verified_sha256": true,
+    "require_immutable_container_digest": true,
+    "forbid_curl_pipe_shell": true,
+    "registry_tls_required_for_trusted_images": true
+  },
+  "rust_manifests": [
+    "Cargo.toml",
+    "extenstion/host/Cargo.toml",
+    "tools/lifecycle/v03c_rust/Cargo.toml",
+    "tools/security_probes/rust/Cargo.toml",
+    "tools/v02_verifier/Cargo.toml"
+  ],
+  "tools": {
+    "rust": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01A"},
+    "cargo-deny": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01A"},
+    "gitleaks": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01A"},
+    "semgrep": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01A"},
+    "node": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01A"},
+    "eslint": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01A"},
+    "web-ext": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01A"},
+    "cargo-fuzz": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01B"},
+    "miri": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01B"},
+    "sanitizers": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01B"},
+    "osv-scanner": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01C"},
+    "codeql": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01C"},
+    "syft": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01D"},
+    "trivy": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01D"},
+    "cosign": {"status": "pending", "version": null, "sha256": null, "source": null, "owner_package": "SEC-01D"}
+  },
+  "images": {
+    "static": {"status": "unpublished", "reference": null, "digest": null, "owner_package": "SEC-01A"},
+    "fuzz": {"status": "unpublished", "reference": null, "digest": null, "owner_package": "SEC-01B"},
+    "analysis": {"status": "unpublished", "reference": null, "digest": null, "owner_package": "SEC-01C"},
+    "release": {"status": "unpublished", "reference": null, "digest": null, "owner_package": "SEC-01D"}
+  }
+}
