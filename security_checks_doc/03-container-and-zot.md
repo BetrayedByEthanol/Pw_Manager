@@ -39,3 +39,19 @@ The SEC-00 wrapper also requires the image reference to be in the **approved** `
 6. Remove publisher credentials from the builder after publication and rotate by policy. Use the previous approved digest to roll back.
 
 The OCI image build is deliberately **not** performed inside a PR job with access to a host Podman/Docker socket.
+
+## Run the local candidate image (explicit opt-in)
+
+The local testing wrapper uses the candidate image, a read-only source checkout, no host engine socket, dropped capabilities and dedicated Podman cache volumes. It refuses to run without `--candidate`. The default is **no network**; Cargo dependency/advisory resolution may fail if caches are cold. Use `--allow-network` **only on a segmented development/security VM with restricted outbound access**. Both modes remain untrusted developer experiments, not protected Forgejo evidence.
+
+```bash
+bash scripts/security/run-static-container.sh \\
+  --image localhost/vaulty/security-static:sec01a \\
+  --candidate --mode static-pr
+# If required after firewall/network isolation review:
+bash scripts/security/run-static-container.sh \\
+  --image localhost/vaulty/security-static:sec01a \\
+  --candidate --mode static-pr --allow-network
+```
+
+Never mount real Vaulty data, token sockets, the host container-engine socket or signing credentials. Named Cargo caches are **not shared** between untrusted CI jobs; this wrapper is for single-owner local smoke testing only.
