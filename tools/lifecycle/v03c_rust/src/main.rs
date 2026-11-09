@@ -9,7 +9,8 @@ use std::time::{Duration, Instant};
 use tokio::time::{MissedTickBehavior, timeout};
 use vaulty_v02_candidate_verifier::v03::{Session, SessionLimits};
 use vaulty_v02_candidate_verifier::v03c::{MonitorPhase, SessionSupervisor, TerminalEvent};
-use zbus::{Connection, Message, Proxy, zvariant::OwnedObjectPath};
+use zbus::{Connection, MatchRule, Message, MessageStream, Proxy,
+    message::Type as MessageType, zvariant::{OwnedFd, OwnedObjectPath}};
 
 const SERVICE: &str = "org.freedesktop.login1";
 const MANAGER: &str = "/org/freedesktop/login1";
@@ -30,6 +31,33 @@ async fn current_owner(bus: &Proxy<'_>) -> Outcome<String> {
 }
 async fn local_session(manager: &Proxy<'_>) -> Outcome<OwnedObjectPath> {
     bounded(manager.call("GetSessionByPID", &(std::process::id(),))).await
+}
+
+/// The lock is an owned file descriptor. Dropping it is the ONLY way we
+/// release the delay: no global polkit/systemd policy is changed. Holding
+/// it until AFTER the synchronous Rust session lock is essential.
+async fn acquire_delay_inhibitor(manager: &Proxy<'_>) -> Outcome<OwnedFd> {
+    bounded(manager.call(
+        "Inhibit",
+        &("sleep:shutdown", "Vaulty V03-D review",
+          "Revoke the in-process Vaulty session before sleep or shutdown",
+          "delay"),
+    )).await
+}
+
+/// Install match rules BEFORE any local session object lookup; otherwise
+/// Lock+Unlock can occur between GetSessionByPID and subscription.
+async fn early_session_stream(
+    connection: &Connection, interface: &str,
+) -> Outcome<MessageStream> {
+    let rule = MatchRule::builder()
+        .msg_type(MessageType::Signal)
+        .sender(SERVICE).map_err(|_| "INVALID_MATCH_RULE")?
+        .interface(interface).map_err(|_| "INVALID_MATCH_RULE")?
+        .path_namespace("/org/freedesktop/login1/session")
+            .map_err(|_| "INVALID_MATCH_RULE")?
+        .build();
+    bounded(MessageStream::for_match_rule(rule, connection, Some(256))).await
 }
 async fn property<T>(proxy: &Proxy<'_>, name: &str) -> Outcome<T>
 where T: TryFrom<zbus::zvariant::OwnedValue>,
@@ -184,6 +212,35 @@ fn drain<'a>(stream: &mut zbus::proxy::SignalStream<'a>) -> bool {
         }
     }
 }
+
+/// Startup safety: any session signal (even another user's) is conservatively
+/// a reason to reject initialization, since we had not pinned a target yet.
+/// A stream error or closed stream is also fail-closed.
+fn drain_early_session_stream(stream: &mut MessageStream) -> bool {
+    match stream.next().now_or_never() {
+        None => false,
+        Some(_) => true,
+    }
+}
+
+/// Only the pinned session is relevant after startup. Bad sender on the
+/// pinned path fails closed. Signals from other sessions are ignored.
+fn session_event_for_target(
+    message: &Message, owner: &str, target: &str,
+) -> Option<TerminalEvent> {
+    if path(message).as_deref() != Some(target) { return None; }
+    Some(classify_session(message, owner, target))
+}
+fn property_event_for_target(
+    message: &Message, owner: &str, target: &str,
+) -> Option<TerminalEvent> {
+    if path(message).as_deref() != Some(target) { return None; }
+    Some(if sender(message).as_deref() == Some(owner) {
+        TerminalEvent::SnapshotRejected
+    } else {
+        TerminalEvent::MalformedMessage
+    })
+}
 async fn monitor(seconds: u64) -> Outcome<()> {
     let limits = SessionLimits::new(Duration::from_secs(20),
         Duration::from_secs(90)).map_err(|_| "INVALID_SESSION_LIMIT")?;
@@ -201,6 +258,14 @@ async fn monitor(seconds: u64) -> Outcome<()> {
     let manager_properties = bounded(Proxy::new(
         &connection, SERVICE, MANAGER, PROPERTIES_IFACE)).await?;
     let mut manager_prop_signals = bounded(manager_properties.receive_all_signals()).await?;
+    // Broad session-path subscriptions are installed *before* resolving the
+    // local session. They retain any initial Lock/Unlock or LockedHint change.
+    let mut session_signals = early_session_stream(&connection, SESSION_IFACE).await?;
+    let mut session_prop_signals =
+        early_session_stream(&connection, PROPERTIES_IFACE).await?;
+    // Request a delay inhibitor before accepting ANY observation. A missing
+    // FD or rejected Inhibit call is a hard failure, not a silent downgrade.
+    let mut inhibitor = Some(acquire_delay_inhibitor(&manager).await?);
     let owner = current_owner(&dbus).await?;
     if !owner.starts_with(':') { return Err("INVALID_LOGIND_OWNER"); }
     let session_path = local_session(&manager).await?;
@@ -209,17 +274,16 @@ async fn monitor(seconds: u64) -> Outcome<()> {
     }
     let session = bounded(Proxy::new(
         &connection, SERVICE, session_path.as_str(), SESSION_IFACE)).await?;
-    let session_properties = bounded(Proxy::new(
-        &connection, SERVICE, session_path.as_str(), PROPERTIES_IFACE)).await?;
-    let mut session_signals = bounded(session.receive_all_signals()).await?;
-    let mut session_prop_signals = bounded(session_properties.receive_all_signals()).await?;
+    // No session-specific subscriptions are installed after PID resolution:
+    // the all-session-path streams above cover the full startup interval.
     safe_snapshot(&manager, &session).await?;
     if current_owner(&dbus).await? != owner
         || local_session(&manager).await? != session_path
     { return Err("STARTUP_BINDING_CHANGED"); }
     if drain(&mut owner_signals) || drain(&mut manager_signals)
-        || drain(&mut manager_prop_signals) || drain(&mut session_signals)
-        || drain(&mut session_prop_signals)
+        || drain(&mut manager_prop_signals)
+        || drain_early_session_stream(&mut session_signals)
+        || drain_early_session_stream(&mut session_prop_signals)
     { return Err("STARTUP_SIGNAL_RACE"); }
     let u = uptime()?;
     if u < started_uptime || u - started_uptime > 15.0
@@ -253,16 +317,28 @@ async fn monitor(seconds: u64) -> Outcome<()> {
                     |m| classify_manager(&m, &owner)));
             }
             message = session_signals.next() => {
-                controller.on_event(message.map_or(TerminalEvent::BusDisconnected,
-                    |m| classify_session(&m, &owner, session_path.as_str())));
+                match message {
+                    Some(Ok(msg)) => {
+                        if let Some(event) =
+                            session_event_for_target(&msg, &owner, session_path.as_str())
+                        { controller.on_event(event); }
+                    }
+                    _ => controller.on_event(TerminalEvent::BusDisconnected),
+                }
             }
             message = manager_prop_signals.next() => {
                 controller.on_event(message.map_or(TerminalEvent::BusDisconnected,
                     |_| TerminalEvent::SnapshotRejected));
             }
             message = session_prop_signals.next() => {
-                controller.on_event(message.map_or(TerminalEvent::BusDisconnected,
-                    |_| TerminalEvent::SnapshotRejected));
+                match message {
+                    Some(Ok(msg)) => {
+                        if let Some(event) =
+                            property_event_for_target(&msg, &owner, session_path.as_str())
+                        { controller.on_event(event); }
+                    }
+                    _ => controller.on_event(TerminalEvent::BusDisconnected),
+                }
             }
             received = probe_results.recv() => {
                 // A task panic, dropped sender or failed validation is denial.
@@ -321,6 +397,9 @@ async fn monitor(seconds: u64) -> Outcome<()> {
             }
         }
         if controller.monitor_phase() == MonitorPhase::Terminated {
+            // SessionSupervisor has already synchronously revoked the
+            // V03 session. Only now release the sleep/shutdown delay FD.
+            drop(inhibitor.take());
             if let Some(task) = probe_task.take() { task.abort(); }
             return Err("SESSION_LOCKED_FAIL_CLOSED");
         }
