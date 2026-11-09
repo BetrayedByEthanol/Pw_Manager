@@ -21,3 +21,7 @@ Forgejo prioritizes `.forgejo/workflows` over `.github/workflows`; keeping both 
 The Forgejo reference probe job uses Debian's Python 3 provided in the job image, whereas GitHub pins Python 3.13. If exact Python-version equivalence becomes a release gate, pin a Forgejo Python 3.13 environment before cutover.
 
 CI configuration has been added for later use; a successful Forgejo execution remains unverified until a runner is connected.
+
+## SEC-00 security infrastructure preparation (proposal)
+
+See [SEC-00 runbook](SEC-00-security-infrastructure.md) and [acceptance](../security/assurance/SEC-00-acceptance.md). SEC-00 adds separate **manual-only** contract smoke checks at `.forgejo/workflows/sec00-readiness.yml` and `.github/workflows/sec00-readiness.yml`; these do **not** scan dependencies, inspect secrets, validate signing, use physical FIDO2, or establish trusted runner readiness. The existing build and security-probe workflows remain separate. Forgejo `docker` runner availability and the provisional smoke container must still be verified; SEC-01A will add digest-pinned scanner images and genuinely blocking PR checks.
