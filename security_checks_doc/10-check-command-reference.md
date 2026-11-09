@@ -18,3 +18,11 @@ Run from repository root after [development-machine setup](01-development-machin
 Exit codes: 0 means the tool executed and passed in the tested environment; 78 means incomplete/not configured, never PASS. Scanner-specific nonzero codes must propagate. `run.sh pr` (without `static-` prefix) is still intentionally unconfigured pending protected Forgejo enforcement.
 
 SEC-01B/C/D own fuzzing, Miri, deep threat modeling, SBOM signing and release workflows.
+
+### Candidate container-run command
+
+```bash
+bash scripts/security/run-static-container.sh --image localhost/vaulty/security-static:sec01a --candidate --mode static-pr
+```
+
+This works only after the candidate image is built; it defaults to offline execution and may need securely prefetched Cargo/advisory caches. `--allow-network` is an explicit local opt-in, never a default setting for protected PR jobs.
