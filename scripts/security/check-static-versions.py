@@ -23,7 +23,7 @@ def output(argv):
     return (proc.stdout + proc.stderr).strip()
 
 
-def check():
+def check(requested=None):
     checks = [
         ("rustc", ["rustc", "--version"], r"rustc\s+(\d+\.\d+\.\d+)", VERSIONS["rustc"]),
         ("clippy", ["cargo", "clippy", "--version"], r"clippy\s+([\d.]+)", None),
