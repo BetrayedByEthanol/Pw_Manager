@@ -27,8 +27,10 @@ subscribed. Only after these streams are installed does the runner:
 2. read the logind unique owner and `GetSessionByPID`;
 3. check the local, active, unlocked seat and supported properties;
 4. revalidate the same unique owner and session;
-5. reject **any buffered startup event** on the early streams (even if it
-   targets another session, conservative false positives are acceptable);
+5. reject **all buffered session/owner/lifecycle startup events** on the
+   early streams (even if another session caused a session signal), but
+   ignore a separately validated, inhibitor-only `DelayInhibited` manager
+   property notification produced by our own required delay inhibitor;
 6. inspect the startup boottime/window and begin the observer loop.
 
 **Manager inhibitor bookkeeping (Codex P1):** Acquiring the required delay
@@ -52,8 +54,9 @@ or malformed message causes terminal revocation. This removes the specific
 unsubscribed period where a transient Lock+Unlock could be lost before the
 initial snapshot.
 
-**Boundaries:** Bus queues are finite; receiving events during bootstrap
-always refuses startup, and a real desktop can still send no Lock events or
+**Boundaries:** Bus queues are finite; lifecycle events during
+bootstrap refuse startup. Only the narrowly validated `DelayInhibited`
+bookkeeping exception is non-terminal; a real desktop can still send no Lock events or
 provide stale LockedHint. This is *not* cryptographic session authentication.
 The runner remains a review executable with a CLOSED-only production session.
 
