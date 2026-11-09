@@ -25,6 +25,8 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3
+      - name: SEC-00 preparation contract (not security scans)
+        run: bash scripts/security/run.sh contract
       - name: Reference tests
         run: |
           cd tools/security_probes
