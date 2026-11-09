@@ -28,6 +28,10 @@ if [[ "$mode" == plan ]]; then
   exit 0
 fi
 [[ "$ack" == true ]] || { echo "SEC01A_CONFIRM_REQUIRED: --apply requires --confirm" >&2; exit 64; }
+[[ "$candidate_ack" == true ]] || {
+  echo "SEC01A_CANDIDATE_CONSENT_REQUIRED: Semgrep transitive PyPI wheels have no approved hash lock; supply --candidate for explicit dev-only installation" >&2
+  exit 78
+}
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
   echo "SEC01A_PLATFORM_UNSUPPORTED: this installer supports Linux x86_64 only" >&2; exit 69;
 }
