@@ -21,6 +21,9 @@ jobs:
         run: |
           cargo check --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --locked --all-targets
           cargo test --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --locked --all-targets
+      - name: V03-D redacted operator intake offline tests
+        run: |
+          python3 -B -m unittest discover -s tools/lifecycle -p 'test_v03d_capture.py' -v
       - name: Inert executable remains fail closed
         run: |
           grep -F 'ExitCode::FAILURE' src/main.rs
