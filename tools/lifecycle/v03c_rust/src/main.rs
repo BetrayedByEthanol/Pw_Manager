@@ -44,10 +44,14 @@ where T: TryFrom<zbus::zvariant::OwnedValue>,
 async fn safe_snapshot(manager: &Proxy<'_>, session: &Proxy<'_>) -> Outcome<()> {
     let (uid, _): (u32, OwnedObjectPath) = property(session, "User").await?;
     let (seat, seat_path): (String, OwnedObjectPath) = property(session, "Seat").await?;
-    let (locked, active, can_lock, remote): (bool, bool, bool, bool) = (
+    // LockedHint and the subscribed Lock/Unlock signals are supported on
+    // Ubuntu 24.04's logind interface. CanLock is version-dependent and
+    // absent from that release, so it must not be a mandatory property.
+    // LockedHint is only a compositor-supplied hint, NOT an attestation that
+    // the desktop will reliably lock; production remains blocked.
+    let (locked, active, remote): (bool, bool, bool) = (
         property(session, "LockedHint").await?,
         property(session, "Active").await?,
-        property(session, "CanLock").await?,
         property(session, "Remote").await?,
     );
     let (state, kind, class): (String, String, String) = (
@@ -63,7 +67,7 @@ async fn safe_snapshot(manager: &Proxy<'_>, session: &Proxy<'_>) -> Outcome<()> 
         .map_err(|_| "NO_KERNEL_UID")?.uid();
     if uid != own_uid || seat.is_empty()
         || !seat_path.as_str().starts_with("/org/freedesktop/login1/seat/")
-        || locked || !active || !can_lock || remote
+        || locked || !active || remote
         || sleeping || shutdown || state != "active"
         || class != "user" || !matches!(kind.as_str(), "x11" | "wayland")
     {
