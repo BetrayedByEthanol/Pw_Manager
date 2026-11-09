@@ -239,6 +239,28 @@ class ObserverTests(unittest.IsolatedAsyncioTestCase):
                 await watcher.verify_health()
         bus.close()
 
+    async def test_startup_suspended_across_initial_snapshot_fails_closed(self):
+        bus = FakeBus()
+        watcher = m.Observer(bus, interval=0.1)
+        from unittest.mock import patch
+        with patch.object(m, "boottime", side_effect=[0.0, 30.0, 30.0]):
+            with self.assertRaisesRegex(m.MonitoringStopped,
+                                        "STARTUP_WATCHDOG_GAP"):
+                await watcher.observe(0.1)
+        self.assertTrue(bus.closed)
+
+    async def test_slow_health_snapshot_exceeding_watchdog_fails_closed(self):
+        bus = FakeBus()
+        watcher = m.Observer(bus, interval=0.1)
+        await watcher.start()
+        baseline = watcher.last_tick
+        from unittest.mock import patch
+        with patch.object(m, "boottime",
+                          side_effect=[baseline + 1.0, baseline + 7.0]):
+            with self.assertRaisesRegex(m.MonitoringStopped, "WATCHDOG_GAP"):
+                await watcher.verify_health()
+        bus.close()
+
     async def test_malformed_payload_is_rejected_without_materializing_secrets(self):
         bus = FakeBus()
         watcher = m.Observer(bus, interval=0.1)
