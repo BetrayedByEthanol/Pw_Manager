@@ -22,7 +22,7 @@ npm --version
 
 ```bash
 bash scripts/security/install-static-tools.sh --plan
-bash scripts/security/install-static-tools.sh --apply --confirm
+bash scripts/security/install-static-tools.sh --apply --confirm --candidate
 export PATH="$HOME/.local/bin:$HOME/.local/share/vaulty/sec01a-venv/bin:$PWD/node_modules/.bin:$PATH"
 python3 scripts/security/check-static-versions.py
 bash scripts/security/run.sh contract
