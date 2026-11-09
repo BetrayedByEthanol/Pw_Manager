@@ -215,6 +215,34 @@ class ObserverTests(unittest.IsolatedAsyncioTestCase):
             watcher.drain()
         bus.close()
 
+    async def test_boottime_gap_or_clock_regression_is_fail_closed(self):
+        bus = FakeBus()
+        watcher = m.Observer(bus, interval=0.1)
+        await watcher.start()
+        baseline = watcher.last_tick
+        from unittest.mock import patch
+        with patch.object(m, "boottime", return_value=baseline + 6):
+            with self.assertRaisesRegex(m.MonitoringStopped, "WATCHDOG_GAP"):
+                await watcher.verify_health()
+        bus.close()
+        bus = FakeBus()
+        watcher = m.Observer(bus, interval=0.1)
+        await watcher.start()
+        baseline = watcher.last_tick
+        with patch.object(m, "boottime", return_value=baseline - 1):
+            with self.assertRaisesRegex(m.MonitoringStopped, "WATCHDOG_GAP"):
+                await watcher.verify_health()
+        bus.close()
+
+    async def test_malformed_payload_is_rejected_without_materializing_secrets(self):
+        bus = FakeBus()
+        watcher = m.Observer(bus, interval=0.1)
+        await watcher.start()
+        bus.push(sig("Lock", body=("x" * 8192,)))
+        with self.assertRaisesRegex(m.MonitoringStopped, "MALFORMED_EVENT"):
+            await watcher.verify_health()
+        bus.close()
+
     async def test_owner_changed_event_and_bad_health_snapshot_fail_closed(self):
         bus = FakeBus()
         watcher = m.Observer(bus, interval=0.1)
