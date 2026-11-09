@@ -20,6 +20,8 @@ done
   exit 78
 }
 # A digest-shaped string is not an approval. Require an approved match in the repo contract.
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+cd "$repo_root"
 python3 - "$image" <<'PY'
 import json
 import sys
@@ -33,7 +35,6 @@ if requested not in approved:
     sys.exit(78)
 PY
 command -v podman >/dev/null || { echo "podman not installed" >&2; exit 69; }
-repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 exec podman run --rm --network=none --read-only --userns=keep-id --cap-drop=all \
   --security-opt=no-new-privileges --pids-limit=256 \
   --tmpfs /tmp:rw,nosuid,nodev,size=64m \
