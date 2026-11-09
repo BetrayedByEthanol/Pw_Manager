@@ -355,3 +355,105 @@ async fn main() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vaulty_v02_candidate_verifier::v03::Phase;
+
+    #[test]
+    fn ubuntu_24_04_compatible_snapshot_requires_supported_lock_hint_not_canlock() {
+        // There is no mandatory CanLock D-Bus Get. An active, unlocked,
+        // local graphical session with supported LockedHint is observable.
+        let good = |locked, active, remote, class, kind| acceptable_session_state(
+            1000, 1000, "seat0", "/org/freedesktop/login1/seat/seat0",
+            locked, active, remote, "active", kind, class, false, false,
+        );
+        assert!(good(false, true, false, "user", "wayland"));
+        assert!(good(false, true, false, "user", "x11"));
+        assert!(!good(true, true, false, "user", "wayland"));
+        assert!(!good(false, false, false, "user", "wayland"));
+        assert!(!good(false, true, true, "user", "wayland"));
+        assert!(!good(false, true, false, "greeter", "wayland"));
+        assert!(!good(false, true, false, "user", "tty"));
+        assert!(!acceptable_session_state(
+            1000, 1001, "seat0", "/org/freedesktop/login1/seat/seat0",
+            false, true, false, "active", "wayland", "user", false, false,
+        ));
+        assert!(!acceptable_session_state(
+            1000, 1000, "seat0", "/org/freedesktop/login1/seat/seat0",
+            false, true, false, "active", "wayland", "user", true, false,
+        ));
+    }
+
+    #[test]
+    fn suspend_inclusive_watchdog_checks_previous_tick_and_last_success() {
+        assert!(!uptime_deadline_expired(100.0, 98.0, 102.0, 5.0));
+        assert!(uptime_deadline_expired(100.0, 98.0, 103.0, 5.0));
+        assert!(uptime_deadline_expired(100.0, 100.0, 105.0, 5.0));
+        assert!(uptime_deadline_expired(100.0, 100.0, 99.0, 5.0));
+        assert!(uptime_deadline_expired(100.0, 100.0, f64::NAN, 5.0));
+    }
+
+    fn closed_controller(gap: Duration) -> SessionSupervisor {
+        let limits = SessionLimits::new(
+            Duration::from_secs(5), Duration::from_secs(30),
+        ).unwrap();
+        let mut controller = SessionSupervisor::new(
+            Session::new(limits), gap,
+        ).unwrap();
+        controller.observe_snapshot().unwrap();
+        controller
+    }
+
+    #[tokio::test]
+    async fn a_blocked_health_probe_does_not_starve_the_independent_watchdog() {
+        let mut controller = closed_controller(Duration::from_millis(80));
+        let (tx, mut replies) = tokio::sync::mpsc::channel::<Outcome<()>>(1);
+        let probe = tokio::spawn(async move {
+            // Simulate many sequential two-second D-Bus calls hanging.
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            let _ = tx.send(Ok(())).await;
+        });
+        let mut tick = tokio::time::interval(Duration::from_millis(10));
+        timeout(Duration::from_secs(1), async {
+            loop {
+                tokio::select! {
+                    biased;
+                    answer = replies.recv() => panic!(
+                        "slow probe unexpectedly completed before lock: {answer:?}"
+                    ),
+                    _ = tick.tick() => {
+                        if controller.tick().is_err() {
+                            controller.on_event(TerminalEvent::WatchdogOverdue);
+                            break;
+                        }
+                    }
+                }
+            }
+        }).await.expect("watchdog must run while health query is pending");
+        assert_eq!(controller.phase(), Phase::Locked);
+        assert_eq!(controller.terminal_event(), Some(TerminalEvent::WatchdogOverdue));
+        probe.abort();
+    }
+
+    #[tokio::test]
+    async fn a_lock_signal_is_consumed_while_a_health_probe_is_blocked() {
+        let mut controller = closed_controller(Duration::from_secs(5));
+        let (tx, mut events) = tokio::sync::mpsc::channel::<TerminalEvent>(1);
+        let mut probe = tokio::spawn(async {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+        });
+        tx.send(TerminalEvent::SessionLock).await.unwrap();
+        timeout(Duration::from_millis(500), async {
+            tokio::select! {
+                biased;
+                Some(event) = events.recv() => controller.on_event(event),
+                _ = &mut probe => panic!("probe should still be blocked"),
+            }
+        }).await.expect("terminal signals must preempt blocked health probes");
+        assert_eq!(controller.phase(), Phase::Locked);
+        assert_eq!(controller.terminal_event(), Some(TerminalEvent::SessionLock));
+        probe.abort();
+    }
+}
