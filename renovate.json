@@ -1,0 +1,31 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["cargo", "npm", "dockerfile", "github-actions"],
+  "dependencyDashboard": true,
+  "automerge": false,
+  "platformAutomerge": false,
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 2,
+  "labels": ["dependencies", "security-review"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions", "dockerfile"],
+      "automerge": false,
+      "groupName": "security infrastructure dependencies"
+    },
+    {
+      "matchFileNames": ["package.json", "tools/**/Cargo.toml", "Cargo.toml", "extenstion/**"],
+      "automerge": false
+    }
+  ],
+  "ignorePaths": [
+    "tools/security_probes/fixtures/**",
+    "tools/v02_verifier/fixtures/**",
+    "docs/security/evidence/**"
+  ]
+}
