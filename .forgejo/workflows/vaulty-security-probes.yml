@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - 'tools/security_probes/**'
+      - 'tools/security/**'
+      - 'scripts/security/**'
+      - '.security/**'
       - '.github/workflows/vaulty-security-probes.yml'
       - '.forgejo/workflows/vaulty-security-probes.yml'
   push:
@@ -12,6 +15,9 @@ on:
       - 'feat/open18-route-graph-open01-kek-vectors'
     paths:
       - 'tools/security_probes/**'
+      - 'tools/security/**'
+      - 'scripts/security/**'
+      - '.security/**'
       - '.github/workflows/vaulty-security-probes.yml'
       - '.forgejo/workflows/vaulty-security-probes.yml'
 jobs:
