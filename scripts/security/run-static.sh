@@ -7,7 +7,15 @@ mode="${1:-pr}"
 case "$mode" in pr|quick|sast|dependencies|browser|secrets) ;; *)
   echo "SEC01A_UNKNOWN_MODE: $mode" >&2; exit 64;;
 esac
-python3 scripts/security/check-static-versions.py
+case "$mode" in
+  pr) versions="rustc,clippy,cargo-deny,gitleaks,semgrep,node,eslint,web-ext" ;;
+  quick) versions="rustc,clippy,semgrep,node,eslint,web-ext" ;;
+  sast) versions="rustc,clippy,semgrep" ;;
+  dependencies) versions="rustc,cargo-deny" ;;
+  browser) versions="node,eslint,web-ext" ;;
+  secrets) versions="gitleaks" ;;
+esac
+python3 scripts/security/check-static-versions.py --only "$versions"
 manifests=(
   Cargo.toml
   extenstion/host/Cargo.toml
