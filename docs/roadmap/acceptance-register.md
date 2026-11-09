@@ -292,9 +292,16 @@ VMK, DEK, PRF, owner consent or clients. No production gate is cleared.
 | --- | --- | --- | --- |
 | A03C-01 | Rust-controlled lock/cancel on security events | Test-only synthetic LOADED fixture; terminal event matrix including lock, unlock, sleep, shutdown, bus loss, owner change, stale watchdog | Production loaded-session wiring and independent review |
 | A03C-02 | No monitor-positive shortcut to secret authorization | SessionSupervisor owns Session, no mutable getter, snapshot remains diagnostic; normal Rust has no LOADED constructor | Actual trusted daemon authorization; G2 blocked |
-| A03C-03 | Direct Rust logind D-Bus observation | Optional zbus manager/session signals, unique owner and PID-bound session, uncached properties, observer-side watchdog | Harden startup subscription race and desktop lock/source provenance tests |
-| A03C-04 | Failure propagation and suspend gap | Rust session lock on event and missed health; `/proc/uptime` suspend-inclusive gap; no raw bus payload logging | Pre-suspend wipe assurance/delay inhibitor and actual OS exercise |
+| A03C-03 | Direct Rust logind D-Bus observation | Optional zbus manager/session signals, unique owner and PID-bound session; Ubuntu-compatible required `LockedHint` plus other supported, typed properties, no required `CanLock`; new local-session negative tests | Harden startup subscription race, real desktop lock/source provenance tests and watcher integration |
+| A03C-04 | Failure propagation and suspend gap | Event loop checks independent 5 s watchdog every 100 ms while D-Bus owner/session/snapshot probe runs in separate, whole-probe 4 s timeout task; priority terminal-signal consumption and late-success rejection; offline hung-probe/lock-preemption/suspend-gap regressions | Pre-suspend wipe assurance/delay inhibitor, actual OS exercise and independent reviewer signoff |
 | A03C-05 | No release/gate escalation | Separate review-only Cargo manifest, CI synthetic tests, inert default binary | OPEN-01/15, G1–G3, audited dependencies and production security review |
+
+**Codex round one: both P2s accepted and corrected in PR #28.**
+See [V03-C P2 findings and negative-test disposition](../security/V03C-codex-round-one-review-disposition-2026-11-09.md).
+CI-successful code is **not** a live desktop test; the supported
+`LockedHint` is not an independently authenticated compositor lock. A
+bounded off-thread health probe now leaves the same-process Rust watchdog
+and terminal event processing responsive even while logind is slow.
 
 **Known blocker:** Subscribing to the specific Session after GetSessionByPID
 can miss a transient Lock+Unlock during startup; the later unlocked snapshot
