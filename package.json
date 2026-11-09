@@ -1,0 +1,16 @@
+{
+  "name": "vaulty-security-tooling",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Development-only browser extension static security checks",
+  "type": "module",
+  "engines": { "node": ">=22.13.0" },
+  "scripts": {
+    "lint:js": "eslint extenstion/*.js",
+    "lint:firefox": "web-ext lint --source-dir extenstion --ignore-files '**/host/**' --warnings-as-errors=false"
+  },
+  "devDependencies": {
+    "eslint": "10.14.0",
+    "web-ext": "10.8.0"
+  }
+}
