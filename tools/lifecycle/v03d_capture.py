@@ -122,13 +122,13 @@ def run_observation(
             if process.poll() is None:
                 process.kill()
             process.communicate(timeout=5)
-            return "INCOMPLETE", problem, process.returncode or -1, False, False
+            return "INCOMPLETE", problem, process.returncode if process.returncode is not None else -1, False, False
 
         # A subprocess that already stopped after READY cannot wait for the
         # operator. It must not produce a credited terminal event receipt.
         if process.poll() is not None:
             process.communicate(timeout=5)
-            return "INCOMPLETE", "OBSERVER_EXITED_BEFORE_ACTION", process.returncode or -1, True, False
+            return "INCOMPLETE", "OBSERVER_EXITED_BEFORE_ACTION", process.returncode if process.returncode is not None else -1, True, False
 
         if on_ready is not None:
             on_ready()
