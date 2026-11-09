@@ -58,6 +58,9 @@ class SEC01AStaticContractTests(unittest.TestCase):
 
     def test_every_scanner_has_real_command(self):
         body = (ROOT / "scripts/security/run-static.sh").read_text(encoding="utf-8")
+        inventory = json.loads((ROOT / ".security/tools.lock.json").read_text(encoding="utf-8"))
+        for manifest in inventory["rust_manifests"]:
+            self.assertIn("  " + manifest + "\n", body)
         for command in ("cargo clippy", "cargo deny", "gitleaks git", "semgrep scan",
                         "npm run lint:js", "npm run lint:firefox"):
             with self.subTest(command=command):
