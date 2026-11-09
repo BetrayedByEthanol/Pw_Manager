@@ -30,7 +30,7 @@ jobs:
           rustup toolchain install 1.99.1 --profile minimal --component clippy
           rustup default 1.99.1
       - name: Install candidate developer tools with verified external artifacts
-        run: bash scripts/security/install-static-tools.sh --apply --confirm
+        run: bash scripts/security/install-static-tools.sh --apply --confirm --candidate
       - name: Setup developer tool PATH
         run: |
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
