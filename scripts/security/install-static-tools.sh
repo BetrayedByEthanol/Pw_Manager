@@ -11,6 +11,7 @@ while (( $# )); do
     --plan) mode=plan; shift;;
     --apply) mode=apply; shift;;
     --confirm) ack=true; shift;;
+    --candidate) candidate_ack=true; shift;;
     -h|--help)
       echo "Usage: bash scripts/security/install-static-tools.sh [--plan | --apply --confirm]"
       echo "Installs approved Gitleaks/cargo-deny archives, top-level-version-pinned Semgrep and npm dev tools."
