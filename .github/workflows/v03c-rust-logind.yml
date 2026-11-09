@@ -6,6 +6,9 @@ on:
       - 'src/v03c*'
       - 'tools/lifecycle/v03c_rust/**'
       - 'docs/architecture/V03C-trusted-rust-lifecycle-lock-enforcement.md'
+      - 'docs/architecture/V03D-linux-lifecycle-hardening-and-evidence.md'
+      - 'tools/lifecycle/v03d_capture.py'
+      - 'tools/lifecycle/test_v03d_capture.py'
       - '.github/workflows/v03c-rust-logind.yml'
 permissions:
   contents: read
@@ -25,6 +28,9 @@ jobs:
         run: |
           cargo check --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --locked --all-targets
           cargo test --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --locked --all-targets
+      - name: Redacted V03-D receipt classification and private no-overwrite tests
+        run: |
+          python3 -B -m unittest discover -s tools/lifecycle -p 'test_v03d_capture.py' -v
       - name: Confirm no live daemon/secret path was activated
         run: |
           grep -F 'ExitCode::FAILURE' src/main.rs
