@@ -48,8 +48,8 @@ jobs:
       - name: Compile and test Rust port
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
-          cargo test --manifest-path tools/security_probes/rust/Cargo.toml --all-targets
+          cargo test --manifest-path tools/security_probes/rust/Cargo.toml --locked --all-targets
       - name: Verify Rust KEK vectors
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
-          cargo run --manifest-path tools/security_probes/rust/Cargo.toml -- --kek-vectors tools/security_probes/fixtures/kek_vectors.json
+          cargo run --manifest-path tools/security_probes/rust/Cargo.toml --locked -- --kek-vectors tools/security_probes/fixtures/kek_vectors.json
