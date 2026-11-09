@@ -23,14 +23,8 @@ jobs:
           cargo test --manifest-path tools/v02_verifier/Cargo.toml --locked --lib -- v03c
       - name: Compile dedicated Rust system-bus observer and offline tests
         run: |
-          cargo check --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --all-targets
-          cargo test --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --all-targets
-      - name: Record deterministic review-runner dependency lockfile for PR
-        run: |
-          echo VAULTY_V03C_LOCK_BEGIN
-          base64 -w0 tools/lifecycle/v03c_rust/Cargo.lock
-          echo
-          echo VAULTY_V03C_LOCK_END
+          cargo check --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --locked --all-targets
+          cargo test --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --locked --all-targets
       - name: Confirm no live daemon/secret path was activated
         run: |
           grep -F 'ExitCode::FAILURE' src/main.rs
