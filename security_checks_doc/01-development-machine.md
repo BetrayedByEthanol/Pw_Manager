@@ -56,3 +56,15 @@ bash scripts/security/run.sh rust-baseline         # all five locked checks/test
 - CI needs outbound access to crates/advisory sources for cargo-deny's vulnerability database. A network failure is **INCOMPLETE**, not PASS.
 
 Local tool installation is user-owned; a development-machine setup plan does not assert a privileged package installation occurred on any host.
+
+### cargo-deny 0.20.2 archive and policy verification
+
+The pinned `cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz` contains the **nested** member `cargo-deny-0.20.2-x86_64-unknown-linux-musl/cargo-deny`. The installer and OCI build both call `scripts/security/extract-static-tool.sh`, which extracts **only** this member after verifying the release archive digest; Gitleaks retains its top-level member. Avoid extracting every member or assuming a flat cargo-deny archive.
+
+```bash
+cargo deny --version                    # must report 0.20.2
+cargo deny --config deny.toml --manifest-path tools/security_probes/rust/Cargo.toml --locked check bans
+cargo deny --config deny.toml --manifest-path tools/security_probes/rust/Cargo.toml --locked check sources
+```
+
+The `[advisories] unmaintained = "workspace"` setting is a **scope** supported by cargo-deny 0.20.2: unmaintained direct dependencies fail; transitive-only unmaintained advisories are not included in that gate. Do not use `"warn"`, which is not a supported value. TOML parsing alone is insufficient: the real pinned cargo-deny CLI must parse this configuration.
