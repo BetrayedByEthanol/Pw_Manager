@@ -205,6 +205,25 @@ fn classify_session(message: &Message, owner: &str, local: &str) -> TerminalEven
         _ => TerminalEvent::MalformedMessage,
     }
 }
+fn event_classification(event: Option<TerminalEvent>) -> &'static str {
+    match event {
+        Some(TerminalEvent::SessionLock) => "SESSION_LOCK",
+        Some(TerminalEvent::SessionUnlock) => "SESSION_UNLOCK",
+        Some(TerminalEvent::SleepStart) => "SLEEP_START",
+        Some(TerminalEvent::SleepEnd) => "SLEEP_END",
+        Some(TerminalEvent::ShutdownStart) => "SHUTDOWN_START",
+        Some(TerminalEvent::ShutdownEnd) => "SHUTDOWN_END",
+        Some(TerminalEvent::SessionRemoved) => "SESSION_REMOVED",
+        Some(TerminalEvent::LogindOwnerChanged) => "LOGIND_OWNER_CHANGED",
+        Some(TerminalEvent::BusDisconnected) => "BUS_DISCONNECTED",
+        Some(TerminalEvent::MalformedMessage) => "MALFORMED_SIGNAL",
+        Some(TerminalEvent::SnapshotRejected) => "SNAPSHOT_REJECTED",
+        Some(TerminalEvent::SessionMismatch) => "SESSION_MISMATCH",
+        Some(TerminalEvent::WatchdogOverdue) => "WATCHDOG_EXPIRED",
+        None => "UNKNOWN",
+    }
+}
+
 fn uptime() -> Outcome<f64> {
     // Linux /proc/uptime first value includes suspend; unlike Instant this
     // catches suspend gaps even when no logind signal could be processed.
@@ -448,7 +467,7 @@ async fn monitor(seconds: u64) -> Outcome<()> {
             // InhibitedSupervisor::on_event already revoked the owned
             // session synchronously before closing its delay FD.
             if let Some(task) = probe_task.take() { task.abort(); }
-            return Err("SESSION_LOCKED_FAIL_CLOSED");
+            return Err(event_classification(controller.terminal_event()));
         }
     }
     if let Some(task) = probe_task.take() { task.abort(); }
@@ -475,8 +494,10 @@ async fn main() {
     }
     match monitor(seconds).await {
         Ok(()) => println!("V03-C: OBSERVED_ONLY; no session or credential authorized"),
-        Err(_) => {
-            eprintln!("V03-C: FAIL_CLOSED; no session or credential authorized");
+        Err(reason) => {
+            // All errors are fixed string categories; never print raw bus
+            // messages, session paths, PIDs or provider details.
+            eprintln!("V03-C: FAIL_CLOSED: {reason}; no session or credential authorized");
             std::process::exit(2);
         }
     }
@@ -486,6 +507,14 @@ async fn main() {
 mod tests {
     use super::*;
     use vaulty_v02_candidate_verifier::v03::Phase;
+
+    #[test]
+    fn redacted_event_classification_never_exposes_session_identifiers() {
+        assert_eq!(event_classification(Some(TerminalEvent::SessionLock)), "SESSION_LOCK");
+        assert_eq!(event_classification(Some(TerminalEvent::SleepStart)), "SLEEP_START");
+        assert_eq!(event_classification(Some(TerminalEvent::BusDisconnected)), "BUS_DISCONNECTED");
+        assert_eq!(event_classification(None), "UNKNOWN");
+    }
 
     #[test]
     fn delay_fd_is_released_only_after_same_process_session_is_locked() {
