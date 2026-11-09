@@ -19,6 +19,8 @@ on:
       - 'docs/security/V02K-physical-fido2-verification-and-evidence.md'
       - 'docs/security/V02L-native-fido2-negative-and-failure-verification.md'
       - 'tools/hardware/**'
+      - 'tools/lifecycle/**'
+      - 'docs/architecture/V03B-linux-logind-watchdog.md'
       - 'docs/roadmap/acceptance-register.md'
       - 'docs/specification/v0.4.5.md'
       - 'docs/decisions/register.md'
@@ -43,6 +45,8 @@ on:
       - 'docs/security/V02K-physical-fido2-verification-and-evidence.md'
       - 'docs/security/V02L-native-fido2-negative-and-failure-verification.md'
       - 'tools/hardware/**'
+      - 'tools/lifecycle/**'
+      - 'docs/architecture/V03B-linux-logind-watchdog.md'
       - 'docs/roadmap/acceptance-register.md'
       - 'docs/specification/v0.4.5.md'
       - 'docs/decisions/register.md'
@@ -82,6 +86,7 @@ jobs:
           python3 tools/v02_verifier/reference_v02i_prf.py --verify
           python3 -m unittest discover -s tools/v02_verifier -p 'test_v02i_policy_contract.py' -v
           python3 -m unittest discover -s tools/hardware -p 'test_*.py' -v
+          python3 -B -m unittest discover -s tools/lifecycle -p 'test_*.py' -v
           python3 tools/hardware/fido2_v02j.py preflight
           python3 -B -I tools/hardware/fido2_v02l.py preflight
           python3 tools/v02_verifier/review_bundle.py --write /tmp/v02d-review-manifest.json
