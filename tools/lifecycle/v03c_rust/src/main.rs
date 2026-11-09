@@ -586,6 +586,124 @@ mod tests {
         assert_eq!(event_classification(None), "UNKNOWN");
     }
 
+    fn string_changed(name: &str) -> HashMap<String, zbus::zvariant::OwnedValue> {
+        let mut changed = HashMap::new();
+        changed.insert(
+            name.into(),
+            zbus::zvariant::OwnedValue::from(
+                zbus::zvariant::Str::from("sleep:shutdown"),
+            ),
+        );
+        changed
+    }
+
+    #[test]
+    fn manager_inhibitor_bookkeeping_does_not_abort_startup_or_runtime() {
+        // Covers both supported signal encodings: a changed-property
+        // a{sv} entry and an invalidated-property as entry.
+        let changed = string_changed("DelayInhibited");
+        assert_eq!(
+            classify_manager_property_fields(MANAGER_IFACE, &changed, &[]),
+            None,
+        );
+        assert_eq!(
+            classify_manager_property_fields(
+                MANAGER_IFACE, &HashMap::new(), &["DelayInhibited".into()],
+            ),
+            None,
+        );
+        assert_eq!(
+            classify_manager_property_fields(
+                MANAGER_IFACE, &changed, &["DelayInhibited".into()],
+            ),
+            None,
+        );
+    }
+
+    #[test]
+    fn manager_sleep_shutdown_unknown_mixed_invalid_and_malformed_events_stay_terminal() {
+        for property in ["PreparingForSleep", "PreparingForShutdown", "UnknownProperty"] {
+            let changed = string_changed(property);
+            assert_eq!(
+                classify_manager_property_fields(MANAGER_IFACE, &changed, &[]),
+                Some(TerminalEvent::SnapshotRejected),
+            );
+            assert_eq!(
+                classify_manager_property_fields(
+                    MANAGER_IFACE, &HashMap::new(), &[property.into()],
+                ),
+                Some(TerminalEvent::SnapshotRejected),
+            );
+        }
+        let mut mixed = string_changed("DelayInhibited");
+        mixed.extend(string_changed("PreparingForSleep"));
+        assert_eq!(
+            classify_manager_property_fields(MANAGER_IFACE, &mixed, &[]),
+            Some(TerminalEvent::SnapshotRejected),
+        );
+        assert_eq!(
+            classify_manager_property_fields(
+                MANAGER_IFACE, &string_changed("DelayInhibited"),
+                &["PreparingForShutdown".into()],
+            ),
+            Some(TerminalEvent::SnapshotRejected),
+        );
+        assert_eq!(
+            classify_manager_property_fields("org.example.Fake", &string_changed("DelayInhibited"), &[]),
+            Some(TerminalEvent::MalformedMessage),
+        );
+        assert_eq!(
+            classify_manager_property_fields(MANAGER_IFACE, &HashMap::new(), &[]),
+            Some(TerminalEvent::MalformedMessage),
+        );
+        // Even an authentic logind sender cannot authorize an invalid
+        // value type for the string-typed DelayInhibited property.
+        let mut mistyped = HashMap::new();
+        mistyped.insert("DelayInhibited".into(), zbus::zvariant::OwnedValue::from(true));
+        assert_eq!(
+            classify_manager_property_fields(MANAGER_IFACE, &mistyped, &[]),
+            Some(TerminalEvent::SnapshotRejected),
+        );
+    }
+
+    fn property_signal(
+        sender: &str, path: &str, interface: &str,
+        changed: HashMap<String, zbus::zvariant::OwnedValue>,
+        invalidated: Vec<String>,
+    ) -> Message {
+        Message::signal(path, PROPERTIES_IFACE, "PropertiesChanged")
+            .unwrap()
+            .sender(sender).unwrap()
+            .build(&(interface, changed, invalidated)).unwrap()
+    }
+
+    #[test]
+    fn full_dbus_manager_signal_is_filtered_only_with_pinned_sender_and_path() {
+        let legit = property_signal(
+            ":1.42", MANAGER, MANAGER_IFACE, string_changed("DelayInhibited"), vec![],
+        );
+        assert_eq!(manager_property_event(&legit, ":1.42"), None);
+        assert_eq!(
+            manager_property_event(&legit, ":1.7"),
+            Some(TerminalEvent::MalformedMessage),
+        );
+        let wrong_path = property_signal(
+            ":1.42", "/org/freedesktop/login1/session/_10",
+            MANAGER_IFACE, string_changed("DelayInhibited"), vec![],
+        );
+        assert_eq!(
+            manager_property_event(&wrong_path, ":1.42"),
+            Some(TerminalEvent::MalformedMessage),
+        );
+        let sleep_changed = property_signal(
+            ":1.42", MANAGER, MANAGER_IFACE, string_changed("PreparingForSleep"), vec![],
+        );
+        assert_eq!(
+            manager_property_event(&sleep_changed, ":1.42"),
+            Some(TerminalEvent::SnapshotRejected),
+        );
+    }
+
     #[test]
     fn delay_fd_is_released_only_after_same_process_session_is_locked() {
         use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
