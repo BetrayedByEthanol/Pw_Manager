@@ -4,7 +4,7 @@
 
 | ID | Acceptance condition | State at PR creation | Evidence required |
 | --- | --- | --- | --- |
-| SEC00-A01 | Five Rust manifests and current browser path enumerated | IMPLEMENTED IN CANDIDATE | validator + source review |
+| SEC00-A01 | Five Rust manifests and current browser path enumerated; all five committed Cargo.lock files present | IMPLEMENTED IN CANDIDATE | validator, generated security-probes lockfile, `--locked` CI smoke |
 | SEC00-A02 | Machine-readable pending/approved tool and OCI digest contract | IMPLEMENTED IN CANDIDATE | JSON negative tests |
 | SEC00-A03 | Setup plan and opt-in Debian/Ubuntu prerequisite installation | IMPLEMENTED IN CANDIDATE | clean-host operator invocation |
 | SEC00-A04 | Local readiness CLI, check-versions fail-closed, Rust baseline command | IMPLEMENTED IN CANDIDATE | exit-code tests + operator evidence |
