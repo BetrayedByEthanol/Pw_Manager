@@ -36,6 +36,7 @@ FILE_ALLOWLIST = (
     "tools/lifecycle/test_v03d_capture.py",
     "docs/architecture/V03D-linux-lifecycle-hardening-and-evidence.md",
     "docs/security/V03D-codex-manager-property-inhibitor-p1-2026-11-09.md",
+    "docs/security/V03D-codex-readiness-handshake-p2-2026-11-09.md",
     "docs/architecture/V03C-trusted-rust-lifecycle-lock-enforcement.md",
     "docs/security/V03C-codex-round-one-review-disposition-2026-11-09.md",
     ".github/workflows/v03c-rust-logind.yml",
