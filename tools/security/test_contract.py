@@ -61,6 +61,12 @@ class ContractTests(unittest.TestCase):
         lock["rust_manifests"].pop()
         self.assertTrue(any("SEC00_MANIFESTS" in e for e in self.errors(lock=lock)))
 
+    def test_all_five_rust_packages_have_committed_lockfiles(self):
+        for manifest in self.lock["rust_manifests"]:
+            lock_path = (v.ROOT / manifest).parent / "Cargo.lock"
+            with self.subTest(manifest=manifest):
+                self.assertTrue(lock_path.is_file(), f"missing {lock_path}")
+
 
 if __name__ == "__main__":
     unittest.main()
