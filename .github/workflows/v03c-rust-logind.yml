@@ -1,0 +1,31 @@
+name: Vaulty V03-C Rust Linux logind review
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/v03c*'
+      - 'tools/lifecycle/v03c_rust/**'
+      - 'docs/architecture/V03C-trusted-rust-lifecycle-lock-enforcement.md'
+      - '.github/workflows/v03c-rust-logind.yml'
+permissions:
+  contents: read
+jobs:
+  offline-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Compile V03-C original Rust session source and synthetic tests
+        run: |
+          cargo check --manifest-path tools/v02_verifier/Cargo.toml --locked --all-targets
+          cargo test --manifest-path tools/v02_verifier/Cargo.toml --locked --lib -- v03c
+      - name: Compile dedicated Rust system-bus observer and offline tests
+        run: |
+          cargo check --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --all-targets
+          cargo test --manifest-path tools/lifecycle/v03c_rust/Cargo.toml --all-targets
+      - name: Confirm no live daemon/secret path was activated
+        run: |
+          grep -F 'ExitCode::FAILURE' src/main.rs
+          ! grep -R -F 'dumpmasterkey' src/ --include='*.rs'
