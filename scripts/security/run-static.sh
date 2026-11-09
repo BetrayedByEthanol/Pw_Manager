@@ -30,6 +30,7 @@ if [[ "$mode" == pr || "$mode" == quick || "$mode" == sast ]]; then
     cargo clippy --manifest-path "$manifest" --locked --all-targets -- -D clippy::correctness
   done
   echo "SEC01A_SEMGREP"
+  semgrep scan --validate --config .security/semgrep --metrics off
   semgrep scan --config .security/semgrep --error --metrics off \
     --exclude 'target/**' --exclude 'node_modules/**' \
     src extenstion tools
