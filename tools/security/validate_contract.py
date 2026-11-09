@@ -54,8 +54,11 @@ def validate(root, lock, policy, require_approved=False):
         errors.append("SEC00_MANIFESTS: must list all five existing Rust manifests once")
     else:
         for manifest in manifests:
-            if not (root / manifest).is_file():
+            manifest_path = root / manifest
+            if not manifest_path.is_file():
                 errors.append(f"SEC00_MANIFEST_MISSING: {manifest}")
+            if not (manifest_path.parent / "Cargo.lock").is_file():
+                errors.append(f"SEC00_LOCKFILE_MISSING: {manifest_path.parent / 'Cargo.lock'}")
 
     tools = lock.get("tools", {})
     if not isinstance(tools, dict) or not tools:
