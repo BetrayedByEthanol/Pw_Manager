@@ -73,3 +73,7 @@ podman pull "$REGISTRY/vaulty/security-static@sha256:<approved-64-hex>"
 ```
 
 Use a **separate, narrowly scoped publisher identity** and an isolated runner read/pull identity. Store the verified exact image digest (including registry and repository) in the security approval inventory only after vulnerability scanning, provenance review, a smoke run and reviewer sign-off. Do not copy the example mutable tag into the runner label.
+
+### Verify cargo-deny packaging during image build
+
+The static Containerfile **copies and uses** the same `scripts/security/extract-static-tool.sh` helper as the development-machine installer. The pinned cargo-deny 0.20.2 archive's executable resides one directory deep; the helper explicitly strips that component. The reviewed container must successfully execute both `cargo-deny --version` and `cargo deny --config deny.toml ... check bans` against a checkout before publishing a digest or enabling `vaulty-pr`. A successful `podman build` by itself is not a scanner pass.
