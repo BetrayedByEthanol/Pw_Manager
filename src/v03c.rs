@@ -74,6 +74,15 @@ impl SessionSupervisor {
         if self.monitor == MonitorPhase::Terminated {
             return Err(MonitorFailure::Terminated);
         }
+        // A delayed health callback cannot revive a watchdog that already
+        // expired. Check the PREVIOUS deadline before refreshing it.
+        if self.monitor == MonitorPhase::Observing && self.last_probe.is_none_or(|last| {
+            now.checked_duration_since(last)
+                .is_none_or(|elapsed| elapsed >= self.max_gap)
+        }) {
+            self.terminate(TerminalEvent::WatchdogOverdue);
+            return Err(MonitorFailure::WatchdogOverdue);
+        }
         self.last_probe = Some(now);
         self.monitor = MonitorPhase::Observing;
         Ok(())
@@ -130,6 +139,16 @@ impl SessionSupervisor {
     // No mutable session getter, resume, or ability to mark V03's internal
     // monitor authorized. Any future production load requires fresh approval.
 }
+impl Drop for SessionSupervisor {
+    fn drop(&mut self) {
+        // Fail closed on early query error, unwind or premature runner exit,
+        // including before the next watchdog timer can observe the failure.
+        if self.monitor != MonitorPhase::Terminated {
+            self.terminate(TerminalEvent::BusDisconnected);
+        }
+    }
+}
+
 #[cfg(test)]
 #[path = "v03c_tests.rs"]
 mod tests;
