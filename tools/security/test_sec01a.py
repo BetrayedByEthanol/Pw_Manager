@@ -45,6 +45,9 @@ class SEC01AStaticContractTests(unittest.TestCase):
         policy = tomllib.loads((ROOT / "deny.toml").read_text(encoding="utf-8"))
         for group in ("advisories", "bans", "licenses", "sources"):
             self.assertIn(group, policy)
+        # cargo-deny 0.20.2 removed the former licenses.unlicensed lint key.
+        # Unlicensed packages are denied by default unless explicitly clarified.
+        self.assertNotIn("unlicensed", policy["licenses"])
 
     def _extract_fake_archive(self, tool, member):
         with tempfile.TemporaryDirectory(prefix="sec01a-archive-") as td:
