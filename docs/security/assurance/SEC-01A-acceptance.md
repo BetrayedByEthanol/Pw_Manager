@@ -28,3 +28,7 @@ For acceptance, capture the source SHA, script/tool/image digest, redacted logs,
 3. Harden Zot to authenticated TLS, build and publish the reviewed OCI image; independently verify the image digest and vulnerability/SBOM evidence.
 4. Provision the isolated Forgejo `vaulty-pr` runner; run the SEC-01A workflow on the exact approved SHA and record the outcome.
 5. Turn on Forgejo's required status-check protection **only after** it passes on the intended runner. Manually run GitHub's independent fallback after merge; optionally deploy the Renovate bot with least-privilege permissions and reviewed version/image.
+
+## Codex P1/P2 corrections to the candidate setup
+
+The development installer and OCI source share the exact-member archive extraction helper so cargo-deny's versioned parent directory is handled safely. `deny.toml` now uses cargo-deny 0.20.2's supported `unmaintained = "workspace"` scope. Behavioral archive-layout tests and configuration assertions were added. **The real pinned scanner must still execute successfully on a reviewed commit**; a Python TOML parser is not enough. Archive and config acceptance is separate from OCI publication, Forgejo runner provisioning or production approval.
