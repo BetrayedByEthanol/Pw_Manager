@@ -6,6 +6,7 @@
 use futures_util::{FutureExt, StreamExt};
 use std::collections::HashMap;
 use std::os::unix::fs::MetadataExt;
+use std::io::Write;
 use std::time::{Duration, Instant};
 use tokio::time::{MissedTickBehavior, timeout};
 use vaulty_v02_candidate_verifier::v03::{Session, SessionLimits};
@@ -434,6 +435,17 @@ async fn monitor(seconds: u64) -> Outcome<()> {
     let mut previous_uptime = uptime()?;
     let mut last_good_uptime = previous_uptime;
     let stop_at = Instant::now() + Duration::from_secs(seconds);
+    // Diagnostic handshake for the local V03-D evidence harness ONLY.
+    // This is reached after early subscriptions, inhibitor acquisition,
+    // session/owner validation, startup drains and watchdog setup. The
+    // unbuffered flush happens BEFORE the operator is instructed to act.
+    // Never interpret this as trusted Vaulty session/factor authorization.
+    {
+        let mut out = std::io::stdout().lock();
+        writeln!(out, "V03-C: OBSERVER_READY; no session or credential authorized")
+            .map_err(|_| "READINESS_WRITE_FAILED")?;
+        out.flush().map_err(|_| "READINESS_WRITE_FAILED")?;
+    }
     loop {
         tokio::select! {
             biased;
