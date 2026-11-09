@@ -36,14 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: SEC-00 temporary lockfile resolution for review
-        run: |
-          cargo generate-lockfile --manifest-path tools/security_probes/rust/Cargo.toml
-          echo SEC00_LOCK_BEGIN
-          base64 -w0 tools/security_probes/rust/Cargo.lock
-          echo
-          echo SEC00_LOCK_END
       - name: Compile and test Rust port
-        run: cargo test --manifest-path tools/security_probes/rust/Cargo.toml --all-targets
+        run: cargo test --manifest-path tools/security_probes/rust/Cargo.toml --locked --all-targets
       - name: Verify Rust KEK vectors
-        run: cargo run --manifest-path tools/security_probes/rust/Cargo.toml -- --kek-vectors tools/security_probes/fixtures/kek_vectors.json
+        run: cargo run --manifest-path tools/security_probes/rust/Cargo.toml --locked -- --kek-vectors tools/security_probes/fixtures/kek_vectors.json
