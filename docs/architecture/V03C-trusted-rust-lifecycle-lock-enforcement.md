@@ -30,7 +30,7 @@ The runner:
   properties signals and NameOwnerChanged, then checks the service's unique
   name and PID-bound logind session. Revalidates bindings every second.
 - Uses a direct, **uncached** D-Bus Properties.Get for `User`, `Seat`,
-  `Active`, `LockedHint`, lock capability hints (not universally exposed), `Remote`, `Class`, `Type`,
+  `Active`, `LockedHint`, `Remote`, `Class`, `Type`,
   `State`, `PreparingForSleep` and `PreparingForShutdown`.
 - Requires a local, non-remote, active, unlocked, seat-backed `user`
   session on X11 or Wayland belonging to the invoking process's UID.
@@ -39,9 +39,14 @@ The runner:
   Unexpected changes also terminate; it never silently weakens policy to
   continue watching.
 - Samples Linux `/proc/uptime` (suspend-inclusive boottime) and rejects
-  polling/startup gaps. All calls have 2-second timeouts. The Rust
-  SessionSupervisor separately enforces an independent maximum missed
-  health deadline and calls `Session::poll`.
+  polling/startup gaps. Each D-Bus call is limited to 2 seconds.
+  **The entire health-query sequence runs in one separate Tokio task**,
+  limited to 4 seconds, and sends only a non-authorizing result over a
+  capacity-one channel. The select loop concurrently processes logind
+  terminal signals and checks the independent 5-second watchdog every
+  100 milliseconds; slow queries cannot block event dispatch. The Rust
+  SessionSupervisor calls `Session::poll` on every watchdog tick and
+  refuses late successful health responses.
 - Uses a bounded, read-only command with no credential input or vault file
   handling; only prints `OBSERVED_ONLY` or `FAIL_CLOSED`, never a session
   identifier, raw D-Bus message, PIN or token metadata.
@@ -105,3 +110,13 @@ supported, typed `LockedHint` plus logind session/owner state and explicitly
 subscribed Lock/Unlock signals instead. These are **observations**, not a
 cryptographic or compositor-backed promise that screen locking is reliable.
 A real desktop integration test remains required for production G2.
+
+### Codex review round-one fixes
+Both review findings are accepted and source-corrected; detailed evidence
+and outstanding gate boundaries are recorded in the
+[review disposition](../security/V03C-codex-round-one-review-disposition-2026-11-09.md).
+The runner and prior Python observer no longer assume every systemd version
+exports the `CanLock` property. Health queries execute on a separate bounded
+Tokio task, while the event loop's watchdog and lock signal processing remain
+responsive. **Neither change proves actual desktop lock reliability or
+pre-suspend secret wiping.**
