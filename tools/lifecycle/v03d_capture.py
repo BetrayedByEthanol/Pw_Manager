@@ -15,13 +15,18 @@ import json
 import os
 from pathlib import Path
 import re
+import select
 import stat
 import subprocess
 import sys
+import time
+from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "tools/lifecycle/v03c_rust/Cargo.toml"
 SCHEMA = "vaulty-v03d-redacted-linux-lifecycle-evidence-v1"
+READY = "V03-C: OBSERVER_READY; no session or credential authorized"
+FINISHED = "V03-C: OBSERVED_ONLY; no session or credential authorized"
 EXIT = re.compile(r"^V03-C: FAIL_CLOSED: ([A-Z][A-Z0-9_]{0,63}); no session or credential authorized$", re.M)
 SAFE_REASONS = frozenset({
     "SESSION_LOCK", "SESSION_UNLOCK", "SLEEP_START", "SLEEP_END",
@@ -42,17 +47,105 @@ class Refused(Exception):
 
 
 def classify(mode: str, code: int, stdout: str, stderr: str) -> tuple[str, str]:
-    """Result classification is narrow and only uses fixed runner categories."""
-    if mode == "baseline" and code == 0 and (
-        stdout.strip() == "V03-C: OBSERVED_ONLY; no session or credential authorized"
-    ):
+    """Only a completed READY handshake permits an observation receipt.
+
+    The exact two-line success protocol is required for baseline. Terminal
+    event tests require the READY line and a single expected failure category
+    with exit code 2. No extra stdout/stderr content is evidence.
+    """
+    lines = stdout.splitlines()
+    if not lines or lines[0] != READY:
+        return "INCOMPLETE", "READINESS_NOT_OBSERVED"
+    if mode == "baseline" and code == 0 and lines == [READY, FINISHED] and not stderr.strip():
         return "LOCAL_IDLE_OBSERVATION_REPORTED", "NONE"
-    m = EXIT.search(stderr)
-    reason = m.group(1) if m and m.group(1) in SAFE_REASONS else "UNCLASSIFIED"
-    if (mode != "baseline" and code == 2
-        and reason in EXPECTED[mode]):
+    match = EXIT.fullmatch(stderr.strip())
+    reason = (match.group(1) if match and match.group(1) in SAFE_REASONS
+              else "UNCLASSIFIED")
+    if (mode != "baseline" and code == 2 and lines == [READY]
+            and reason in EXPECTED[mode]):
         return "LOCAL_TERMINAL_EVENT_REPORTED", reason
     return "INCOMPLETE", reason
+
+
+def await_observer_ready(
+    process: subprocess.Popen[bytes], deadline_seconds: float,
+) -> tuple[bool, bytes, str]:
+    """Wait for a flushed, exact, length-bounded readiness line.
+
+    The Rust runner may fail its startup snapshot/inhibitor before this line;
+    no operator action is requested on that path. Only stdout is consumed
+    here; the runner's stderr is one fixed result line after termination.
+    """
+    assert process.stdout is not None
+    deadline = time.monotonic() + deadline_seconds
+    buffered = bytearray()
+    while time.monotonic() < deadline:
+        available, _, _ = select.select(
+            [process.stdout], [], [], max(0.0, deadline - time.monotonic()),
+        )
+        if not available:
+            return False, b"", "READINESS_TIMEOUT"
+        chunk = os.read(process.stdout.fileno(), 256)
+        if not chunk:
+            return False, b"", "READINESS_NOT_OBSERVED"
+        buffered.extend(chunk)
+        if len(buffered) > 512:
+            return False, b"", "READINESS_PROTOCOL_INVALID"
+        if b"\n" in buffered:
+            first, remainder = bytes(buffered).split(b"\n", 1)
+            if first != READY.encode("ascii"):
+                return False, b"", "READINESS_PROTOCOL_INVALID"
+            return True, remainder, "NONE"
+    return False, b"", "READINESS_TIMEOUT"
+
+
+def run_observation(
+    command: list[str], mode: str, seconds: int, *,
+    readiness_timeout: float = 25.0,
+    on_ready: Callable[[], None] | None = None,
+) -> tuple[str, str, int, bool, bool]:
+    """Run reviewed binary and prompt *only after* its READY handshake.
+
+    All pre-ready failures and timeouts stay INCOMPLETE. No raw subprocess
+    output is printed, stored in receipts, or interpreted as hardware proof.
+    Tests may inject a synthetic subprocess command, never real keys.
+    """
+    process = subprocess.Popen(
+        command, cwd=ROOT, stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
+    )
+    ready = False
+    prompted = False
+    try:
+        ready, prefix, problem = await_observer_ready(process, readiness_timeout)
+        if not ready:
+            if process.poll() is None:
+                process.kill()
+            process.communicate(timeout=5)
+            return "INCOMPLETE", problem, process.returncode or -1, False, False
+
+        # A subprocess that already stopped after READY cannot wait for the
+        # operator. It must not produce a credited terminal event receipt.
+        if process.poll() is not None:
+            process.communicate(timeout=5)
+            return "INCOMPLETE", "OBSERVER_EXITED_BEFORE_ACTION", process.returncode or -1, True, False
+
+        if on_ready is not None:
+            on_ready()
+            prompted = mode != "baseline"
+
+        remaining_stdout, stderr = process.communicate(timeout=seconds + 10)
+        stdout = READY + "\n" + (prefix + remaining_stdout).decode("ascii", errors="replace")
+        status, reason = classify(
+            mode, process.returncode, stdout, stderr.decode("ascii", errors="replace"),
+        )
+        return status, reason, process.returncode, True, prompted
+    except subprocess.TimeoutExpired:
+        return "INCOMPLETE", "PROCESS_TIMEOUT", -1, ready, prompted
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=5)
 
 
 def git_source() -> str:
@@ -126,21 +219,22 @@ def main() -> int:
         if confirmation != "TEST":
             raise Refused("OPERATOR_DECLINED")
         binary = build_binary()
-        print("Observer executable prepared. Once started, initiate the "
-              "selected event manually using your desktop controls. "
-              "Baseline mode requires no action.", flush=True)
-        print("RUNNING_OBSERVATION", flush=True)
-        try:
-            run = subprocess.run(
-                [str(binary), "--observe-only", "--seconds", str(args.seconds)],
-                cwd=ROOT, capture_output=True, text=True,
-                timeout=args.seconds + 20, check=False,
-            )
-            status, reason = classify(args.mode, run.returncode,
-                                      run.stdout, run.stderr)
-            code = run.returncode
-        except subprocess.TimeoutExpired:
-            status, reason, code = "INCOMPLETE", "PROCESS_TIMEOUT", -1
+        print("Starting observer and awaiting validated logind readiness. "
+              "Do not lock or suspend yet.", flush=True)
+
+        def notify_ready() -> None:
+            # This marker is deliberately only emitted *after* the Rust
+            # stdout handshake, once it has installed event subscriptions,
+            # acquired its inhibitor and completed the initial snapshot.
+            print("RUNNING_OBSERVATION", flush=True)
+            if args.mode != "baseline":
+                print("Observer ready: trigger the selected action using "
+                      "your desktop controls now.", flush=True)
+
+        status, reason, code, ready, prompted = run_observation(
+            [str(binary), "--observe-only", "--seconds", str(args.seconds)],
+            args.mode, args.seconds, on_ready=notify_ready,
+        )
         receipt = {
             "schema": SCHEMA,
             "mode": args.mode,
@@ -149,6 +243,8 @@ def main() -> int:
             "status": status,
             "redacted_event": reason,
             "observer_exit_code": code,
+            "observer_ready_handshake": ready,
+            "operator_action_prompted_after_ready": prompted,
             "local_self_report_only": True,
             "real_vault_loaded_or_unlocked": False,
             "inhibitor_fd_lifecycle_independently_verified": False,
