@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Verify installed SEC-01A candidate tool versions, fail on absence/mismatch."""
+import argparse
 import json
 import re
 import shutil
