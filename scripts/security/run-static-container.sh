@@ -47,8 +47,8 @@ exec podman run --rm --read-only --userns=keep-id \
   --memory=12g --cpus=4 --network="$network" \
   --tmpfs /tmp:rw,nosuid,nodev,size=512m \
   --mount "type=bind,src=$repo_root,dst=/workspace,ro" \
-  --mount type=volume,src=vaulty-sec01a-cargo,dst=/cache/cargo,U=true \
-  --mount type=volume,src=vaulty-sec01a-target,dst=/cache/target,U=true \
+  --volume vaulty-sec01a-cargo:/cache/cargo:U \
+  --volume vaulty-sec01a-target:/cache/target:U \
   -e CARGO_HOME=/cache/cargo \
   -e CARGO_TARGET_DIR=/cache/target \
   -e HOME=/tmp \
