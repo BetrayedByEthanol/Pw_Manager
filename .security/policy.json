@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "package": "SEC-00",
+  "state": "PREPARATION_ONLY",
+  "execution": {
+    "pr": {"enabled": false, "blocking": false, "runner_class": "vaulty-pr", "owner_package": "SEC-01A"},
+    "nightly": {"enabled": false, "blocking": false, "runner_class": "vaulty-heavy", "owner_package": "SEC-01B"},
+    "analysis": {"enabled": false, "blocking": false, "runner_class": "vaulty-heavy", "owner_package": "SEC-01C"},
+    "release": {"enabled": false, "blocking": false, "runner_class": "vaulty-release", "owner_package": "SEC-01D"}
+  },
+  "manual_readiness_workflows_only": true,
+  "real_credentials_permitted": false,
+  "production_crypto_approved": false,
+  "physical_fido2_in_ci": false,
+  "release_signing_in_general_ci": false,
+  "trust_boundaries": {
+    "pr": {"untrusted_source": true, "signing_keys": false, "production_secrets": false, "host_container_socket": false},
+    "heavy": {"untrusted_source": true, "signing_keys": false, "production_secrets": false, "host_container_socket": false},
+    "release": {"untrusted_source": false, "signing_keys": "restricted_after_explicit_gate", "production_secrets": false, "host_container_socket": false}
+  },
+  "outstanding_review_gates": ["OPEN-01", "OPEN-15", "G1", "G2", "G3"],
+  "required_evidence_fields": ["package_id", "source_commit", "source_tree_clean", "tool_versions", "environment", "command", "exit_status", "started_at", "completed_at", "artifact_digests", "limitations"]
+}

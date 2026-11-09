@@ -156,3 +156,7 @@ Only move an item to DONE when merged implementation plus applicable acceptance 
 - Forgejo: `.forgejo/workflows/` mirror is committed but unverified on a real Forgejo runner.
 
 The source of truth for changes is the repository; this roadmap is a plan and evidence ledger, not an automatic runtime certificate.
+
+## SEC-00 — Security infrastructure preparation (proposed PR; NOT merged)
+
+SEC-00 is a **preparation-only** workstream before SEC-01A (static/PR tools), SEC-01B (fuzz/sanitizers), SEC-01C (threat model/OSV/CodeQL eligibility), and SEC-01D (SBOM/provenance/signing). Candidate paths: `.security/tools.lock.json`, `.security/policy.json`, `scripts/security/`, `tools/security/`, `containers/security/README.md`, `docs/ci/SEC-00-security-infrastructure.md`, and two manual-only readiness workflows. The new CLI deliberately exits 78 for unimplemented scanner/release commands. No protected security scan, approved tool binary, trusted OCI image, active runner, lab environment, or signed release is established by documentation/contract tests. Existing V02/V03 runtime and cryptographic approval gates (OPEN-01, OPEN-15, G1–G3) remain unchanged. Link implementation evidence through [SEC-00 acceptance](../security/assurance/SEC-00-acceptance.md) rather than treating a candidate PR as completed work.

@@ -1,0 +1,37 @@
+name: SEC-00 preparation contract (manual only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout immutable reviewed action
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validate development bootstrap plan (no changes)
+        run: bash scripts/security/bootstrap-dev.sh --profile minimal --plan
+      - name: Validate preparation contract (NOT security scans)
+        run: bash scripts/security/run.sh contract
+      - name: Reject premature security-gate claims
+        run: |
+          if bash scripts/security/run.sh pr; then
+            echo "SEC-00 PR scan unexpectedly returned success" >&2
+            exit 1
+          else
+            status=$?
+            test "$status" -eq 78
+          fi
+          if bash scripts/security/run.sh release-verify; then
+            echo "SEC-00 release verification unexpectedly returned success" >&2
+            exit 1
+          else
+            status=$?
+            test "$status" -eq 78
+          fi

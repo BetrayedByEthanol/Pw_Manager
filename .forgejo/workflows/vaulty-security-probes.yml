@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - 'tools/security_probes/**'
+      - 'tools/security/**'
+      - 'scripts/security/**'
+      - '.security/**'
       - '.github/workflows/vaulty-security-probes.yml'
       - '.forgejo/workflows/vaulty-security-probes.yml'
   push:
@@ -12,6 +15,9 @@ on:
       - 'feat/open18-route-graph-open01-kek-vectors'
     paths:
       - 'tools/security_probes/**'
+      - 'tools/security/**'
+      - 'scripts/security/**'
+      - '.security/**'
       - '.github/workflows/vaulty-security-probes.yml'
       - '.forgejo/workflows/vaulty-security-probes.yml'
 jobs:
@@ -25,6 +31,8 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3
+      - name: SEC-00 preparation contract (not security scans)
+        run: bash scripts/security/run.sh contract
       - name: Reference tests
         run: |
           cd tools/security_probes
@@ -48,8 +56,8 @@ jobs:
       - name: Compile and test Rust port
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
-          cargo test --manifest-path tools/security_probes/rust/Cargo.toml --all-targets
+          cargo test --manifest-path tools/security_probes/rust/Cargo.toml --locked --all-targets
       - name: Verify Rust KEK vectors
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
-          cargo run --manifest-path tools/security_probes/rust/Cargo.toml -- --kek-vectors tools/security_probes/fixtures/kek_vectors.json
+          cargo run --manifest-path tools/security_probes/rust/Cargo.toml --locked -- --kek-vectors tools/security_probes/fixtures/kek_vectors.json

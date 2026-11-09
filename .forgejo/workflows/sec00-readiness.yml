@@ -1,0 +1,29 @@
+name: SEC-00 preparation contract (manual only)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  contract-only:
+    # Existing staging runner label; real runner readiness NOT established.
+    runs-on: docker
+    container:
+      # Provisional, unpinned staging environment only.
+      # SEC-01A must substitute a reviewed immutable image.
+      image: node:22-bookworm
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@v4
+      - name: Install Python (readiness check only)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3
+      - name: Validate SEC-00 contracts (NOT scanner approval)
+        run: bash scripts/security/run.sh contract
+      - name: Check unconfigured PR gate rejects execution
+        run: |
+          if bash scripts/security/run.sh pr; then
+            exit 1
+          else
+            status=$?
+            test "$status" -eq 78
+          fi
