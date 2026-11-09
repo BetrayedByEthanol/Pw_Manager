@@ -31,6 +31,20 @@ subscribed. Only after these streams are installed does the runner:
    targets another session, conservative false positives are acceptable);
 6. inspect the startup boottime/window and begin the observer loop.
 
+**Manager inhibitor bookkeeping (Codex P1):** Acquiring the required delay
+inhibitor itself causes systemd/logind to emit
+`PropertiesChanged(DelayInhibited)`. A manager-property classifier shared
+by the startup drain and runtime event loop ignores **only** a well-formed,
+unique-owner-authenticated `org.freedesktop.login1.Manager` change or
+invalidation containing exclusively string-typed `DelayInhibited`.
+`PreparingForSleep`, `PreparingForShutdown`, mixed/unknown properties,
+invalid value types, invalidated security properties, unexpected sender,
+incorrect manager path or malformed signal body still fail closed.
+This avoids rejecting our own inhibitor setup without suppressing actual
+sleep/shutdown notifications. The
+[Codex P1 disposition](../security/V03D-codex-manager-property-inhibitor-p1-2026-11-09.md)
+tracks the correction and required live-baseline verification.
+
 There is no session-identity-dependent subscription **after** the PID query.
 Subsequent events are checked for the exact pinned local session path and
 unique owner. Unexpected path/sender for the pinned path, connection failure
