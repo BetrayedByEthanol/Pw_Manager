@@ -93,5 +93,31 @@ class SEC01AStaticContractTests(unittest.TestCase):
         self.assertEqual("unpublished", inventory["images"]["static"]["status"])
         self.assertIsNone(inventory["images"]["static"]["digest"])
 
+    def test_unapproved_oci_candidate_requires_explicit_consent(self):
+        proc = subprocess.run(
+            ["bash", "scripts/security/run-static-container.sh", "--image",
+             "localhost/vaulty/security-static:sec01a"],
+            cwd=ROOT, capture_output=True, text=True, timeout=10,
+        )
+        self.assertEqual(78, proc.returncode)
+        self.assertIn("CANDIDATE_CONSENT_REQUIRED", proc.stderr)
+
+    def test_nonlocal_oci_candidate_rejected_before_podman(self):
+        proc = subprocess.run(
+            ["bash", "scripts/security/run-static-container.sh", "--image",
+             "registry.example/vaulty/security-static:latest", "--candidate"],
+            cwd=ROOT, capture_output=True, text=True, timeout=10,
+        )
+        self.assertEqual(78, proc.returncode)
+        self.assertIn("LOCAL_IMAGE_ONLY", proc.stderr)
+
+    def test_install_requires_explicit_candidate_consent(self):
+        proc = subprocess.run(
+            ["bash", "scripts/security/install-static-tools.sh", "--apply", "--confirm"],
+            cwd=ROOT, capture_output=True, text=True, timeout=10,
+        )
+        self.assertEqual(78, proc.returncode)
+        self.assertIn("CANDIDATE_CONSENT_REQUIRED", proc.stderr)
+
 if __name__ == "__main__":
     unittest.main()
