@@ -12,6 +12,8 @@ with open(".security/tools.lock.json", encoding="utf-8") as f:
 PY
 )
 for manifest in "${manifests[@]}"; do
+  lockfile="$(dirname "$manifest")/Cargo.lock"
+  [[ -f "$lockfile" ]] || { echo "SEC00_LOCKFILE_MISSING: $lockfile" >&2; exit 78; }
   echo "SEC-00 existing Rust baseline: $manifest"
   cargo check --manifest-path "$manifest" --locked --all-targets
   cargo test --manifest-path "$manifest" --locked --all-targets
