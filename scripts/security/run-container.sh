@@ -19,6 +19,19 @@ done
   echo "SEC00_IMAGE_UNPINNED: supply an immutable registry/repo@sha256:<64 hex> reference" >&2
   exit 78
 }
+# A digest-shaped string is not an approval. Require an approved match in the repo contract.
+python3 - "$image" <<'PY'
+import json
+import sys
+with open(".security/tools.lock.json", encoding="utf-8") as f:
+    lock = json.load(f)
+requested = sys.argv[1]
+approved = [obj["reference"] for obj in lock.get("images", {}).values()
+            if obj.get("status") == "published" and obj.get("reference")]
+if requested not in approved:
+    print("SEC00_IMAGE_NOT_APPROVED: image digest is not in an approved lockfile record", file=sys.stderr)
+    sys.exit(78)
+PY
 command -v podman >/dev/null || { echo "podman not installed" >&2; exit 69; }
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 exec podman run --rm --network=none --read-only --userns=keep-id --cap-drop=all \
