@@ -1,0 +1,54 @@
+# syntax=docker/dockerfile:1
+# SEC-01A candidate only. Operator MUST provide reviewed base image digests;
+# publication/approval requires independent scans and a TLS registry.
+ARG RUST_BASE
+ARG NODE_BASE
+FROM ${NODE_BASE} AS node_runtime
+FROM ${RUST_BASE}
+
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl git python3 python3-venv python3-pip \
+      build-essential pkg-config libpcsclite-dev libfido2-dev \
+      libudev-dev libusb-1.0-0-dev libxkbcommon-dev libssl-dev libclang-dev \
+      && rm -rf /var/lib/apt/lists/*
+
+COPY --from=node_runtime /usr/local/bin/node /usr/local/bin/node
+COPY --from=node_runtime /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
+    ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+
+RUN rustup toolchain install 1.99.1 --profile minimal --component clippy && \
+    rustup default 1.99.1
+
+# Integrity values from the upstream GitHub Releases asset digests (not guessed).
+ARG CARGO_DENY_URL=https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz
+ARG CARGO_DENY_SHA256=9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
+ARG GITLEAKS_URL=https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+ARG GITLEAKS_SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+RUN set -eu; \
+    for name in cargo-deny gitleaks; do \
+      case "$name" in \
+        cargo-deny) url="$CARGO_DENY_URL"; digest="$CARGO_DENY_SHA256" ;; \
+        gitleaks) url="$GITLEAKS_URL"; digest="$GITLEAKS_SHA256" ;; \
+      esac; \
+      curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o "/tmp/$name.tar.gz" "$url"; \
+      echo "$digest  /tmp/$name.tar.gz" | sha256sum -c -; \
+      tar -xz -C /usr/local/bin -f "/tmp/$name.tar.gz" "$name"; \
+      chmod 0755 "/usr/local/bin/$name"; \
+      rm -f "/tmp/$name.tar.gz"; \
+    done
+
+# Semgrep top-level version is fixed. Transitive pip integrity is NOT yet
+# hash-locked and must be reviewed before labeling this a protected image.
+RUN python3 -m venv /opt/sec01a-venv && \
+    /opt/sec01a-venv/bin/pip install --no-cache-dir 'semgrep==1.184.0'
+
+WORKDIR /opt/sec01a-js
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
+ENV PATH="/opt/sec01a-venv/bin:/opt/sec01a-js/node_modules/.bin:${PATH}" \
+    PYTHONDONTWRITEBYTECODE=1
+WORKDIR /workspace
+# Checkout is supplied by the CI job; never bake user secrets or repository into image.
+CMD ["bash"]
