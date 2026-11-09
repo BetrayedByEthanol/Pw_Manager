@@ -13,7 +13,8 @@ unmaintained = "workspace"
 [licenses]
 confidence-threshold = 0.8
 unused-allowed-license = "warn"
-unlicensed = "warn"
+# Unlicensed crates are denied by cargo-deny 0.20.2. The legacy
+# 'unlicensed' lint key was removed; use a reviewed clarification for exceptions.
 allow = [
     "Apache-2.0",
     "MIT",
