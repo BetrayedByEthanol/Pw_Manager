@@ -34,6 +34,7 @@ FILE_ALLOWLIST = (
     "tools/lifecycle/v03c_rust/src/main.rs",
     "docs/architecture/V03C-trusted-rust-lifecycle-lock-enforcement.md",
     ".github/workflows/v03c-rust-logind.yml",
+    ".forgejo/workflows/v03c-rust-logind.yml",
     "tools/lifecycle/v03b_logind.py",
     "tools/lifecycle/test_v03b_logind.py",
     "tools/lifecycle/requirements-live.txt",
