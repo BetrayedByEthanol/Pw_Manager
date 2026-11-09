@@ -37,7 +37,7 @@ fi
 if [[ "$mode" == pr || "$mode" == dependencies ]]; then
   for manifest in "${manifests[@]}"; do
     echo "SEC01A_CARGO_DENY: $manifest"
-    cargo deny --manifest-path "$manifest" --config "$repo_root/deny.toml" check
+    cargo deny --manifest-path "$manifest" --locked --config "$repo_root/deny.toml" check
   done
 fi
 if [[ "$mode" == pr || "$mode" == secrets ]]; then
