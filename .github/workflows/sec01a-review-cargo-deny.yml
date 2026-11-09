@@ -1,0 +1,46 @@
+# Temporary verification of Codex P1/P2 fixes. Remove before merge:
+# the permanent GitHub security workflow remains workflow_dispatch-only.
+name: SEC-01A review — pinned cargo-deny archive and policy
+
+on:
+  pull_request:
+    paths:
+      - 'deny.toml'
+      - 'scripts/security/extract-static-tool.sh'
+      - 'scripts/security/install-static-tools.sh'
+      - 'containers/security/Containerfile.static'
+      - 'tools/security/test_sec01a.py'
+      - '.github/workflows/sec01a-review-cargo-deny.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-deny-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Execute archive and configuration regression tests
+        run: |
+          python3 -B -m unittest discover -s tools/security -p 'test_*.py' -v
+      - name: Install SHA256-verified cargo-deny 0.20.2 release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/cargo-deny.tar.gz"
+          curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error --retry 3 \
+            --output "$archive" \
+            'https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz'
+          printf '%s  %s\n' '9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f' "$archive" | sha256sum --check
+          bash scripts/security/extract-static-tool.sh "$archive" cargo-deny "$RUNNER_TEMP/bin"
+          "$RUNNER_TEMP/bin/cargo-deny" --version
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Parse deny.toml and execute pinned cargo-deny dependency policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo deny --config deny.toml --manifest-path tools/security_probes/rust/Cargo.toml --locked check bans
+          cargo deny --config deny.toml --manifest-path tools/security_probes/rust/Cargo.toml --locked check sources
