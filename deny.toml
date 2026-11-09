@@ -1,0 +1,37 @@
+# SEC-01A. Run once per independent Rust manifest; this is not a Cargo workspace.
+# Defaults deliberately retain advisory and source checks without broad exclusions.
+[graph]
+all-features = true
+
+[advisories]
+yanked = "warn"
+# cargo-deny 0.20.2 uses a scope here, not a lint severity.
+# Fail on unmaintained direct dependencies of these standalone Rust crates;
+# transitive-only unmaintained advisories are outside this initial policy.
+unmaintained = "workspace"
+
+[licenses]
+confidence-threshold = 0.8
+unused-allowed-license = "warn"
+# Unlicensed crates are denied by cargo-deny 0.20.2. The legacy
+# 'unlicensed' lint key was removed; use a reviewed clarification for exceptions.
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "CC0-1.0",
+    "OpenSSL",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

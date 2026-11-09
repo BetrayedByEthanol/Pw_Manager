@@ -108,3 +108,7 @@ atomic vault update
 Recovery Code for Password
 Recovery Code for Fido2 into Virtual Device HMAC2
 Fido2 Fallback device
+
+## Security check setup and execution (SEC-01A candidate)
+
+See [security_checks_doc](security_checks_doc/README.md) for development-machine setup, Git repository policies, OCI image builds and TLS Zot, Forgejo runner and workflows, manual GitHub Actions, security laboratories, Renovate, and command references. New static scanners are a **candidate** until tools, OCI image and isolated Forgejo runner are verified and protected checks are actually enforced; the prototype is still not suitable for real credentials.

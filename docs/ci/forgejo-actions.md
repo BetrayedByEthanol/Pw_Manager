@@ -25,3 +25,7 @@ CI configuration has been added for later use; a successful Forgejo execution re
 ## SEC-00 security infrastructure preparation (proposal)
 
 See [SEC-00 runbook](SEC-00-security-infrastructure.md) and [acceptance](../security/assurance/SEC-00-acceptance.md). SEC-00 adds separate **manual-only** contract smoke checks at `.forgejo/workflows/sec00-readiness.yml` and `.github/workflows/sec00-readiness.yml`; these do **not** scan dependencies, inspect secrets, validate signing, use physical FIDO2, or establish trusted runner readiness. The existing build and security-probe workflows remain separate. Forgejo `docker` runner availability and the provisional smoke container must still be verified; SEC-01A will add digest-pinned scanner images and genuinely blocking PR checks.
+
+## SEC-01A static security (new proposal; not a certified runner)
+
+See [SEC-01A location runbooks](../../security_checks_doc/README.md). `.forgejo/workflows/sec01a-static-security.yml` requires a separately provisioned `vaulty-pr` runner using a **reviewed immutable-digest OCI image**; it intentionally does not fall back to the general `docker` label. The workflow actually runs Clippy, cargo-deny, Gitleaks, Semgrep, ESLint and web-ext, but a queued job is **not a passing scan**. Provision runner, hardened TLS Zot and branch protection per the instructions before marking the check mandatory. `.github/workflows/sec01a-security-manual.yml` is a hosted manual dispatch fallback, not an automatic GitHub PR gate.

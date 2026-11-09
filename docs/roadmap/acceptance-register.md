@@ -495,3 +495,7 @@ Claims of COMPLETE or CERTIFIED require primary evidence for the exact behavior;
 ## SEC-00 — Security infrastructure preparation (candidate / not accepted)
 
 Evidence owner: [SEC-00 acceptance criteria](../security/assurance/SEC-00-acceptance.md) and [location-specific runbook](../ci/SEC-00-security-infrastructure.md). Status of this PR: **PREPARATION ONLY, NOT MERGED, UNVERIFIED ON RUNNERS**. Proposed source includes contract JSON, negative tests, local bootstrap plan and intentionally fail-closed scanner CLI. It must not be counted as mandatory PR scanning, validated hardware assurance, trusted OCI registry, isolated CI runner, SBOM, signing, or production authorization. Cross-package prerequisite for SEC-01A/B/C/D only; OPEN-01/OPEN-15/G1–G3 and prior V02 evidence dispositions unchanged.
+
+## SEC-01A — Static Security Foundation (PR #31 candidate)
+
+Source candidate and manual setup documentation: [SEC-01A ledger](../security/assurance/SEC-01A-acceptance.md) / [per-location runbooks](../../security_checks_doc/README.md). Six scanner commands, five standalone Rust checks, npm integrity lockfile, restricted OCI build source, Forgejo dedicated runner label, GitHub manual workflow and Renovate config are proposed. **DO NOT mark protected PR security checks, verified scanner execution, published image or isolated runner as implemented** without actual external execution evidence and branch-protection configuration. Security candidates do not close OPEN-01, OPEN-15 or G1–G3.

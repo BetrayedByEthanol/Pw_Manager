@@ -1,0 +1,7 @@
+title = "Vaulty secrets baseline — reviewed rules, no global exclusions"
+
+[extend]
+useDefault = true
+
+# Never exclude the entire documentation tree or sample secrets globally.
+# Record individual false-positive decisions in the findings register.
