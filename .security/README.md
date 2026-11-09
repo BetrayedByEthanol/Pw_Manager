@@ -22,3 +22,7 @@ bash scripts/security/run.sh contract
 `run.sh pr`, `run.sh fuzz-smoke` and `run.sh release-verify` deliberately exit 78 (EX_CONFIG), not success. Manual GitHub/Forgejo workflows validate the SEC-00 contract only; they do **not** perform security scanning.
 
 Existing V02 test vectors, review evidence, and hardware-lab reports are not modified or upgraded to independent assurance by SEC-00.
+
+## SEC-01A candidate static scans
+
+[Per-location setup and execution instructions](../security_checks_doc/README.md). This SEC-00 contract remains the conservative **approval/release** baseline: new candidate tool versions, scanner scripts and Forgejo/GitHub workflows do not imply a published OCI image, registered runner or enforced protected gate. `bash scripts/security/run.sh static-pr` executes the six candidate scanners only on an explicitly provisioned machine. The original `run.sh pr` remains blocked until the external rollout is reviewed.
