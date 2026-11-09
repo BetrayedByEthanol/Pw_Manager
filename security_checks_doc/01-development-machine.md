@@ -28,6 +28,8 @@ python3 scripts/security/check-static-versions.py
 bash scripts/security/run.sh contract
 ```
 
+The explicit `--candidate` flag acknowledges that the temporary development environment contains dependencies without complete upstream transitive hash approval. This is **not** permitted for protected release or privileged CI.
+
 The script SHA-256 verifies upstream **cargo-deny** and **Gitleaks** archives against committed GitHub release digests; uses a dedicated venv for **Semgrep==1.184.0**; and `npm ci --ignore-scripts` for **ESLint** and **web-ext** using the committed npm lockfile. The entire transitive Semgrep PyPI dependency tree is **not yet hash locked**; consider this a candidate installation, not release assurance. Never run an unsigned bootstrap via `curl | bash`.
 
 ## Commands
