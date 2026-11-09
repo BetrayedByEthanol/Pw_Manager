@@ -32,3 +32,7 @@ For acceptance, capture the source SHA, script/tool/image digest, redacted logs,
 ## Codex P1/P2 corrections to the candidate setup
 
 The development installer and OCI source share the exact-member archive extraction helper so cargo-deny's versioned parent directory is handled safely. `deny.toml` now uses cargo-deny 0.20.2's supported `unmaintained = "workspace"` scope. Behavioral archive-layout tests and configuration assertions were added. **The real pinned scanner must still execute successfully on a reviewed commit**; a Python TOML parser is not enough. Archive and config acceptance is separate from OCI publication, Forgejo runner provisioning or production approval.
+
+### Codex P1/P2 real-binary evidence
+
+[GitHub review run #42610908904](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/42610908904) passed at SHA `56ab84eda38d37fd00187563637b7c5730fa9df5`: SHA-256-verified cargo-deny 0.20.2 archive download, nested binary extraction, `--version` and actual `--locked check bans`/`check sources` parsing of `deny.toml`, plus 41 Python contract/negative-path tests. In the initial probe, cargo-deny also rejected the removed `licenses.unlicensed` key; this key was removed before the green run. Source checks and packaging smoke **do not** certify the full PR static scanner suite or external Forgejo/OCI infrastructure.
