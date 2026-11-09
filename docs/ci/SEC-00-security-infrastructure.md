@@ -90,3 +90,7 @@ Acceptance register: [SEC-00 acceptance](../security/assurance/SEC-00-acceptance
 - SEC-01D: trusted release builders, SBOM, provenance, signature verification and signing policy.
 
 **SEC-00 completion means only that reviewed preparation assets are merged and their local contract tests passed.** External runner provisioning, CI green status, hardened registry, scanners and actual release assurance require independent evidence.
+
+### Cargo baseline manifest-loader fail-closed guarantee
+
+The `rust-baseline` dispatcher now captures the manifest loader's exit status instead of using process substitution, and rejects zero manifests. Missing Python, Python failure, and empty loader output result in exit code 78 without running Cargo or printing a successful completion marker. Regression tests use a fake Cargo executable to assert no checks are silently skipped; only the CI Rust jobs perform actual builds.
