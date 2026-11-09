@@ -55,5 +55,87 @@ class ScriptTests(unittest.TestCase):
         self.assertIn("Would execute:", proc.stdout)
 
 
+
+class RustBaselineLoaderTests(unittest.TestCase):
+    """Simulate missing/failed Python while Cargo remains on PATH."""
+
+    def _run_baseline(self, python_mode):
+        import shutil
+        import sys
+        import tempfile
+
+        with tempfile.TemporaryDirectory(prefix="sec00-baseline-") as temp:
+            bindir = Path(temp)
+            real_dirname = shutil.which("dirname")
+            self.assertIsNotNone(real_dirname)
+            (bindir / "dirname").symlink_to(real_dirname)
+
+            call_log = bindir / "cargo-calls.txt"
+            fake_cargo = bindir / "cargo"
+            fake_cargo.write_text(
+                "#!/bin/sh\n"
+                + "printf '%s\\n' \"$*\" >> " + repr(str(call_log)) + "\n",
+                encoding="utf-8",
+            )
+            fake_cargo.chmod(0o755)
+
+            fake_python = bindir / "python3"
+            if python_mode == "valid":
+                fake_python.symlink_to(sys.executable)
+            elif python_mode == "empty":
+                fake_python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                fake_python.chmod(0o755)
+            elif python_mode == "failed":
+                fake_python.write_text("#!/bin/sh\nexit 21\n", encoding="utf-8")
+                fake_python.chmod(0o755)
+            elif python_mode != "missing":
+                self.fail(f"unexpected python_mode: {python_mode}")
+
+            environment = os.environ.copy()
+            environment["PATH"] = str(bindir)
+            process = subprocess.run(
+                ["/bin/bash", str(SCRIPTS / "run-cargo-all.sh")],
+                cwd=ROOT,
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=15,
+                check=False,
+            )
+            calls = call_log.read_text(encoding="utf-8").splitlines() if call_log.exists() else []
+            return process, calls
+
+    def test_rust_baseline_rejects_missing_python_before_cargo(self):
+        process, calls = self._run_baseline("missing")
+        self.assertEqual(78, process.returncode, process.stderr)
+        self.assertIn("SEC00_MANIFEST_LOAD_FAILED", process.stderr)
+        self.assertNotIn("Rust baseline complete", process.stdout)
+        self.assertEqual([], calls)
+
+    def test_rust_baseline_rejects_failed_python_before_cargo(self):
+        process, calls = self._run_baseline("failed")
+        self.assertEqual(78, process.returncode, process.stderr)
+        self.assertIn("SEC00_MANIFEST_LOAD_FAILED", process.stderr)
+        self.assertNotIn("Rust baseline complete", process.stdout)
+        self.assertEqual([], calls)
+
+    def test_rust_baseline_rejects_empty_manifest_output(self):
+        process, calls = self._run_baseline("empty")
+        self.assertEqual(78, process.returncode, process.stderr)
+        self.assertIn("SEC00_MANIFEST_EMPTY", process.stderr)
+        self.assertNotIn("Rust baseline complete", process.stdout)
+        self.assertEqual([], calls)
+
+    def test_rust_baseline_runs_all_five_manifests_with_locked_flags(self):
+        process, calls = self._run_baseline("valid")
+        self.assertEqual(0, process.returncode, process.stderr)
+        self.assertIn("Rust baseline complete", process.stdout)
+        self.assertEqual(10, len(calls), calls)
+        self.assertTrue(all("--locked" in command for command in calls), calls)
+        self.assertEqual(5, sum(command.startswith("check ") for command in calls))
+        self.assertEqual(5, sum(command.startswith("test ") for command in calls))
+
+
 if __name__ == "__main__":
     unittest.main()
