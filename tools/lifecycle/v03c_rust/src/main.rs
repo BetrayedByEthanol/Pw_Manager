@@ -22,6 +22,52 @@ const PROPERTIES_IFACE: &str = "org.freedesktop.DBus.Properties";
 
 type Outcome<T> = Result<T, &'static str>;
 
+/// Lifetime-coupled safety: on *all* exits after the delay FD is acquired,
+/// revoke the Rust-owned session before closing the inhibitor. This includes
+/// D-Bus errors, task cancellation, early returns and panic unwinding.
+/// The review runner still only owns a CLOSED production session.
+struct InhibitedSupervisor<F> {
+    supervisor: SessionSupervisor,
+    inhibitor: Option<F>,
+}
+impl<F> InhibitedSupervisor<F> {
+    fn new(supervisor: SessionSupervisor, inhibitor: F) -> Self {
+        Self { supervisor, inhibitor: Some(inhibitor) }
+    }
+    fn on_event(&mut self, event: TerminalEvent) {
+        self.supervisor.on_event(event);
+        self.release_after_revocation();
+    }
+    fn release_after_revocation(&mut self) {
+        // A revoked controller must already be LOCKED before the inhibitor
+        // is allowed to close. SessionSupervisor::on_event is synchronous.
+        if self.supervisor.monitor_phase() == MonitorPhase::Terminated {
+            debug_assert_eq!(
+                self.supervisor.phase(),
+                vaulty_v02_candidate_verifier::v03::Phase::Locked,
+            );
+            drop(self.inhibitor.take());
+        }
+    }
+}
+impl<F> std::ops::Deref for InhibitedSupervisor<F> {
+    type Target = SessionSupervisor;
+    fn deref(&self) -> &Self::Target { &self.supervisor }
+}
+impl<F> std::ops::DerefMut for InhibitedSupervisor<F> {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.supervisor }
+}
+impl<F> Drop for InhibitedSupervisor<F> {
+    fn drop(&mut self) {
+        if self.supervisor.monitor_phase() != MonitorPhase::Terminated {
+            self.supervisor.on_event(TerminalEvent::BusDisconnected);
+        }
+        self.release_after_revocation();
+    }
+}
+
+
+
 async fn bounded<T>(future: impl Future<Output = zbus::Result<T>>) -> Outcome<T> {
     timeout(Duration::from_secs(2), future).await
         .map_err(|_| "DBUS_TIMEOUT")?.map_err(|_| "DBUS_FAILED")
@@ -265,7 +311,9 @@ async fn monitor(seconds: u64) -> Outcome<()> {
         early_session_stream(&connection, PROPERTIES_IFACE).await?;
     // Request a delay inhibitor before accepting ANY observation. A missing
     // FD or rejected Inhibit call is a hard failure, not a silent downgrade.
-    let mut inhibitor = Some(acquire_delay_inhibitor(&manager).await?);
+    let mut controller = InhibitedSupervisor::new(
+        controller, acquire_delay_inhibitor(&manager).await?,
+    );
     let owner = current_owner(&dbus).await?;
     if !owner.starts_with(':') { return Err("INVALID_LOGIND_OWNER"); }
     let session_path = local_session(&manager).await?;
@@ -397,9 +445,8 @@ async fn monitor(seconds: u64) -> Outcome<()> {
             }
         }
         if controller.monitor_phase() == MonitorPhase::Terminated {
-            // SessionSupervisor has already synchronously revoked the
-            // V03 session. Only now release the sleep/shutdown delay FD.
-            drop(inhibitor.take());
+            // InhibitedSupervisor::on_event already revoked the owned
+            // session synchronously before closing its delay FD.
             if let Some(task) = probe_task.take() { task.abort(); }
             return Err("SESSION_LOCKED_FAIL_CLOSED");
         }
