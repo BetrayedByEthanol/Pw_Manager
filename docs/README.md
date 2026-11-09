@@ -62,3 +62,8 @@ Each PR affecting keys, policy, recovery, storage, migration or client behavior 
 ## Recommended immediate milestone
 
 **V02-H — Adversarial Cryptographic Conformance & Independent Review Submission**, following merged [V02-G PR #15](https://github.com/BetrayedByEthanol/Pw_Manager/pull/15). [Source-pinned attack/reviewer packet](security/V02H-adversarial-conformance-and-review-submission.md) offers independently coded **wire-only** cross-language checks and adversarial scenarios. Next step is named independent OPEN-01 cryptographer and parallel OPEN-15 physical FIDO2 tests; no unapproved vNext cryptography or real credential use.
+
+## Security infrastructure and scanner runbooks
+
+- [SEC-01A security checks by location](../security_checks_doc/README.md) — workstation setup, Git policy, Podman/Zot, Forgejo/Gitea runners, GitHub manual fallback, Renovate and per-tool execution.
+- [SEC-01A acceptance](security/assurance/SEC-01A-acceptance.md) — proof of what's implemented versus not independently executed or enforced.
