@@ -1,0 +1,25 @@
+name: SEC-01A temporary npm lock preparation
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - '.github/workflows/sec01a-npm-lock-prep.yml'
+permissions:
+  contents: read
+jobs:
+  create-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Generate development-only exact npm dependency lock
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          echo SEC01A_LOCK_BEGIN
+          gzip -n -c package-lock.json | base64 -w0
+          echo
+          echo SEC01A_LOCK_END
