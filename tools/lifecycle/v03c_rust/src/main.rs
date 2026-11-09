@@ -295,7 +295,7 @@ fn classify_manager_property_fields(
     if changed.keys().chain(invalidated.iter()).all(|key| key == "DelayInhibited")
         // systemd's DelayInhibited property has D-Bus type 's'. Even a
         // trusted logind sender must not make us ignore a malformed value.
-        && changed.values().all(|value| value.value_signature().as_str() == "s")
+        && changed.values().all(|value| value.value_signature().to_string() == "s")
     {
         return None;
     }
@@ -373,7 +373,7 @@ fn property_event_for_target(
 async fn monitor(seconds: u64) -> Outcome<()> {
     let limits = SessionLimits::new(Duration::from_secs(20),
         Duration::from_secs(90)).map_err(|_| "INVALID_SESSION_LIMIT")?;
-    let mut controller = SessionSupervisor::new(Session::new(limits),
+    let controller = SessionSupervisor::new(Session::new(limits),
         Duration::from_secs(5)).map_err(|_| "INVALID_WATCHDOG")?;
     let start = Instant::now();
     let started_uptime = uptime()?;
