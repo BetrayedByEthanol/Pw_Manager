@@ -46,13 +46,15 @@ mkdir -p "$install_dir"
 tmp="$(mktemp -d)"
 trap 'rm -rf -- "$tmp"' EXIT
 for tool in cargo-deny gitleaks; do
-  mapfile -t info < <(python3 - "$tool" <<'PY'
+  info_lines="$(python3 - "$tool" <<'PY'
 import json,sys
 with open(".security/sec01a-static.json", encoding="utf-8") as f:
     o=json.load(f)[sys.argv[1]]
 print(o["url"]);print(o["sha256"])
 PY
-)
+)" || { echo "SEC01A_TOOL_METADATA_LOAD_FAILED: $tool" >&2; exit 78; }
+  [[ -n "$info_lines" ]] || { echo "SEC01A_TOOL_METADATA_EMPTY: $tool" >&2; exit 78; }
+  mapfile -t info <<< "$info_lines"
   [[ "${#info[@]}" == 2 ]] || { echo "SEC01A_INVALID_TOOL_RECORD: $tool" >&2; exit 78; }
   curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error     --retry 3 --output "$tmp/$tool.tar.gz" "${info[0]}"
   printf '%s  %s\n' "${info[1]}" "$tmp/$tool.tar.gz" | sha256sum --check --status || {
