@@ -2,6 +2,7 @@
 import json
 import re
 import subprocess
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -31,6 +32,21 @@ class SEC01AStaticContractTests(unittest.TestCase):
         for name, item in self.npm["packages"].items():
             if item.get("resolved", "").startswith("https://registry.npmjs.org/"):
                 self.assertRegex(item.get("integrity", ""), r"^sha512-")
+
+    def test_toml_security_policy_files_parse(self):
+        for filename in ("deny.toml", ".gitleaks.toml"):
+            with self.subTest(filename=filename):
+                result = tomllib.loads((ROOT / filename).read_text(encoding="utf-8"))
+                self.assertIsInstance(result, dict)
+                self.assertTrue(result)
+        policy = tomllib.loads((ROOT / "deny.toml").read_text(encoding="utf-8"))
+        for group in ("advisories", "bans", "licenses", "sources"):
+            self.assertIn(group, policy)
+
+    def test_renovate_is_proposal_only(self):
+        config = json.loads((ROOT / "renovate.json").read_text(encoding="utf-8"))
+        self.assertIs(config.get("automerge"), False)
+        self.assertIs(config.get("dependencyDashboard"), True)
 
     def test_reviewed_binary_asset_sha256_values_are_recorded(self):
         for name in ("gitleaks", "cargo-deny"):
