@@ -62,4 +62,8 @@ def check(requested=None):
 
 
 if __name__ == "__main__":
-    sys.exit(check())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--only", help="comma-separated tool names; omit for all")
+    args = parser.parse_args()
+    selected = set(args.only.split(",")) if args.only else None
+    sys.exit(check(selected))
