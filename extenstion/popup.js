@@ -70,8 +70,6 @@ const SELECTOR_BUTTONS = [
 ];
 
 document.addEventListener("DOMContentLoaded", async () => {
-  ensureSiteMappingUi();
-
   wireSelectorButtons();
   wireTestFillButton();
   wireClearMappingButton();
@@ -82,91 +80,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   await renderPopupState();
 });
 
-function ensureSiteMappingUi() {
-  if (document.getElementById("site-mapping-card")) {
-    return;
-  }
-
-  const footer = document.querySelector(".footer");
-
-  const card = document.createElement("section");
-  card.id = "site-mapping-card";
-  card.className = "card";
-
-  card.innerHTML = `
-    <div class="card-title">Current site mapping</div>
-
-    <div id="site-origin" class="empty">
-      No active site.
-    </div>
-
-    <div id="page-security-warning" class="empty" hidden style="margin-top: 8px; color: #ffcc66;">
-    </div>
-
-    <div id="login-scan-result" class="empty" hidden style="margin-top: 8px;">
-    </div>
-
-    <button id="use-detected-login-fields" class="secondary full" type="button" hidden>
-      Use detected login fields
-    </button>
-
-    <div id="site-mapping-empty" class="empty" style="margin-top: 8px;">
-      No username/password fields stored for this site yet.
-    </div>
-
-    <div id="site-mapping-details" class="field-list" hidden style="margin-top: 8px;">
-      <div class="field-row">
-        <span class="field-label">Username</span>
-        <span id="mapping-username" class="field-value">—</span>
-      </div>
-
-      <div class="field-row">
-        <span class="field-label">Password</span>
-        <span id="mapping-password" class="field-value">—</span>
-      </div>
-
-      <div class="field-row">
-        <span class="field-label">Updated</span>
-        <span id="mapping-updated" class="field-value">—</span>
-      </div>
-
-      <div class="field-row">
-        <span class="field-label">Reg email</span>
-        <span id="mapping-registration-email" class="field-value">—</span>
-      </div>
-
-      <div class="field-row">
-        <span class="field-label">Reg username</span>
-        <span id="mapping-registration-username" class="field-value">—</span>
-      </div>
-
-      <div class="field-row">
-        <span class="field-label">Reg password</span>
-        <span id="mapping-registration-password" class="field-value">—</span>
-      </div>
-
-      <div class="field-row">
-        <span class="field-label">Reg confirm</span>
-        <span id="mapping-registration-password-confirm" class="field-value">—</span>
-      </div>
-
-      <div class="field-row">
-        <span class="field-label">Reg submit</span>
-        <span id="mapping-registration-submit" class="field-value">—</span>
-      </div>
-
-      <button id="clear-mapping" class="secondary full" type="button">
-        Clear site mapping
-      </button>
-    </div>
-  `;
-
-  if (footer) {
-    footer.before(card);
-  } else {
-    document.querySelector(".app")?.appendChild(card);
-  }
-}
 
 function wireSelectorButtons() {
   for (const config of SELECTOR_BUTTONS) {
