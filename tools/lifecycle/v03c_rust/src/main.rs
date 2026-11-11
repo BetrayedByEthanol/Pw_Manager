@@ -272,12 +272,7 @@ fn uptime_deadline_expired(previous: f64, last_good: f64, now: f64, seconds: f64
 }
 
 fn drain<'a>(stream: &mut zbus::proxy::SignalStream<'a>) -> bool {
-    loop {
-        match stream.next().now_or_never() {
-            Some(Some(_)) | Some(None) => return true,
-            None => return false,
-        }
-    }
+    stream.next().now_or_never().is_some()
 }
 
 /// A logind delay inhibitor itself triggers the manager's
