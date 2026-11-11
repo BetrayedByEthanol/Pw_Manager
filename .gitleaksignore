@@ -7,3 +7,5 @@
 5de17bcebe36245f0bba15510fb5c7daf1b3d7f6:tools/security_probes/fixtures/kek_vectors.json:generic-api-key:31
 5de17bcebe36245f0bba15510fb5c7daf1b3d7f6:tools/security_probes/fixtures/kek_vectors.json:generic-api-key:53
 5de17bcebe36245f0bba15510fb5c7daf1b3d7f6:tools/security_probes/fixtures/kek_vectors.json:generic-api-key:77
+1f3dfe40e83177d54f945bcaa5b5a8ce612d5ebc:docs/architecture/v02g-vnext-cryptographic-protocol-review.md:generic-api-key:86
+464a644daf011003a3e1522171e4e7d653ffe88b:docs/security/V02C-cryptographic-conformance.md:generic-api-key:11
