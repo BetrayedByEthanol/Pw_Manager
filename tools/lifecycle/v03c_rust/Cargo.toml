@@ -5,9 +5,9 @@ edition = "2024"
 publish = false
 
 [dependencies]
-vaulty-v02-candidate-verifier = { path = "../../v02_verifier" }
+vaulty-v02-candidate-verifier = { path = "../../v02_verifier", version = "=0.1.0" }
 zbus = { version = "=5.19.0", default-features = false, features = ["tokio"] }
-tokio = { version = "=1.49.0", features = ["rt-multi-thread", "macros", "time", "sync"] }
+tokio = { version = "=1.53.3", features = ["rt-multi-thread", "macros", "time", "sync"] }
 futures-util = "=0.3.31"
 
 # Non-production, non-root, review-only binary. No Vaulty unlock, native
