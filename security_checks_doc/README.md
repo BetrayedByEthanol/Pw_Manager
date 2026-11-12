@@ -14,6 +14,7 @@ SEC-01A introduces runnable static checks, but **infrastructure acceptance is se
 | Renovate setup, bot permissions and update PR review | [08-renovate.md](08-renovate.md) |
 | Acceptance gates, finding review, rollback and evidence | [09-acceptance-and-evidence.md](09-acceptance-and-evidence.md) |
 | Exact command reference by check | [10-check-command-reference.md](10-check-command-reference.md) |
+| First successful scan, browser warning decisions and privacy audit | [11-first-scan-firefox-compatibility.md](11-first-scan-firefox-compatibility.md) |
 
 ## Scope and status
 
