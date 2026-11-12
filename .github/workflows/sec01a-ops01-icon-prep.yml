@@ -1,46 +1,49 @@
-# Temporary PR-only asset conversion. Remove after the reviewed 48x48 blob
-# has been committed. This does not change the manual-only static scan.
-name: SEC-01A OPS-01 temporary icon dimension preparation
-
+# Temporary PR-only post-change browser/semgrep validation.
+# Delete before merge; permanent GitHub static scans remain manual-only.
+name: SEC-01A OPS-01 temporary browser and Semgrep verification
 on:
   pull_request:
     paths:
       - 'extenstion/icons/**'
-      - '.github/workflows/sec01a-ops01-icon-prep.yml'
       - '.security/semgrep/vaulty-browser.yml'
-
+      - 'tools/security/test_sec01a.py'
+      - '.github/workflows/sec01a-ops01-icon-prep.yml'
 permissions:
   contents: read
-
 jobs:
-  icon-prep:
+  browser-review:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Generate exact 48x48 icon from current tracked asset
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: SEC-01A regression tests
+        run: python3 -B -m unittest discover -s tools/security -p 'test_*.py' -v
+      - name: Run exact npm-locked Firefox lint and reject icon warning
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install --quiet 'Pillow==11.3.0'
-          python3 - <<'PY'
-          import base64
-          import io
-          from PIL import Image
-
-          with Image.open("extenstion/icons/icon48.png") as original:
-              print("ORIGINAL_DIMENSIONS", original.size)
-              if original.size != (512, 512):
-                  raise SystemExit("Unexpected source dimensions")
-              image = original.convert("RGBA").resize((48, 48), Image.Resampling.LANCZOS)
-              buffer = io.BytesIO()
-              image.save(buffer, format="PNG", optimize=True)
-          payload = buffer.getvalue()
-          check = Image.open(io.BytesIO(payload))
-          assert check.size == (48, 48)
-          print("ICON48_PNG_BEGIN")
-          print(base64.b64encode(payload).decode("ascii"))
-          print("ICON48_PNG_END")
-          PY
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run lint:firefox 2>&1 | tee "$RUNNER_TEMP/vaulty-web-ext.txt"
+          if grep -q 'ICON_SIZE_INVALID' "$RUNNER_TEMP/vaulty-web-ext.txt"; then
+            echo 'Unexpected icon-dimensions warning' >&2
+            exit 1
+          fi
+          grep -q 'BACKGROUND_SERVICE_WORKER_IGNORED' "$RUNNER_TEMP/vaulty-web-ext.txt"
+          grep -q 'MISSING_DATA_COLLECTION_PERMISSIONS' "$RUNNER_TEMP/vaulty-web-ext.txt"
+      - name: Validate anchored paths with exact candidate Semgrep
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/semgrep-venv"
+          "$RUNNER_TEMP/semgrep-venv/bin/pip" install --disable-pip-version-check --quiet 'semgrep==1.184.0'
+          "$RUNNER_TEMP/semgrep-venv/bin/semgrep" scan --validate --config .security/semgrep --metrics off
+          "$RUNNER_TEMP/semgrep-venv/bin/semgrep" scan --config .security/semgrep --error --metrics off src extenstion tools 2>&1 | tee "$RUNNER_TEMP/vaulty-semgrep.txt"
+          if grep -q 'will soon be interpreted' "$RUNNER_TEMP/vaulty-semgrep.txt"; then
+            echo 'Unresolved Semgrepignore-v2 path warning' >&2
+            exit 1
+          fi
