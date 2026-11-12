@@ -4,10 +4,10 @@
 
 | Finding ID | Scanner | File/component | Severity | Evidence commit/job | Disposition | Owner | Due |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| OPS01-BROWSER-ICON | web-ext `ICON_SIZE_INVALID` | `extenstion/icons/icon48.png` | Low / compatibility | Run 43095040536 | FIXED_IN_PR — needs post-change lint | Browser | Before Firefox package release |
+| OPS01-BROWSER-ICON | web-ext `ICON_SIZE_INVALID` | `extenstion/icons/icon48.png` | Low / compatibility | Baseline 43095040536; recheck 43169921377 | FIXED_AND_REGRESSION_TESTED — now 48×48, warning absent | Browser | Complete |
 | OPS01-BROWSER-CONSENT | web-ext `MISSING_DATA_COLLECTION_PERMISSIONS` | `extenstion/manifest.json`, native-message flow | Medium / release compliance | Run 43095040536 | OPEN_PRIVACY_REVIEW — no `none` assertion | Security/privacy | Before Firefox distribution |
 | OPS01-BROWSER-BG | web-ext `BACKGROUND_SERVICE_WORKER_IGNORED` | `extenstion/manifest.json` | Info / cross-browser | Run 43095040536 | DOCUMENTED_EXPECTED — Firefox uses scripts, Chromium uses worker | Browser | Smoke-test both engines |
-| OPS01-SEMGREP-PATH | Semgrep anchored path warning | `.security/semgrep/vaulty-browser.yml` | Low / future compatibility | Run 43095040536 | FIXED_IN_PR — needs post-change scan | Security tooling | Before next scanner pin |
+| OPS01-SEMGREP-PATH | Semgrep anchored path warning | `.security/semgrep/vaulty-browser.yml` | Low / future compatibility | Baseline 43095040536; recheck 43169921377 | FIXED_AND_REGRESSION_TESTED — no Semgrepignore v2 warning | Security tooling | Complete |
 | OPS01-CARGO-DUPLICATES | cargo-deny `warning[duplicate]` | 5 independent Rust lockfiles | Low / dependency maintenance | Run 43095040536 | OPEN_TRIAGE — no blanket suppression | Dependencies | Scheduled review |
 | OPS01-LICENSE-ALLOW | cargo-deny `warning[license-not-encountered]` | `deny.toml` / Rust manifests | Info / policy hygiene | Run 43095040536 | OPEN_TRIAGE — approved license list retained | Security policy | Scheduled review |
 
@@ -35,3 +35,7 @@ Do not add blanket Semgrep, cargo-deny, ESLint or Gitleaks suppression rules to 
 The first full scanner run is complete, but **zero blocking findings does not mean zero warnings**. All Firefox warnings and representative cargo-deny / Semgrep warnings are tracked above rather than suppressed. The same scan's success cannot prove browser runtime behavior, the correctness of future credentials handling or physical FIDO2 guarantees.
 
 See [SEC-01A-OPS-01 Firefox triage](../../../security_checks_doc/11-first-scan-firefox-compatibility.md) for Mozilla policy links, actual native-message flows, and required post-change rechecks. No `browser_specific_settings.gecko.data_collection_permissions` declaration is added until a product/security reviewer approves the categories and whether disclosure is required. Treat this privacy decision as a **Firefox distribution blocker**, not as a scanner failure.
+
+### Post-correction validation — 2026-11-12
+
+[GitHub PR review run #43169921377](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/43169921377), source SHA `91a128eeb8db6cc7475b25df3901fe21b6bffb2e`, passed the 45 standard-library regression tests, `npm ci`, pinned `web-ext 10.8.0` lint (0 errors, **2 remaining warnings**) and pinned `Semgrep 1.184.0` scan (5 rules, 102 tracked files, 0 findings, no path-anchoring warning). The temporary PR-only workflow providing this evidence was removed after verification. The remaining warnings are `MISSING_DATA_COLLECTION_PERMISSIONS` (open Firefox distribution gate) and `BACKGROUND_SERVICE_WORKER_IGNORED` (documented expected cross-browser behavior); neither was silently suppressed.
