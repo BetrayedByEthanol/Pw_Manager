@@ -13,8 +13,8 @@
 
 | Check | Finding | Disposition |
 | --- | --- | --- |
-| Firefox web-ext | `ICON_SIZE_INVALID`: image advertised as 48×48 was actually 512×512 | Corrected by resampling the existing asset to an actual 48×48 PNG; IHDR dimensions verified by a regression test. Retest web-ext before marking closed. |
-| Semgrep | Path `extenstion/*.js` will change interpretation under Semgrepignore v2 | Changed each affected rule to explicit root anchor `/extenstion/*.js`; rerun Semgrep to verify. No rule is globally disabled. |
+| Firefox web-ext | `ICON_SIZE_INVALID`: image advertised as 48×48 was actually 512×512 | Corrected and verified: resampled the existing asset to 48×48; IHDR/CRC regression passed and pinned web-ext 10.8.0 no longer reports `ICON_SIZE_INVALID` in run 43169921377. |
+| Semgrep | Path `extenstion/*.js` will change interpretation under Semgrepignore v2 | Corrected and verified: each affected rule uses root anchor `/extenstion/*.js`; pinned Semgrep 1.184.0 ran 5 rules on 102 files with no path-compatibility warnings or findings in run 43169921377. No rule was disabled. |
 | Firefox web-ext | `BACKGROUND_SERVICE_WORKER_IGNORED` | **Expected cross-browser difference, retained.** Manifest V3 declares both `background.scripts` (Firefox event page) and `background.service_worker` (Chromium worker). Removing either would break one engine. Document warning and test both browsers rather than suppressing it globally. |
 | Firefox web-ext | `MISSING_DATA_COLLECTION_PERMISSIONS` | **Open: browser privacy disclosure decision required before Firefox distribution.** No unreviewed `required: ["none"]` declaration is added to the manifest. |
 
@@ -48,3 +48,14 @@ Smoke-test Firefox's event-page behavior and Chromium's extension service-worker
 ## Deployment boundary
 
 The manual hosted GitHub scan does **not** register a Forgejo `vaulty-pr` runner, build/publish the verified OCI security image, enable a required status check, approve Semgrep transitive wheel provenance, or establish cryptographic release assurance. See [SEC-01A acceptance](../docs/security/assurance/SEC-01A-acceptance.md) for the remaining operator steps.
+
+## Post-change verification evidence
+
+[Temporary GitHub PR verification run #43169921377](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/43169921377) at branch SHA `91a128eeb8db6cc7475b25df3901fe21b6bffb2e` succeeded:
+
+- **45/45** SEC-00/SEC-01A regression tests, including binary PNG IHDR and CRC.
+- `npm ci` and pinned `web-ext 10.8.0`: **0 errors, 2 warnings**, down from 3.
+- Pinned `Semgrep 1.184.0`: valid config; five rules on 102 tracked files; **0 findings**; the old path warning is absent.
+- Only the privacy-consent decision and the documented Firefox service-worker difference remain. Neither is bypassed by disabling lint checks.
+
+The temporary PR-trigger workflow was deleted after successful verification to preserve SEC-01A's manual-only permanent GitHub static scanner policy.
