@@ -104,6 +104,43 @@ class SEC01AStaticContractTests(unittest.TestCase):
             {"all", "workspace", "transitive", "none"},
         )
 
+    def test_extension_icon_matches_manifest_declared_48_px_size(self):
+        """Read PNG IHDR using the standard library; no image tools in contract CI."""
+        import struct
+        import zlib
+
+        manifest = json.loads((ROOT / "extenstion/manifest.json").read_text(encoding="utf-8"))
+        icon_path = "icons/icon48.png"
+        self.assertEqual(icon_path, manifest["icons"]["48"])
+        self.assertEqual(icon_path, manifest["action"]["default_icon"]["48"])
+        image = (ROOT / "extenstion" / icon_path).read_bytes()
+        self.assertTrue(image.startswith(b"\\x89PNG\\r\\n\\x1a\\n"))
+        self.assertEqual(b"IHDR", image[12:16])
+        self.assertEqual((48, 48), struct.unpack(">II", image[16:24]))
+        self.assertEqual(zlib.crc32(image[12:29]) & 0xFFFFFFFF,
+                         struct.unpack(">I", image[29:33])[0])
+
+    def test_semgrep_extension_paths_are_explicitly_root_anchored(self):
+        """Avoid changed Semgrepignore-v2 semantics for unanchored paths."""
+        rules = (ROOT / ".security/semgrep/vaulty-browser.yml").read_text(encoding="utf-8")
+        self.assertEqual(3, rules.count('include: ["/extenstion/*.js"]'))
+        self.assertNotIn("include: [extenstion/*.js]", rules)
+
+    def test_manifest_preserves_both_browser_background_engines(self):
+        """Firefox uses scripts and Chromium uses MV3 service_worker."""
+        manifest = json.loads((ROOT / "extenstion/manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(["background.js"], manifest["background"]["scripts"])
+        self.assertEqual("background.js", manifest["background"]["service_worker"])
+
+    def test_privacy_declaration_does_not_falsely_claim_no_transmission(self):
+        """Native messaging exists; a no-data claim needs a separate reviewed audit."""
+        manifest = json.loads((ROOT / "extenstion/manifest.json").read_text(encoding="utf-8"))
+        self.assertIn("nativeMessaging", manifest["permissions"])
+        declaration = manifest["browser_specific_settings"]["gecko"].get("data_collection_permissions")
+        if declaration is not None:
+            self.assertNotEqual(["none"], declaration.get("required"),
+                                "Native-messaging data flows need explicit privacy review")
+
     def test_renovate_is_proposal_only(self):
         config = json.loads((ROOT / "renovate.json").read_text(encoding="utf-8"))
         self.assertIs(config.get("automerge"), False)
