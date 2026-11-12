@@ -8,18 +8,18 @@ rules:
           - pattern: eval(...)
           - pattern: new Function(...)
     paths:
-      include: [extenstion/*.js]
+      include: ["/extenstion/*.js"]
   - id: vaulty-browser-wildcard-postmessage
     languages: [javascript]
     severity: ERROR
     message: Wildcard target origin is prohibited for Vaulty extension messages.
     pattern: window.postMessage($MSG, "*")
     paths:
-      include: [extenstion/*.js]
+      include: ["/extenstion/*.js"]
   - id: vaulty-browser-unsafe-innerhtml
     languages: [javascript]
     severity: WARNING
     message: Review HTML insertion for attacker-controlled data.
     pattern: $EL.innerHTML = $VALUE
     paths:
-      include: [extenstion/*.js]
+      include: ["/extenstion/*.js"]
