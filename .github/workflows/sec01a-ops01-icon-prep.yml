@@ -1,0 +1,46 @@
+# Temporary PR-only asset conversion. Remove after the reviewed 48x48 blob
+# has been committed. This does not change the manual-only static scan.
+name: SEC-01A OPS-01 temporary icon dimension preparation
+
+on:
+  pull_request:
+    paths:
+      - 'extenstion/icons/**'
+      - '.github/workflows/sec01a-ops01-icon-prep.yml'
+      - '.security/semgrep/vaulty-browser.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  icon-prep:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Generate exact 48x48 icon from current tracked asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet 'Pillow==11.3.0'
+          python3 - <<'PY'
+          import base64
+          import io
+          from PIL import Image
+
+          with Image.open("extenstion/icons/icon48.png") as original:
+              print("ORIGINAL_DIMENSIONS", original.size)
+              if original.size != (512, 512):
+                  raise SystemExit("Unexpected source dimensions")
+              image = original.convert("RGBA").resize((48, 48), Image.Resampling.LANCZOS)
+              buffer = io.BytesIO()
+              image.save(buffer, format="PNG", optimize=True)
+          payload = buffer.getvalue()
+          check = Image.open(io.BytesIO(payload))
+          assert check.size == (48, 48)
+          print("ICON48_PNG_BEGIN")
+          print(base64.b64encode(payload).decode("ascii"))
+          print("ICON48_PNG_END")
+          PY
