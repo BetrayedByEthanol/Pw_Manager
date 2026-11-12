@@ -114,7 +114,7 @@ class SEC01AStaticContractTests(unittest.TestCase):
         self.assertEqual(icon_path, manifest["icons"]["48"])
         self.assertEqual(icon_path, manifest["action"]["default_icon"]["48"])
         image = (ROOT / "extenstion" / icon_path).read_bytes()
-        self.assertTrue(image.startswith(b"\\x89PNG\\r\\n\\x1a\\n"))
+        self.assertTrue(image.startswith(b"\x89PNG\r\n\x1a\n"))
         self.assertEqual(b"IHDR", image[12:16])
         self.assertEqual((48, 48), struct.unpack(">II", image[16:24]))
         self.assertEqual(zlib.crc32(image[12:29]) & 0xFFFFFFFF,
