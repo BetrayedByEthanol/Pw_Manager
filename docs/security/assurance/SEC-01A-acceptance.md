@@ -53,3 +53,7 @@ The development installer and OCI source share the exact-member archive extracti
 | Product security approval | **Not granted.** OPEN-01/OPEN-15, G1–G3 and protected Forgejo deployment still outstanding |
 
 Firefox warnings were **not** globally suppressed. This follow-up PR corrects the 48×48 icon and Semgrep path anchors, preserves the dual-engine background manifest, and leaves `MISSING_DATA_COLLECTION_PERMISSIONS` explicitly open pending privacy audit of native messaging. See the [first-scan and Firefox triage runbook](../../../security_checks_doc/11-first-scan-firefox-compatibility.md) and [findings register](SEC-01A-findings.md). New source changes require a separate post-change run before their fixes can be marked validated.
+
+### SEC-01A-OPS-01 corrected branch validation
+
+A [PR-only verification run #43169921377](https://github.com/BetrayedByEthanol/Pw_Manager/actions/runs/43169921377) at commit `91a128eeb8db6cc7475b25df3901fe21b6bffb2e` passed **45/45** tests, `npm ci` with the locked browser tools, Firefox lint (**0 errors, 2 warnings remaining**) and Semgrep (**5 rules, 102 tracked files, 0 findings; no anchored-path deprecation warnings**). The new icon's binary PNG dimensions and IHDR CRC passed tests. This validates the icon and Semgrep fixes, not runtime Firefox/Chromium behavior, Firefox consent, clean developer workstation installation, trusted OCI image or protected Forgejo runner.
